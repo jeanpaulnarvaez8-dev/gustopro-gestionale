@@ -6,6 +6,7 @@ import OrderPage from './pages/OrderPage'
 import CheckoutPage from './pages/CheckoutPage'
 import KDSPage from './pages/KDSPage'
 import DashboardPage from './pages/DashboardPage'
+import InventoryPage from './pages/InventoryPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function ProtectedRoute() {
@@ -37,6 +38,11 @@ export default function App() {
         <Route path="/dashboard" element={
           <RoleRoute roles={['admin', 'manager']}>
             <DashboardPage />
+          </RoleRoute>
+        } />
+        <Route path="/inventory" element={
+          <RoleRoute roles={['admin', 'manager']}>
+            <InventoryPage />
           </RoleRoute>
         } />
       </Route>

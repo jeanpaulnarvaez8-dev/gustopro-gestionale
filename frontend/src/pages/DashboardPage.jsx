@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, Users, Receipt, TableProperties, BarChart3 } from 'lucide-react'
-import { adminAPI, billingAPI } from '../lib/api'
+import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, Users, Receipt, TableProperties, BarChart3, Package, AlertTriangle, Trash2 } from 'lucide-react'
+import { adminAPI, billingAPI, inventoryAPI } from '../lib/api'
 import { formatPrice, formatTime } from '../lib/utils'
 
 // Simple inline SVG bar chart
@@ -69,20 +69,23 @@ export default function DashboardPage() {
   const [stats, setStats] = useState(null)
   const [hourly, setHourly] = useState([])
   const [receipts, setReceipts] = useState([])
+  const [invKpis, setInvKpis] = useState(null)
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState(null)
 
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [sRes, hRes, rRes] = await Promise.all([
+      const [sRes, hRes, rRes, invRes] = await Promise.all([
         adminAPI.stats(),
         adminAPI.hourly(),
         billingAPI.receipts(),
+        inventoryAPI.kpis(),
       ])
       setStats(sRes.data)
       setHourly(hRes.data)
       setReceipts(rRes.data.slice(0, 20))
+      setInvKpis(invRes.data)
       setLastRefresh(new Date())
     } catch {
       // keep existing data
@@ -163,6 +166,45 @@ export default function DashboardPage() {
             color={stats?.tables_open > 0 ? 'text-amber-400' : 'text-emerald-400'}
           />
         </div>
+
+        {/* Inventory KPIs */}
+        {invKpis && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[#888] text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
+                <Package size={12} /> Inventario
+              </h3>
+              <button onClick={() => navigate('/inventory')}
+                className="text-[#D4AF37] text-xs hover:underline">Dettagli →</button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard
+                icon={AlertTriangle}
+                label="Discrepanza media"
+                value={`${parseFloat(invKpis.avg_discrepancy_pct).toFixed(1)}%`}
+                color={invKpis.avg_discrepancy_pct > 5 ? 'text-red-400' : 'text-emerald-400'}
+              />
+              <KpiCard
+                icon={TrendingDown}
+                label="Perdite settimana"
+                value={formatPrice(invKpis.loss_week)}
+                color="text-amber-400"
+              />
+              <KpiCard
+                icon={Trash2}
+                label="Scarti oggi"
+                value={formatPrice(invKpis.spoilage_today)}
+                color="text-orange-400"
+              />
+              <KpiCard
+                icon={Trash2}
+                label="Scarti settimana"
+                value={formatPrice(invKpis.spoilage_week)}
+                color="text-red-400"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Hourly chart */}
         <div className="bg-[#222] rounded-xl border border-[#3A3A3A] p-4">

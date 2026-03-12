@@ -90,4 +90,30 @@ export const adminAPI = {
   hourly: () => api.get('/admin/stats/hourly'),
 };
 
+// Inventory
+export const inventoryAPI = {
+  // Suppliers
+  suppliers:     ()        => api.get('/inventory/suppliers'),
+  createSupplier:(data)    => api.post('/inventory/suppliers', data),
+
+  // Purchase Orders
+  listPOs:       ()        => api.get('/inventory/po'),
+  createPO:      (data)    => api.post('/inventory/po', data),
+  getPO:         (id)      => api.get(`/inventory/po/${id}`),
+
+  // Goods Receipts
+  listReceipts:  ()        => api.get('/inventory/receipts'),
+  getReceipt:    (id)      => api.get(`/inventory/receipts/${id}`),
+  createReceipt: (data)    => api.post('/inventory/receipts', data),
+  confirmItem:   (itemId)  => api.patch(`/inventory/receipt-items/${itemId}/confirm`),
+
+  // Spoilage
+  listSpoilage:  ()        => api.get('/inventory/spoilage'),
+  createSpoilage:(data)    => api.post('/inventory/spoilage', data),
+
+  // KPIs & barcode
+  kpis:          ()        => api.get('/inventory/kpis'),
+  barcode:       (code)    => api.get(`/inventory/barcode/${code}`),
+};
+
 export default api;
