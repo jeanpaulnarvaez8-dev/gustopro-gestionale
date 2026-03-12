@@ -1,11 +1,21 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Delete } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 export default function PinPad({ onSubmit, loading, error, maxLength = 4 }) {
   const [pin, setPin] = useState('')
+  const [shake, setShake] = useState(false)
+
+  // Shake dots when a new error arrives
+  useEffect(() => {
+    if (!error) return
+    setShake(true)
+    const t = setTimeout(() => setShake(false), 500)
+    return () => clearTimeout(t)
+  }, [error])
 
   const handleKey = (digit) => {
+    if (loading) return
     if (pin.length < maxLength) {
       const next = pin + digit
       setPin(next)
@@ -16,32 +26,41 @@ export default function PinPad({ onSubmit, loading, error, maxLength = 4 }) {
     }
   }
 
-  const handleDelete = () => setPin(p => p.slice(0, -1))
+  const handleDelete = () => { if (!loading) setPin(p => p.slice(0, -1)) }
 
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫']
 
   return (
     <div className="flex flex-col items-center gap-6">
-      {/* PIN dots */}
-      <div className="flex gap-3">
+      {/* PIN dots with shake animation on error */}
+      <motion.div
+        className="flex gap-3"
+        animate={shake ? { x: [-8, 8, -6, 6, -3, 3, 0] } : { x: 0 }}
+        transition={{ duration: 0.45, ease: 'easeInOut' }}
+      >
         {Array.from({ length: maxLength }).map((_, i) => (
           <div
             key={i}
             className={`w-4 h-4 rounded-full border-2 transition-all duration-150 ${
-              i < pin.length
-                ? 'bg-[#D4AF37] border-[#D4AF37]'
-                : 'border-[#3A3A3A] bg-transparent'
+              loading
+                ? 'bg-[#D4AF37]/40 border-[#D4AF37]/40 animate-pulse'
+                : i < pin.length
+                  ? 'bg-[#D4AF37] border-[#D4AF37]'
+                  : error
+                    ? 'border-red-500/60 bg-transparent'
+                    : 'border-[#3A3A3A] bg-transparent'
             }`}
           />
         ))}
-      </div>
+      </motion.div>
 
       {/* Error message */}
       {error && (
         <motion.p
+          key={error}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-red-400 text-sm"
+          className="text-red-400 text-sm text-center"
         >
           {error}
         </motion.p>

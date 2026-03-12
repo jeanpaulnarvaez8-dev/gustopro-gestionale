@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock } from 'lucide-react'
+import { ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock, LayoutDashboard, Package } from 'lucide-react'
 import { useSocket } from '../context/SocketContext'
 import { useToast } from '../context/ToastContext'
+import { useAuth } from '../context/AuthContext'
 import { kdsAPI } from '../lib/api'
 import { formatElapsed, elapsedMinutes } from '../lib/utils'
 
@@ -37,6 +38,7 @@ export default function KDSPage() {
   const navigate = useNavigate()
   const { socket, isConnected } = useSocket()
   const { toast } = useToast()
+  const { user } = useAuth()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState({}) // itemId → true
@@ -94,10 +96,23 @@ export default function KDSPage() {
   const handleAdvance = async (itemId, nextStatus) => {
     if (!nextStatus) return
     setUpdating(prev => ({ ...prev, [itemId]: true }))
+
+    // Optimistic update — don't wait for socket (works even when offline)
+    setOrders(prev => {
+      const updated = prev.map(order => {
+        const newItems = order.items.map(it => it.id === itemId ? { ...it, status: nextStatus } : it)
+        const active = newItems.filter(it => it.status === 'pending' || it.status === 'cooking')
+        if (active.length === 0) return null
+        return { ...order, items: newItems }
+      })
+      return updated.filter(Boolean)
+    })
+
     try {
       await kdsAPI.updateItemStatus(itemId, nextStatus)
     } catch {
       toast({ type: 'error', title: 'Errore aggiornamento stato' })
+      loadOrders() // revert to true DB state on failure
     } finally {
       setUpdating(prev => { const n = { ...prev }; delete n[itemId]; return n })
     }
@@ -126,7 +141,19 @@ export default function KDSPage() {
           <span className="text-[#555]">{orders.length} ordini</span>
         </div>
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-4">
+          {['admin', 'manager'].includes(user?.role) && (
+            <button onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
+              <LayoutDashboard size={13} /> Dashboard
+            </button>
+          )}
+          {['admin', 'manager'].includes(user?.role) && (
+            <button onClick={() => navigate('/inventory')}
+              className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
+              <Package size={13} /> Inventario
+            </button>
+          )}
           <button onClick={loadOrders} className="text-[#555] hover:text-[#888] transition">
             <RefreshCw size={14} />
           </button>

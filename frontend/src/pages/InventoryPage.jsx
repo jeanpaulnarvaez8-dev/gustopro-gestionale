@@ -205,17 +205,17 @@ function POForm({ suppliers, onClose, onSaved }) {
   const updateItem = (i, field, val) => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: val } : it))
 
   const submit = async () => {
-    if (!supplierName.trim() || items.some(it => !it.item_name.trim())) {
-      setError('Fornitore e nome articoli obbligatori')
-      return
-    }
+    if (!supplierName.trim()) { setError('Nome fornitore obbligatorio'); return }
+    if (items.some(it => !it.item_name.trim())) { setError('Tutti gli articoli devono avere un nome'); return }
+    if (items.some(it => it.qty_ordered <= 0)) { setError('Le quantità devono essere maggiori di 0'); return }
+    if (items.some(it => it.unit_cost < 0)) { setError('I prezzi non possono essere negativi'); return }
     setSaving(true)
     setError(null)
     try {
       await inventoryAPI.createPO({ supplier_name: supplierName, expected_date: expectedDate || null, notes, items })
       onSaved()
-    } catch {
-      setError('Errore salvataggio')
+    } catch (err) {
+      setError(err.response?.data?.error ?? 'Errore salvataggio')
     } finally {
       setSaving(false)
     }
@@ -633,17 +633,16 @@ function SpoilageForm({ onClose, onSaved }) {
   const update = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
 
   const submit = async () => {
-    if (!form.item_name.trim() || !form.qty) {
-      setError('Articolo e quantità obbligatori')
-      return
-    }
+    if (!form.item_name.trim()) { setError('Nome articolo obbligatorio'); return }
+    if (!form.qty || parseFloat(form.qty) <= 0) { setError('La quantità deve essere maggiore di 0'); return }
+    if (parseFloat(form.unit_cost) < 0) { setError('Il costo non può essere negativo'); return }
     setSaving(true)
     setError(null)
     try {
       await inventoryAPI.createSpoilage({ ...form, qty: parseFloat(form.qty) })
       onSaved()
-    } catch {
-      setError('Errore salvataggio')
+    } catch (err) {
+      setError(err.response?.data?.error ?? 'Errore salvataggio')
     } finally {
       setSaving(false)
     }

@@ -102,12 +102,14 @@ function UserForm({ initial, onClose, onSaved }) {
               {isEdit ? 'Nuovo PIN (lascia vuoto per non cambiare)' : 'PIN * (4-6 cifre)'}
             </label>
             <div className="grid grid-cols-2 gap-2">
-              <input type="password" inputMode="numeric" maxLength={6}
-                value={form.pin} onChange={e => update('pin', e.target.value)}
+              <input type="password" inputMode="numeric"
+                value={form.pin}
+                onChange={e => update('pin', e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="••••"
                 className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm placeholder-[#555]" />
-              <input type="password" inputMode="numeric" maxLength={6}
-                value={form.pinConfirm} onChange={e => update('pinConfirm', e.target.value)}
+              <input type="password" inputMode="numeric"
+                value={form.pinConfirm}
+                onChange={e => update('pinConfirm', e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="Conferma"
                 className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm placeholder-[#555]" />
             </div>

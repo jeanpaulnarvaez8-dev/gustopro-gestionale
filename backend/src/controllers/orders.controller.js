@@ -69,13 +69,18 @@ async function createOrder(req, res, next) {
 
     await client.query('COMMIT');
 
-    // Emit to kitchen
+    // Emit to kitchen + update table status for all clients
     const tableInfo = await pool.query('SELECT table_number FROM tables WHERE id=$1', [table_id]);
     getIO()?.to('role:kitchen').emit('new-order', {
       orderId: order.id,
       tableId: table_id,
       tableNumber: tableInfo.rows[0]?.table_number,
       itemCount: orderItems.length,
+    });
+    getIO()?.emit('table-status-changed', {
+      tableId: table_id,
+      status: 'occupied',
+      active_order_id: order.id,
     });
 
     res.status(201).json({ ...order, items: orderItems });

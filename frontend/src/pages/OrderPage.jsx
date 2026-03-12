@@ -31,10 +31,9 @@ export default function OrderPage() {
           menuAPI.categories(),
         ])
         const t = tablesRes.data.find(t => t.id === tableId)
-        if (t) {
-          setTableData(t)
-          setTable(t.id, t.table_number)
-        }
+        if (!t) { navigate('/tables', { replace: true }); return }
+        setTableData(t)
+        setTable(t.id, t.table_number)
         setCategories(catsRes.data)
         if (catsRes.data.length > 0) setActiveCategory(catsRes.data[0].id)
       } catch {
@@ -72,7 +71,10 @@ export default function OrderPage() {
   }
 
   const handleSend = async () => {
-    if (cartItems.length === 0) return
+    if (cartItems.length === 0) {
+      toast({ type: 'warning', title: 'Carrello vuoto', message: 'Aggiungi almeno un piatto' })
+      return
+    }
     setSending(true)
     try {
       const payload = {

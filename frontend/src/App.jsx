@@ -51,6 +51,8 @@ export default function App() {
             <UsersPage />
           </RoleRoute>
         } />
+        {/* Alias /staff → /users */}
+        <Route path="/staff" element={<Navigate to="/users" replace />} />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

@@ -47,8 +47,15 @@ export default function TableMapPage() {
   // Aggiornamenti live via Socket.io
   useEffect(() => {
     if (!socket) return
-    const handler = ({ tableId, status }) => {
-      setTables(prev => prev.map(t => t.id === tableId ? { ...t, status } : t))
+    const handler = ({ tableId, status, active_order_id }) => {
+      setTables(prev => prev.map(t => {
+        if (t.id !== tableId) return t
+        return {
+          ...t,
+          status,
+          active_order_id: active_order_id !== undefined ? active_order_id : t.active_order_id,
+        }
+      }))
     }
     socket.on('table-status-changed', handler)
     return () => socket.off('table-status-changed', handler)
