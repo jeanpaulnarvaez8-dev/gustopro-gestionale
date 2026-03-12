@@ -86,8 +86,10 @@ export const billingAPI = {
 
 // Admin
 export const adminAPI = {
-  stats:  () => api.get('/admin/stats'),
-  hourly: () => api.get('/admin/stats/hourly'),
+  stats:    ()             => api.get('/admin/stats'),
+  hourly:   ()             => api.get('/admin/stats/hourly'),
+  topItems: (days, limit)  => api.get('/admin/analytics/top-items', { params: { days, limit } }),
+  weekday:  (weeks)        => api.get('/admin/analytics/weekday', { params: { weeks } }),
 };
 
 // Inventory

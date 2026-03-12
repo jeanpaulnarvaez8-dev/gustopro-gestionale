@@ -6,6 +6,7 @@ import OrderPage from './pages/OrderPage'
 import CheckoutPage from './pages/CheckoutPage'
 import KDSPage from './pages/KDSPage'
 import DashboardPage from './pages/DashboardPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 import InventoryPage from './pages/InventoryPage'
 import UsersPage from './pages/UsersPage'
 import NotFoundPage from './pages/NotFoundPage'
@@ -49,6 +50,11 @@ export default function App() {
         <Route path="/users" element={
           <RoleRoute roles={['admin']}>
             <UsersPage />
+          </RoleRoute>
+        } />
+        <Route path="/analytics" element={
+          <RoleRoute roles={['admin', 'manager']}>
+            <AnalyticsPage />
           </RoleRoute>
         } />
         {/* Alias /staff → /users */}

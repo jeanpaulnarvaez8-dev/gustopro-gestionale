@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, Users, Receipt, TableProperties, BarChart3, Package, AlertTriangle, Trash2 } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, Users, Receipt, TableProperties, BarChart3, Package, AlertTriangle, Trash2, LineChart } from 'lucide-react'
 import { adminAPI, billingAPI, inventoryAPI } from '../lib/api'
 import { formatPrice, formatTime } from '../lib/utils'
 
@@ -117,7 +117,11 @@ export default function DashboardPage() {
         <span className="text-[#555] text-xs ml-1">
           {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
         </span>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-3">
+          <button onClick={() => navigate('/analytics')}
+            className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
+            <LineChart size={13} /> Analytics
+          </button>
           {lastRefresh && (
             <span className="text-[#555] text-xs">
               Aggiornato {formatTime(lastRefresh.toISOString())}
