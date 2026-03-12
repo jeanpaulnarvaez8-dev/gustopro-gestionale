@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock } from 'lucide-react'
 import { useSocket } from '../context/SocketContext'
+import { useToast } from '../context/ToastContext'
 import { kdsAPI } from '../lib/api'
 import { formatElapsed, elapsedMinutes } from '../lib/utils'
 
@@ -35,6 +36,7 @@ function ElapsedTick({ sentAt }) {
 export default function KDSPage() {
   const navigate = useNavigate()
   const { socket, isConnected } = useSocket()
+  const { toast } = useToast()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState({}) // itemId → true
@@ -95,7 +97,7 @@ export default function KDSPage() {
     try {
       await kdsAPI.updateItemStatus(itemId, nextStatus)
     } catch {
-      // socket will still update if backend succeeds
+      toast({ type: 'error', title: 'Errore aggiornamento stato' })
     } finally {
       setUpdating(prev => { const n = { ...prev }; delete n[itemId]; return n })
     }

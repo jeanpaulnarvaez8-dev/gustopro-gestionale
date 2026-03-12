@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Plus, Minus, Trash2, Send, ShoppingCart, RefreshCw, CheckCircle2 } from 'lucide-react'
 import { useCart } from '../context/CartContext'
+import { useToast } from '../context/ToastContext'
 import { menuAPI, ordersAPI, tablesAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 
@@ -10,6 +11,7 @@ export default function OrderPage() {
   const { tableId } = useParams()
   const navigate = useNavigate()
   const { items: cartItems, total, itemCount, setTable, addItem, removeItem, updateQuantity, clearCart } = useCart()
+  const { toast } = useToast()
 
   const [table, setTableData] = useState(null)
   const [categories, setCategories] = useState([])
@@ -19,7 +21,6 @@ export default function OrderPage() {
   const [loadingItems, setLoadingItems] = useState(false)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
-  const [error, setError] = useState(null)
 
   // Load table + categories on mount
   useEffect(() => {
@@ -37,7 +38,7 @@ export default function OrderPage() {
         setCategories(catsRes.data)
         if (catsRes.data.length > 0) setActiveCategory(catsRes.data[0].id)
       } catch {
-        setError('Errore caricamento menu')
+        toast({ type: 'error', title: 'Errore caricamento menu' })
       } finally {
         setLoadingMenu(false)
       }
@@ -73,7 +74,6 @@ export default function OrderPage() {
   const handleSend = async () => {
     if (cartItems.length === 0) return
     setSending(true)
-    setError(null)
     try {
       const payload = {
         table_id: tableId,
@@ -97,7 +97,7 @@ export default function OrderPage() {
       setSent(true)
       setTimeout(() => navigate('/tables'), 1800)
     } catch {
-      setError("Errore invio ordine. Riprova.")
+      toast({ type: 'error', title: 'Errore invio ordine', message: 'Riprova' })
       setSending(false)
     }
   }
@@ -245,7 +245,7 @@ export default function OrderPage() {
 
           {/* Footer: total + send */}
           <div className="px-4 py-4 border-t border-[#3A3A3A] flex flex-col gap-3">
-            {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+
             <div className="flex items-center justify-between">
               <span className="text-[#888] text-sm">Totale</span>
               <span className="text-[#D4AF37] font-bold text-lg">{formatPrice(total)}</span>

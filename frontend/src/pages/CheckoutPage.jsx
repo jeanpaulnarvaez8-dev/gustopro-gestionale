@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Banknote, CreditCard, Split, RefreshCw, CheckCircle2, Receipt } from 'lucide-react'
 import { billingAPI, tablesAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
+import { useToast } from '../context/ToastContext'
 
 const METHODS = [
   { id: 'cash',  label: 'Contanti', icon: Banknote,    color: 'border-emerald-500/50 hover:border-emerald-400 text-emerald-400' },
@@ -14,6 +15,7 @@ const METHODS = [
 export default function CheckoutPage() {
   const { orderId } = useParams()
   const navigate = useNavigate()
+  const { toast } = useToast()
 
   const [bill, setBill] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -57,9 +59,11 @@ export default function CheckoutPage() {
       } else {
         setSplitPaid(splitIndex)
         setBill(prev => ({ ...prev, total_amount: prev.total_amount - amount }))
+        toast({ type: 'success', title: `Quota ${splitIndex}/${splitTotal} incassata`, message: formatPrice(amount) })
       }
     } catch {
       setError('Errore pagamento. Riprova.')
+      toast({ type: 'error', title: 'Errore pagamento', message: 'Riprova' })
     } finally {
       setPaying(false)
     }

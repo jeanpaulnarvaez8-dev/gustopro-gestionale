@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LogOut, LayoutDashboard, ChefHat, Wifi, WifiOff, Users, RefreshCw, Package } from 'lucide-react'
+import { LogOut, LayoutDashboard, ChefHat, Wifi, WifiOff, Users, RefreshCw, Package, UserCog } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import { tablesAPI, zonesAPI } from '../lib/api'
@@ -95,6 +95,12 @@ export default function TableMapPage() {
             <button onClick={() => navigate('/inventory')}
               className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
               <Package size={16} /> Inventario
+            </button>
+          )}
+          {user?.role === 'admin' && (
+            <button onClick={() => navigate('/users')}
+              className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
+              <UserCog size={16} /> Staff
             </button>
           )}
           <span className="text-[#888] text-sm">
