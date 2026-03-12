@@ -165,7 +165,14 @@ export default function TableMapPage() {
               return (
                 <motion.button
                   key={table.id}
-                  onClick={() => navigate(`/order/${table.id}`)}
+                  onClick={() => {
+                    const isCashier = ['cashier', 'admin', 'manager'].includes(user?.role)
+                    if (isCashier && table.status === 'occupied' && table.active_order_id) {
+                      navigate(`/checkout/${table.active_order_id}`)
+                    } else {
+                      navigate(`/order/${table.id}`)
+                    }
+                  }}
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   className={`relative rounded-xl border-2 p-5 flex flex-col items-center gap-3 transition ${cfg.color}`}
