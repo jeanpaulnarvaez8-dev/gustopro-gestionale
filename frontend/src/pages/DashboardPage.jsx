@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, Users, Receipt, TableProperties, BarChart3, Package, AlertTriangle, Trash2, LineChart, BookOpen, UtensilsCrossed, LayoutGrid } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, Users, Receipt, TableProperties, BarChart3, Package, AlertTriangle, Trash2, LineChart, BookOpen, UtensilsCrossed, LayoutGrid, FileText } from 'lucide-react'
 import { adminAPI, billingAPI, inventoryAPI } from '../lib/api'
 import { formatPrice, formatTime } from '../lib/utils'
 
@@ -133,6 +133,10 @@ export default function DashboardPage() {
           <button onClick={() => navigate('/venue')}
             className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
             <LayoutGrid size={13} /> Zone & Tavoli
+          </button>
+          <button onClick={() => navigate('/tax-report')}
+            className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
+            <FileText size={13} /> Fiscale
           </button>
           {lastRefresh && (
             <span className="text-[#555] text-xs">

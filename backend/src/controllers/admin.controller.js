@@ -135,4 +135,80 @@ async function getByWeekday(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getDashboardStats, getHourlyRevenue, getTopItems, getByWeekday };
+// ── getTaxReport ──────────────────────────────────────────────
+// Corrispettivi telematici per Agenzia delle Entrate
+// ?from=YYYY-MM-DD&to=YYYY-MM-DD (default: oggi)
+async function getTaxReport(req, res, next) {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const from  = req.query.from || today;
+    const to    = req.query.to   || today;
+
+    // Breakdown IVA per aliquota (combo senza category → 10% default)
+    const { rows: byAliquota } = await pool.query(
+      `SELECT
+         COALESCE(c.tax_rate, 10.00)::NUMERIC(5,2)  AS aliquota,
+         COUNT(DISTINCT r.id)                        AS num_scontrini,
+         SUM(oi.subtotal)                            AS lordo,
+         SUM(ROUND(
+           oi.subtotal / (1 + COALESCE(c.tax_rate, 10.00) / 100), 2
+         ))                                          AS imponibile,
+         SUM(oi.subtotal - ROUND(
+           oi.subtotal / (1 + COALESCE(c.tax_rate, 10.00) / 100), 2
+         ))                                          AS iva
+       FROM receipts r
+       JOIN orders      o   ON o.id  = r.order_id
+       JOIN order_items oi  ON oi.order_id = o.id AND oi.status != 'cancelled'
+       LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+       LEFT JOIN categories  c  ON c.id = mi.category_id
+       WHERE DATE(r.created_at AT TIME ZONE 'Europe/Rome') BETWEEN $1 AND $2
+       GROUP BY COALESCE(c.tax_rate, 10.00)
+       ORDER BY aliquota`,
+      [from, to]
+    );
+
+    // Corrispettivi giornalieri
+    const { rows: byDay } = await pool.query(
+      `SELECT
+         DATE(r.created_at AT TIME ZONE 'Europe/Rome') AS giorno,
+         COUNT(*)             AS num_scontrini,
+         SUM(r.total_amount)  AS lordo,
+         SUM(r.tax_amount)    AS iva
+       FROM receipts r
+       WHERE DATE(r.created_at AT TIME ZONE 'Europe/Rome') BETWEEN $1 AND $2
+       GROUP BY giorno
+       ORDER BY giorno`,
+      [from, to]
+    );
+
+    const totale = byAliquota.reduce(
+      (acc, r) => ({
+        lordo:         acc.lordo        + parseFloat(r.lordo),
+        imponibile:    acc.imponibile   + parseFloat(r.imponibile),
+        iva:           acc.iva          + parseFloat(r.iva),
+        num_scontrini: acc.num_scontrini + parseInt(r.num_scontrini),
+      }),
+      { lordo: 0, imponibile: 0, iva: 0, num_scontrini: 0 }
+    );
+
+    res.json({
+      periodo: { from, to },
+      by_aliquota: byAliquota.map(r => ({
+        aliquota:      parseFloat(r.aliquota),
+        num_scontrini: parseInt(r.num_scontrini),
+        lordo:         parseFloat(r.lordo),
+        imponibile:    parseFloat(r.imponibile),
+        iva:           parseFloat(r.iva),
+      })),
+      by_day: byDay.map(r => ({
+        giorno:        r.giorno,
+        num_scontrini: parseInt(r.num_scontrini),
+        lordo:         parseFloat(r.lordo),
+        iva:           parseFloat(r.iva),
+      })),
+      totale,
+    });
+  } catch (err) { next(err); }
+}
+
+module.exports = { getDashboardStats, getHourlyRevenue, getTopItems, getByWeekday, getTaxReport };

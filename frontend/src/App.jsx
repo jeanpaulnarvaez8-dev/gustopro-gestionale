@@ -15,6 +15,7 @@ import AsportoPage from './pages/AsportoPage'
 import ComboAdminPage from './pages/ComboAdminPage'
 import MenuAdminPage from './pages/MenuAdminPage'
 import VenueAdminPage from './pages/VenueAdminPage'
+import TaxReportPage from './pages/TaxReportPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function ProtectedRoute() {
@@ -83,6 +84,11 @@ export default function App() {
         <Route path="/venue" element={
           <RoleRoute roles={['admin']}>
             <VenueAdminPage />
+          </RoleRoute>
+        } />
+        <Route path="/tax-report" element={
+          <RoleRoute roles={['admin']}>
+            <TaxReportPage />
           </RoleRoute>
         } />
         <Route path="/staff" element={<Navigate to="/users" replace />} />
