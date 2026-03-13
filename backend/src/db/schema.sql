@@ -226,7 +226,39 @@ CREATE OR REPLACE TRIGGER orders_sync_table_status
     FOR EACH ROW EXECUTE FUNCTION sync_table_status();
 
 -- ============================================================
--- 8. INDEXES
+-- 8. CUSTOMERS & RESERVATIONS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS customers (
+    id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        VARCHAR(255) NOT NULL,
+    phone       VARCHAR(30),
+    email       VARCHAR(255),
+    notes       TEXT,
+    visit_count INTEGER      NOT NULL DEFAULT 0,
+    last_visit  DATE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS reservations (
+    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id    UUID        REFERENCES customers(id) ON DELETE SET NULL,
+    customer_name  VARCHAR(255) NOT NULL,
+    customer_phone VARCHAR(30),
+    table_id       UUID        REFERENCES tables(id) ON DELETE SET NULL,
+    party_size     SMALLINT    NOT NULL DEFAULT 2,
+    reserved_date  DATE        NOT NULL,
+    reserved_time  TIME        NOT NULL,
+    status         VARCHAR(20) NOT NULL DEFAULT 'confirmed'
+                       CHECK (status IN ('confirmed','seated','cancelled','no_show')),
+    notes          TEXT,
+    created_by     UUID        REFERENCES users(id) ON DELETE SET NULL,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- 9. INDEXES
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_tables_zone         ON tables(zone_id);
 CREATE INDEX IF NOT EXISTS idx_tables_status       ON tables(status);
@@ -236,4 +268,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_status       ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created      ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_order_items_order   ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_status  ON order_items(status);
-CREATE INDEX IF NOT EXISTS idx_payments_order      ON payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_order        ON payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_reservations_date     ON reservations(reserved_date);
+CREATE INDEX IF NOT EXISTS idx_reservations_customer ON reservations(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customers_phone       ON customers(phone);

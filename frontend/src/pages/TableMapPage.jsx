@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LogOut, LayoutDashboard, ChefHat, Wifi, WifiOff, Users, RefreshCw, Package, UserCog } from 'lucide-react'
+import { LogOut, LayoutDashboard, ChefHat, Wifi, WifiOff, Users, RefreshCw, Package, UserCog, CalendarDays } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import { tablesAPI, zonesAPI } from '../lib/api'
@@ -102,6 +102,16 @@ export default function TableMapPage() {
             <button onClick={() => navigate('/inventory')}
               className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
               <Package size={16} /> Inventario
+            </button>
+          )}
+          <button onClick={() => navigate('/reservations')}
+            className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
+            <CalendarDays size={16} /> Prenotazioni
+          </button>
+          {['admin', 'manager'].includes(user?.role) && (
+            <button onClick={() => navigate('/customers')}
+              className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
+              <Users size={16} /> Clienti
             </button>
           )}
           {user?.role === 'admin' && (

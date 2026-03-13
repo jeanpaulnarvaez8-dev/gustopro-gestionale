@@ -315,15 +315,48 @@ async function getInventoryKPIs(req, res, next) {
 async function lookupBarcode(req, res, next) {
   try {
     const { barcode } = req.params;
+
+    // 1. Check internal DB (past PO items — most accurate pricing/units)
     const { rows } = await pool.query(
-      `SELECT pi.*, po.supplier_name, po.id AS po_id
+      `SELECT pi.item_name, pi.unit, pi.unit_cost, pi.barcode,
+              po.supplier_name
        FROM po_items pi
        JOIN purchase_orders po ON po.id = pi.po_id
-       WHERE pi.barcode = $1 AND po.status = 'pending'
-       ORDER BY po.created_at DESC LIMIT 5`,
+       WHERE pi.barcode = $1
+       ORDER BY po.created_at DESC LIMIT 1`,
       [barcode]
     );
-    res.json(rows);
+
+    if (rows.length > 0) {
+      return res.json({ source: 'internal', ...rows[0] });
+    }
+
+    // 2. Fallback: Open Food Facts (free, covers Italian GS1 barcodes)
+    const offRes = await fetch(
+      `https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (offRes.ok) {
+      const data = await offRes.json();
+      if (data.status === 1 && data.product) {
+        const p = data.product;
+        const name = p.product_name_it || p.product_name || p.abbreviated_product_name || '';
+        if (name) {
+          return res.json({
+            source:    'openfoodfacts',
+            barcode,
+            item_name: name,
+            brand:     p.brands || null,
+            category:  p.food_groups_tags?.[0]?.replace('en:', '') || null,
+            unit:      'pz',
+            unit_cost: 0,
+          });
+        }
+      }
+    }
+
+    // 3. Not found anywhere
+    res.json(null);
   } catch (err) { next(err); }
 }
 

@@ -9,6 +9,8 @@ import DashboardPage from './pages/DashboardPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import InventoryPage from './pages/InventoryPage'
 import UsersPage from './pages/UsersPage'
+import CustomersPage from './pages/CustomersPage'
+import ReservationsPage from './pages/ReservationsPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function ProtectedRoute() {
@@ -57,6 +59,12 @@ export default function App() {
             <AnalyticsPage />
           </RoleRoute>
         } />
+        <Route path="/customers" element={
+          <RoleRoute roles={['admin', 'manager']}>
+            <CustomersPage />
+          </RoleRoute>
+        } />
+        <Route path="/reservations" element={<ReservationsPage />} />
         {/* Alias /staff → /users */}
         <Route path="/staff" element={<Navigate to="/users" replace />} />
       </Route>

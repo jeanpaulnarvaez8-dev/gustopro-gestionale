@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { inventoryAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
+import { useToast } from '../context/ToastContext'
 
 const TABS = [
   { id: 'kpis',       label: 'Panoramica',  icon: Package },
@@ -381,6 +382,7 @@ function ReceiptsTab() {
 }
 
 function ReceiptForm({ pendingPOs, onClose, onSaved }) {
+  const { toast } = useToast()
   const [selectedPO, setSelectedPO] = useState(null)
   const [barcodeInput, setBarcodeInput] = useState('')
   const [notes, setNotes] = useState('')
@@ -402,19 +404,23 @@ function ReceiptForm({ pendingPOs, onClose, onSaved }) {
     if (!code) return
     try {
       const res = await inventoryAPI.barcode(code)
-      if (res.data.length > 0) {
-        const found = res.data[0]
+      const found = res.data  // now a single object or null
+      if (found?.item_name) {
         setItems(prev => [...prev, {
           item_name: found.item_name,
           barcode: code,
-          qty_ordered: found.qty_ordered,
-          qty_received: found.qty_ordered,
-          unit: found.unit,
-          unit_cost: found.unit_cost,
+          qty_ordered: found.qty_ordered ?? 0,
+          qty_received: found.qty_ordered ?? 0,
+          unit: found.unit || 'pz',
+          unit_cost: found.unit_cost || 0,
           batch_no: '', expiry_date: '',
         }])
+        if (found.source === 'openfoodfacts') {
+          toast({ type: 'info', title: `Trovato: ${found.item_name}${found.brand ? ` (${found.brand})` : ''}`, message: 'Da Open Food Facts — verifica prezzo e unità' })
+        }
       } else {
         setItems(prev => [...prev, { ...emptyItem(), barcode: code }])
+        toast({ type: 'warning', title: 'Prodotto non trovato', message: 'Barcode sconosciuto — inserisci manualmente' })
       }
     } catch {
       setItems(prev => [...prev, { ...emptyItem(), barcode: code }])

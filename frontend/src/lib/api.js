@@ -92,6 +92,24 @@ export const adminAPI = {
   weekday:  (weeks)        => api.get('/admin/analytics/weekday', { params: { weeks } }),
 };
 
+// Customers
+export const customersAPI = {
+  list:   (q)      => api.get('/customers', { params: q ? { q } : {} }),
+  get:    (id)     => api.get(`/customers/${id}`),
+  create: (data)   => api.post('/customers', data),
+  update: (id, d)  => api.put(`/customers/${id}`, d),
+  remove: (id)     => api.delete(`/customers/${id}`),
+};
+
+// Reservations
+export const reservationsAPI = {
+  list:     (date)  => api.get('/reservations', { params: date ? { date } : {} }),
+  upcoming: ()      => api.get('/reservations/upcoming'),
+  create:   (data)  => api.post('/reservations', data),
+  update:   (id, d) => api.put(`/reservations/${id}`, d),
+  remove:   (id)    => api.delete(`/reservations/${id}`),
+};
+
 // Inventory
 export const inventoryAPI = {
   // Suppliers
