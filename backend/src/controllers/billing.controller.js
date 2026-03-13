@@ -10,17 +10,17 @@ async function generatePreConto(req, res, next) {
     const { rows: items } = await pool.query(
       `SELECT
          oi.id, oi.quantity, oi.unit_price, oi.modifier_total, oi.subtotal, oi.notes, oi.status,
-         mi.name AS item_name,
+         COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name,
          COALESCE(
            json_agg(json_build_object('name', m.name, 'price_extra', oim.price_extra))
            FILTER (WHERE m.id IS NOT NULL), '[]'
          ) AS modifiers
        FROM order_items oi
-       JOIN menu_items mi ON mi.id = oi.menu_item_id
+       LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        LEFT JOIN order_item_modifiers oim ON oim.order_item_id = oi.id
        LEFT JOIN modifiers m ON m.id = oim.modifier_id
        WHERE oi.order_id = $1 AND oi.status != 'cancelled'
-       GROUP BY oi.id, mi.name
+       GROUP BY oi.id, mi.name, oi.combo_menu_name
        ORDER BY oi.sent_at`,
       [orderId]
     );
@@ -65,9 +65,10 @@ async function processPayment(req, res, next) {
 
     // Snapshot receipt data
     const { rows: items } = await client.query(
-      `SELECT oi.quantity, oi.subtotal, mi.name AS item_name
+      `SELECT oi.quantity, oi.subtotal,
+              COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name
        FROM order_items oi
-       JOIN menu_items mi ON mi.id = oi.menu_item_id
+       LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        WHERE oi.order_id=$1 AND oi.status != 'cancelled'`,
       [order_id]
     );
@@ -119,10 +120,10 @@ async function processPayment(req, res, next) {
 async function listReceipts(req, res, next) {
   try {
     const { rows } = await pool.query(
-      `SELECT r.*, t.table_number, u.name AS issued_by_name
+      `SELECT r.*, COALESCE(t.table_number, 'Asporto') AS table_number, u.name AS issued_by_name
        FROM receipts r
        JOIN orders o ON o.id = r.order_id
-       JOIN tables t ON t.id = o.table_id
+       LEFT JOIN tables t ON t.id = o.table_id
        LEFT JOIN users u ON u.id = r.issued_by
        ORDER BY r.created_at DESC
        LIMIT 100`

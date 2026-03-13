@@ -10,7 +10,8 @@ const STATUS_CONFIG = {
   free:     { label: 'Libero',    color: 'bg-emerald-900/30 border-emerald-500/40 hover:border-emerald-400', dot: 'bg-emerald-400', text: 'text-emerald-400' },
   occupied: { label: 'Occupato',  color: 'bg-red-900/30     border-red-500/40     hover:border-red-400',     dot: 'bg-red-400',     text: 'text-red-400' },
   reserved: { label: 'Riservato', color: 'bg-blue-900/30    border-blue-500/40    hover:border-blue-400',    dot: 'bg-blue-400',    text: 'text-blue-400' },
-  cleaning: { label: 'Pulizia',   color: 'bg-yellow-900/30  border-yellow-500/40  hover:border-yellow-400',  dot: 'bg-yellow-400',  text: 'text-yellow-400' },
+  dirty:    { label: 'Pulizia',   color: 'bg-yellow-900/30  border-yellow-500/40  hover:border-yellow-400',  dot: 'bg-yellow-400',  text: 'text-yellow-400' },
+  parked:   { label: 'In attesa', color: 'bg-purple-900/30  border-purple-500/40  hover:border-purple-400',  dot: 'bg-purple-400',  text: 'text-purple-400' },
 }
 
 export default function TableMapPage() {
@@ -73,63 +74,69 @@ export default function TableMapPage() {
     <div className="min-h-screen bg-[#1A1A1A] flex flex-col">
 
       {/* Header */}
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-[#8B0000] flex items-center justify-center">
-            <span className="text-[#D4AF37] font-bold text-sm">G</span>
+      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-4 py-3 flex items-center gap-3">
+        {/* Logo */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="w-7 h-7 rounded-full bg-[#8B0000] flex items-center justify-center">
+            <span className="text-[#D4AF37] font-bold text-xs">G</span>
           </div>
-          <span className="text-[#F5F5DC] font-semibold">GustoPro</span>
+          <span className="text-[#F5F5DC] font-semibold hidden sm:block">GustoPro</span>
           <div className={`flex items-center gap-1 text-xs ${isConnected ? 'text-emerald-400' : 'text-[#888]'}`}>
-            {isConnected ? <Wifi size={12} /> : <WifiOff size={12} />}
-            <span>{isConnected ? 'Live' : 'Offline'}</span>
+            {isConnected ? <Wifi size={11} /> : <WifiOff size={11} />}
+            <span className="hidden sm:block">{isConnected ? 'Live' : 'Offline'}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        {/* Nav — scrollable on mobile */}
+        <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0 scrollbar-none">
           {['kitchen', 'admin', 'manager'].includes(user?.role) && (
             <button onClick={() => navigate('/kds')}
-              className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
-              <ChefHat size={16} /> KDS
+              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+              <ChefHat size={14} /> <span className="hidden md:block">KDS</span>
             </button>
           )}
           {['admin', 'manager'].includes(user?.role) && (
             <button onClick={() => navigate('/dashboard')}
-              className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
-              <LayoutDashboard size={16} /> Dashboard
+              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+              <LayoutDashboard size={14} /> <span className="hidden md:block">Dashboard</span>
             </button>
           )}
           {['admin', 'manager'].includes(user?.role) && (
             <button onClick={() => navigate('/inventory')}
-              className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
-              <Package size={16} /> Inventario
+              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+              <Package size={14} /> <span className="hidden md:block">Inventario</span>
             </button>
           )}
           <button onClick={() => navigate('/asporto')}
-            className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
-            <ShoppingBag size={16} /> Asporto
+            className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+            <ShoppingBag size={14} /> <span className="hidden md:block">Asporto</span>
           </button>
           <button onClick={() => navigate('/reservations')}
-            className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
-            <CalendarDays size={16} /> Prenotazioni
+            className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+            <CalendarDays size={14} /> <span className="hidden md:block">Prenotazioni</span>
           </button>
           {['admin', 'manager'].includes(user?.role) && (
             <button onClick={() => navigate('/customers')}
-              className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
-              <Users size={16} /> Clienti
+              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+              <Users size={14} /> <span className="hidden md:block">Clienti</span>
             </button>
           )}
           {user?.role === 'admin' && (
             <button onClick={() => navigate('/users')}
-              className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
-              <UserCog size={16} /> Staff
+              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+              <UserCog size={14} /> <span className="hidden md:block">Staff</span>
             </button>
           )}
-          <span className="text-[#888] text-sm">
+        </div>
+
+        {/* User + logout — always visible */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[#888] text-xs hidden sm:block">
             {user?.name} · <span className="text-[#D4AF37]">{user?.role}</span>
           </span>
           <button onClick={logout}
-            className="flex items-center gap-2 text-[#888] hover:text-red-400 transition text-sm">
-            <LogOut size={16} />
+            className="text-[#888] hover:text-red-400 transition p-1">
+            <LogOut size={15} />
           </button>
         </div>
       </header>
