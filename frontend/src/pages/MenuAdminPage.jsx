@@ -11,12 +11,13 @@ import { useToast } from '../context/ToastContext'
 
 // ─── Item Row ────────────────────────────────────────────────
 function ItemRow({ item, onToggle, onEdit, onDelete }) {
-  const [editing, setEditing]   = useState(false)
-  const [name, setName]         = useState(item.name)
-  const [price, setPrice]       = useState(item.base_price)
-  const [desc, setDesc]         = useState(item.description ?? '')
-  const [prep, setPrep]         = useState(item.prep_time_mins ?? '')
-  const [saving, setSaving]     = useState(false)
+  const [editing, setEditing]       = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [name, setName]             = useState(item.name)
+  const [price, setPrice]           = useState(item.base_price)
+  const [desc, setDesc]             = useState(item.description ?? '')
+  const [prep, setPrep]             = useState(item.prep_time_mins ?? '')
+  const [saving, setSaving]         = useState(false)
   const { toast } = useToast()
 
   const handleSave = async () => {
@@ -57,9 +58,21 @@ function ItemRow({ item, onToggle, onEdit, onDelete }) {
           <button onClick={() => setEditing(true)} className="text-[#444] hover:text-[#D4AF37] transition">
             <Pencil size={13} />
           </button>
-          <button onClick={() => onDelete(item.id, item.name)} className="text-[#444] hover:text-red-400 transition">
-            <Trash2 size={13} />
-          </button>
+          {confirmDelete ? (
+            <div className="flex items-center gap-1 shrink-0">
+              <button onClick={() => onDelete(item.id, item.name)}
+                className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md hover:bg-red-500/30 transition">
+                Sì, rimuovi
+              </button>
+              <button onClick={() => setConfirmDelete(false)} className="text-[#444] hover:text-[#888] transition">
+                <X size={13} />
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} className="text-[#444] hover:text-red-400 transition shrink-0">
+              <Trash2 size={13} />
+            </button>
+          )}
         </div>
       ) : (
         <div className="px-4 py-3 flex flex-col gap-2 bg-[#1E1E1E]">
@@ -189,12 +202,11 @@ function CategoryCard({ cat, onRefresh }) {
   }
 
   const handleDeleteItem = async (id, itemName) => {
-    if (!window.confirm(`Disattivare "${itemName}"?`)) return
     try {
       await menuAPI.deleteItem(id)
       loadItems()
-      toast({ type: 'success', title: 'Disattivato' })
-    } catch { toast({ type: 'error', title: 'Errore' }) }
+      toast({ type: 'success', title: `"${itemName}" rimosso` })
+    } catch { toast({ type: 'error', title: 'Errore rimozione' }) }
   }
 
   return (
