@@ -1,40 +1,180 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Plus, Minus, Trash2, Send, ShoppingCart, RefreshCw, CheckCircle2 } from 'lucide-react'
+import {
+  ArrowLeft, Plus, Minus, Trash2, Send, ShoppingCart, RefreshCw,
+  CheckCircle2, BookOpen, X, ChevronRight,
+} from 'lucide-react'
 import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
-import { menuAPI, ordersAPI, tablesAPI } from '../lib/api'
+import { menuAPI, ordersAPI, tablesAPI, comboAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
+
+// ─── Combo Course Selector Modal ─────────────────────────────
+
+function ComboModal({ combo, onClose, onConfirm }) {
+  // selections: { courseId: { item_id, item_name, price_supplement } }
+  const [selections, setSelections] = useState({})
+
+  const allRequired = combo.courses.every(course => {
+    const sel = selections[course.id]
+    return sel && Object.keys(sel).length >= (course.min_choices ?? 1)
+  })
+
+  const totalSupplement = Object.values(selections).reduce((s, sel) => {
+    return s + Object.values(sel).reduce((ss, v) => ss + (v.price_supplement || 0), 0)
+  }, 0)
+
+  const toggleItem = (course, item) => {
+    const max = course.max_choices ?? 1
+    setSelections(prev => {
+      const cur = prev[course.id] ?? {}
+      if (cur[item.id]) {
+        // deselect
+        const next = { ...cur }
+        delete next[item.id]
+        return { ...prev, [course.id]: next }
+      }
+      if (Object.keys(cur).length >= max) {
+        // replace if max=1, otherwise ignore
+        if (max === 1) return { ...prev, [course.id]: { [item.id]: item } }
+        return prev
+      }
+      return { ...prev, [course.id]: { ...cur, [item.id]: item } }
+    })
+  }
+
+  const buildSelectionsPayload = () => {
+    const result = {}
+    for (const course of combo.courses) {
+      const sel = selections[course.id] ?? {}
+      const names = Object.values(sel).map(v => v.item_name)
+      result[course.name] = names.length === 1 ? names[0] : names
+    }
+    return result
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 24, opacity: 0 }}
+        className="bg-[#222] border border-[#3A3A3A] rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col">
+
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-[#3A3A3A]">
+          <div>
+            <h3 className="text-[#F5F5DC] font-bold">{combo.name}</h3>
+            <p className="text-[#D4AF37] text-sm">
+              {formatPrice(combo.price)}
+              {totalSupplement > 0 && (
+                <span className="text-[#888] text-xs ml-1">(+{formatPrice(totalSupplement)} supplementi)</span>
+              )}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-[#555] hover:text-[#888] mt-0.5"><X size={18} /></button>
+        </div>
+
+        {/* Courses */}
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+          {combo.courses.map(course => {
+            const sel = selections[course.id] ?? {}
+            const selectedCount = Object.keys(sel).length
+            const max = course.max_choices ?? 1
+            const min = course.min_choices ?? 1
+            const isFilled = selectedCount >= min
+
+            return (
+              <div key={course.id}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[#F5F5DC] text-sm font-semibold">{course.name}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    isFilled
+                      ? 'bg-emerald-900/40 text-emerald-400'
+                      : 'bg-[#2A2A2A] text-[#555]'
+                  }`}>
+                    {selectedCount}/{max} {max > 1 ? `(min ${min})` : ''}
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  {course.items.map(item => {
+                    const isSelected = !!sel[item.id]
+                    return (
+                      <button key={item.id} onClick={() => toggleItem(course, item)}
+                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl border transition text-left ${
+                          isSelected
+                            ? 'border-[#D4AF37]/70 bg-[#D4AF37]/10 text-[#F5F5DC]'
+                            : 'border-[#333] bg-[#2A2A2A] text-[#888] hover:border-[#555] hover:text-[#F5F5DC]'
+                        }`}>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition ${
+                            isSelected ? 'border-[#D4AF37] bg-[#D4AF37]' : 'border-[#444]'
+                          }`}>
+                            {isSelected && <CheckCircle2 size={10} className="text-[#1A1A1A]" />}
+                          </div>
+                          <span className="text-sm">{item.item_name}</span>
+                        </div>
+                        {item.price_supplement > 0 && (
+                          <span className="text-[#D4AF37] text-xs">+{formatPrice(item.price_supplement)}</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-[#3A3A3A]">
+          <button onClick={() => allRequired && onConfirm(combo, buildSelectionsPayload())}
+            disabled={!allRequired}
+            className="w-full py-3 rounded-xl bg-[#D4AF37] text-[#1A1A1A] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-30 hover:bg-[#c9a42e] transition">
+            <ShoppingCart size={15} /> Aggiungi al carrello · {formatPrice(combo.price + totalSupplement)}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────
+
+const COMBO_TAB_ID = '__combos__'
 
 export default function OrderPage() {
   const { tableId } = useParams()
   const navigate = useNavigate()
-  const { items: cartItems, total, itemCount, setTable, addItem, removeItem, updateQuantity, clearCart } = useCart()
+  const { items: cartItems, total, itemCount, setTable, addItem, addCombo, removeItem, updateQuantity, clearCart } = useCart()
   const { toast } = useToast()
 
-  const [table, setTableData] = useState(null)
-  const [categories, setCategories] = useState([])
-  const [menuItems, setMenuItems] = useState([])
+  const [table, setTableData]         = useState(null)
+  const [categories, setCategories]   = useState([])
+  const [menuItems, setMenuItems]     = useState([])
+  const [combos, setCombos]           = useState([])
   const [activeCategory, setActiveCategory] = useState(null)
   const [loadingMenu, setLoadingMenu] = useState(true)
   const [loadingItems, setLoadingItems] = useState(false)
-  const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [sending, setSending]         = useState(false)
+  const [sent, setSent]               = useState(false)
+  const [comboModal, setComboModal]   = useState(null) // combo obj
 
-  // Load table + categories on mount
+  // Load table + categories + combos on mount
   useEffect(() => {
     async function init() {
       try {
-        const [tablesRes, catsRes] = await Promise.all([
+        const [tablesRes, catsRes, combosRes] = await Promise.all([
           tablesAPI.list(),
           menuAPI.categories(),
+          comboAPI.list(),
         ])
         const t = tablesRes.data.find(t => t.id === tableId)
         if (!t) { navigate('/tables', { replace: true }); return }
         setTableData(t)
         setTable(t.id, t.table_number)
         setCategories(catsRes.data)
+        setCombos(combosRes.data.filter(c => c.is_active !== false))
         if (catsRes.data.length > 0) setActiveCategory(catsRes.data[0].id)
       } catch {
         toast({ type: 'error', title: 'Errore caricamento menu' })
@@ -45,9 +185,9 @@ export default function OrderPage() {
     init()
   }, [tableId, setTable])
 
-  // Load items when category changes
+  // Load items when category changes (not for combo tab)
   const loadItems = useCallback(async (catId) => {
-    if (!catId) return
+    if (!catId || catId === COMBO_TAB_ID) return
     setLoadingItems(true)
     try {
       const res = await menuAPI.items(catId)
@@ -63,11 +203,13 @@ export default function OrderPage() {
 
   const handleSelectCategory = (catId) => {
     setActiveCategory(catId)
-    setMenuItems([])
+    if (catId !== COMBO_TAB_ID) setMenuItems([])
   }
 
-  const handleAddItem = (item) => {
-    addItem(item, 1, [], null)
+  const handleComboConfirm = (combo, selections) => {
+    addCombo(combo, selections)
+    setComboModal(null)
+    toast({ type: 'success', title: `${combo.name} aggiunto`, message: formatPrice(combo.price) })
   }
 
   const handleSend = async () => {
@@ -77,21 +219,29 @@ export default function OrderPage() {
     }
     setSending(true)
     try {
-      const payload = {
-        table_id: tableId,
-        items: cartItems.map(ci => ({
+      const regularItems = cartItems
+        .filter(ci => !ci.item.is_combo)
+        .map(ci => ({
           menu_item_id: ci.item.id,
           quantity: ci.quantity,
           notes: ci.notes || null,
           modifiers: ci.modifiers.map(m => ({ modifier_id: m.id })),
-        })),
-      }
+        }))
+
+      const comboItems = cartItems
+        .filter(ci => ci.item.is_combo)
+        .map(ci => ({
+          combo_menu_id: ci.combo_id,
+          quantity: ci.quantity,
+          combo_selections: ci.combo_selections,
+        }))
+
+      const items = [...regularItems, ...comboItems]
 
       if (table?.active_order_id) {
-        await ordersAPI.addItems(table.active_order_id, payload.items)
+        await ordersAPI.addItems(table.active_order_id, items)
       } else {
-        await ordersAPI.create(payload)
-        // mark table occupied
+        await ordersAPI.create({ table_id: tableId, items })
         await tablesAPI.setStatus(tableId, 'occupied').catch(() => {})
       }
 
@@ -164,19 +314,58 @@ export default function OrderPage() {
                   {cat.name}
                 </button>
               ))}
+              {combos.length > 0 && (
+                <button onClick={() => handleSelectCategory(COMBO_TAB_ID)}
+                  className={`px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+                    activeCategory === COMBO_TAB_ID
+                      ? 'border-[#D4AF37] text-[#D4AF37]'
+                      : 'border-transparent text-[#888] hover:text-[#F5F5DC]'
+                  }`}>
+                  <BookOpen size={13} /> Menù Fissi
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Menu items grid */}
+          {/* Content */}
           <div className="flex-1 overflow-y-auto p-4">
             {loadingMenu || loadingItems ? (
               <div className="flex items-center justify-center h-40">
                 <RefreshCw size={18} className="animate-spin text-[#888]" />
               </div>
+            ) : activeCategory === COMBO_TAB_ID ? (
+              /* Combos grid */
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {combos.map(combo => (
+                  <motion.button key={combo.id} onClick={() => setComboModal(combo)}
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                    className="bg-[#2A2A2A] border border-[#3A3A3A] hover:border-[#D4AF37]/50 rounded-xl p-4 text-left transition flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-[#F5F5DC] font-semibold text-sm leading-tight">{combo.name}</span>
+                      <span className="text-[9px] font-bold bg-[#D4AF37]/20 text-[#D4AF37] px-1.5 py-0.5 rounded-full flex-shrink-0">MENU</span>
+                    </div>
+                    {combo.description && (
+                      <span className="text-[#555] text-xs leading-tight line-clamp-2">{combo.description}</span>
+                    )}
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {combo.courses.map(course => (
+                        <span key={course.id} className="text-[10px] bg-[#333] text-[#888] px-2 py-0.5 rounded-full">
+                          {course.name}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between mt-auto pt-1">
+                      <span className="text-[#D4AF37] font-bold text-sm">{formatPrice(combo.price)}</span>
+                      <ChevronRight size={14} className="text-[#555]" />
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
             ) : (
+              /* Regular items grid */
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {menuItems.map(item => (
-                  <motion.button key={item.id} onClick={() => handleAddItem(item)}
+                  <motion.button key={item.id} onClick={() => addItem(item, 1, [], null)}
                     whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                     className="bg-[#2A2A2A] border border-[#3A3A3A] hover:border-[#D4AF37]/50 rounded-xl p-4 text-left transition flex flex-col gap-2">
                     <span className="text-[#F5F5DC] text-sm font-medium leading-tight">{item.name}</span>
@@ -200,7 +389,6 @@ export default function OrderPage() {
             <h3 className="text-[#F5F5DC] font-semibold text-sm">Ordine</h3>
           </div>
 
-          {/* Cart items */}
           <div className="flex-1 overflow-y-auto px-3 py-2">
             {cartItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-32 gap-2">
@@ -214,27 +402,45 @@ export default function OrderPage() {
                     initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
                     className="py-2 border-b border-[#2E2E2E] last:border-0">
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-[#F5F5DC] text-xs font-medium leading-tight flex-1">
-                        {ci.item.name}
-                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[#F5F5DC] text-xs font-medium leading-tight block truncate">
+                          {ci.item.is_combo && (
+                            <span className="text-[9px] font-bold bg-[#D4AF37]/20 text-[#D4AF37] px-1 py-0.5 rounded mr-1">M</span>
+                          )}
+                          {ci.item.name}
+                        </span>
+                        {ci.item.is_combo && ci.combo_selections && (
+                          <div className="mt-0.5">
+                            {Object.entries(ci.combo_selections).map(([course, sel]) => (
+                              <p key={course} className="text-[#555] text-[9px] truncate">
+                                {course}: {Array.isArray(sel) ? sel.join(', ') : sel}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <button onClick={() => removeItem(ci._key)}
                         className="text-[#555] hover:text-red-400 transition flex-shrink-0">
                         <Trash2 size={12} />
                       </button>
                     </div>
                     <div className="flex items-center justify-between mt-1.5">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => updateQuantity(ci._key, ci.quantity - 1)}
-                          disabled={ci.quantity <= 1}
-                          className="w-5 h-5 rounded bg-[#333] flex items-center justify-center text-[#888] hover:text-[#F5F5DC] disabled:opacity-30 transition">
-                          <Minus size={10} />
-                        </button>
-                        <span className="text-[#F5F5DC] text-xs w-4 text-center">{ci.quantity}</span>
-                        <button onClick={() => updateQuantity(ci._key, ci.quantity + 1)}
-                          className="w-5 h-5 rounded bg-[#333] flex items-center justify-center text-[#888] hover:text-[#F5F5DC] transition">
-                          <Plus size={10} />
-                        </button>
-                      </div>
+                      {!ci.item.is_combo ? (
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => updateQuantity(ci._key, ci.quantity - 1)}
+                            disabled={ci.quantity <= 1}
+                            className="w-5 h-5 rounded bg-[#333] flex items-center justify-center text-[#888] hover:text-[#F5F5DC] disabled:opacity-30 transition">
+                            <Minus size={10} />
+                          </button>
+                          <span className="text-[#F5F5DC] text-xs w-4 text-center">{ci.quantity}</span>
+                          <button onClick={() => updateQuantity(ci._key, ci.quantity + 1)}
+                            className="w-5 h-5 rounded bg-[#333] flex items-center justify-center text-[#888] hover:text-[#F5F5DC] transition">
+                            <Plus size={10} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[#555] text-[10px]">×1</span>
+                      )}
                       <span className="text-[#D4AF37] text-xs font-medium">
                         {formatPrice(ci.item.base_price * ci.quantity)}
                       </span>
@@ -245,9 +451,7 @@ export default function OrderPage() {
             )}
           </div>
 
-          {/* Footer: total + send */}
           <div className="px-4 py-4 border-t border-[#3A3A3A] flex flex-col gap-3">
-
             <div className="flex items-center justify-between">
               <span className="text-[#888] text-sm">Totale</span>
               <span className="text-[#D4AF37] font-bold text-lg">{formatPrice(total)}</span>
@@ -265,6 +469,17 @@ export default function OrderPage() {
           </div>
         </div>
       </div>
+
+      {/* Combo Modal */}
+      <AnimatePresence>
+        {comboModal && (
+          <ComboModal
+            combo={comboModal}
+            onClose={() => setComboModal(null)}
+            onConfirm={handleComboConfirm}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

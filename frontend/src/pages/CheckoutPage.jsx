@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Banknote, CreditCard, Smartphone, Receipt, RefreshCw,
-  CheckCircle2, Users, SplitSquareVertical, Pencil, Plus, Minus, X,
+  CheckCircle2, Users, SplitSquareVertical, Pencil, Plus, Minus, X, Zap,
 } from 'lucide-react'
 import { billingAPI, tablesAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
@@ -512,7 +512,7 @@ export default function CheckoutPage() {
                     <div className="flex flex-col gap-4">
                       <p className="text-[#888] text-xs uppercase tracking-wider font-medium">Metodo di pagamento</p>
                       <MethodPicker value={method} onChange={setMethod} />
-                      <div className="mt-2">
+                      <div className="flex flex-col gap-2 mt-2">
                         <motion.button
                           onClick={() => handlePay(bill.total_amount, false, 1, 1, method)}
                           disabled={paying || !method}
@@ -522,6 +522,13 @@ export default function CheckoutPage() {
                             ? <RefreshCw size={16} className="animate-spin" />
                             : <><CheckCircle2 size={16} /> Incassa {formatPrice(bill.total_amount)}</>}
                         </motion.button>
+                        {/* SumUp deep-link — opens SumUp app on tablet/phone */}
+                        <a
+                          href={`sumupmerchant://pay?amount=${bill.total_amount.toFixed(2)}&currency=EUR&title=GustoPro%20Tavolo%20${bill.table_number ?? ''}&foreign-transaction-id=${orderId}`}
+                          onClick={() => { setMethod('card'); }}
+                          className="w-full py-2.5 rounded-xl border-2 border-blue-500/50 text-blue-400 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-blue-500/10 transition">
+                          <Zap size={15} /> Paga con SumUp
+                        </a>
                       </div>
                     </div>
                   )}

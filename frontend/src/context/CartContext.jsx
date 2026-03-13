@@ -31,6 +31,23 @@ function cartReducer(state, action) {
       };
     }
 
+    case 'ADD_COMBO': {
+      const { combo, selections } = action;
+      const key = `combo-${combo.id}-${Date.now()}`;
+      return {
+        ...state,
+        items: [...state.items, {
+          _key: key,
+          item: { id: combo.id, name: combo.name, base_price: combo.price, is_combo: true },
+          combo_id: combo.id,
+          combo_selections: selections,
+          quantity: 1,
+          modifiers: [],
+          notes: null,
+        }],
+      };
+    }
+
     case 'REMOVE_ITEM':
       return { ...state, items: state.items.filter(i => i._key !== action.key) };
 
@@ -61,6 +78,10 @@ export function CartProvider({ children }) {
     dispatch({ type: 'ADD_ITEM', item, quantity, modifiers, notes });
   }, []);
 
+  const addCombo = useCallback((combo, selections) => {
+    dispatch({ type: 'ADD_COMBO', combo, selections });
+  }, []);
+
   const removeItem = useCallback((key) => {
     dispatch({ type: 'REMOVE_ITEM', key });
   }, []);
@@ -83,7 +104,7 @@ export function CartProvider({ children }) {
   return (
     <CartContext.Provider value={{
       ...state, total, itemCount,
-      setTable, addItem, removeItem, updateQuantity, clearCart,
+      setTable, addItem, addCombo, removeItem, updateQuantity, clearCart,
     }}>
       {children}
     </CartContext.Provider>

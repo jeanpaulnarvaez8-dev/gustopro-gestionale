@@ -12,6 +12,7 @@ import UsersPage from './pages/UsersPage'
 import CustomersPage from './pages/CustomersPage'
 import ReservationsPage from './pages/ReservationsPage'
 import AsportoPage from './pages/AsportoPage'
+import ComboAdminPage from './pages/ComboAdminPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function ProtectedRoute() {
@@ -67,6 +68,11 @@ export default function App() {
         } />
         <Route path="/reservations" element={<ReservationsPage />} />
         <Route path="/asporto" element={<AsportoPage />} />
+        <Route path="/combos" element={
+          <RoleRoute roles={['admin', 'manager']}>
+            <ComboAdminPage />
+          </RoleRoute>
+        } />
         {/* Alias /staff → /users */}
         <Route path="/staff" element={<Navigate to="/users" replace />} />
       </Route>

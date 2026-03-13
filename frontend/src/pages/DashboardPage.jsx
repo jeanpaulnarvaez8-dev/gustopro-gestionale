@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, Users, Receipt, TableProperties, BarChart3, Package, AlertTriangle, Trash2, LineChart } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, Users, Receipt, TableProperties, BarChart3, Package, AlertTriangle, Trash2, LineChart, BookOpen } from 'lucide-react'
 import { adminAPI, billingAPI, inventoryAPI } from '../lib/api'
 import { formatPrice, formatTime } from '../lib/utils'
 
@@ -121,6 +121,10 @@ export default function DashboardPage() {
           <button onClick={() => navigate('/analytics')}
             className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
             <LineChart size={13} /> Analytics
+          </button>
+          <button onClick={() => navigate('/combos')}
+            className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
+            <BookOpen size={13} /> Menù Fissi
           </button>
           {lastRefresh && (
             <span className="text-[#555] text-xs">
