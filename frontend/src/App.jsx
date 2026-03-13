@@ -11,6 +11,7 @@ import InventoryPage from './pages/InventoryPage'
 import UsersPage from './pages/UsersPage'
 import CustomersPage from './pages/CustomersPage'
 import ReservationsPage from './pages/ReservationsPage'
+import AsportoPage from './pages/AsportoPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function ProtectedRoute() {
@@ -65,6 +66,7 @@ export default function App() {
           </RoleRoute>
         } />
         <Route path="/reservations" element={<ReservationsPage />} />
+        <Route path="/asporto" element={<AsportoPage />} />
         {/* Alias /staff → /users */}
         <Route path="/staff" element={<Navigate to="/users" replace />} />
       </Route>

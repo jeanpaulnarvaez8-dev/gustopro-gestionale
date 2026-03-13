@@ -258,7 +258,48 @@ CREATE TABLE IF NOT EXISTS reservations (
 );
 
 -- ============================================================
--- 9. INDEXES
+-- 9. MENÙ FISSI (COMBO)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS combo_menus (
+    id          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        VARCHAR(255)  NOT NULL,
+    price       NUMERIC(10,2) NOT NULL DEFAULT 0,
+    description TEXT,
+    is_active   BOOLEAN       NOT NULL DEFAULT true,
+    sort_order  SMALLINT      NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS combo_courses (
+    id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    combo_id    UUID         NOT NULL REFERENCES combo_menus(id) ON DELETE CASCADE,
+    name        VARCHAR(100) NOT NULL,
+    min_choices SMALLINT     NOT NULL DEFAULT 1,
+    max_choices SMALLINT     NOT NULL DEFAULT 1,
+    sort_order  SMALLINT     NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS combo_course_items (
+    id               UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    course_id        UUID          NOT NULL REFERENCES combo_courses(id) ON DELETE CASCADE,
+    menu_item_id     UUID          NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
+    price_supplement NUMERIC(10,2) NOT NULL DEFAULT 0,
+    UNIQUE(course_id, menu_item_id)
+);
+
+-- Extend order_items: combo grouping
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS combo_menu_id    UUID;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS combo_menu_name  VARCHAR(255);
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS combo_selections JSONB;
+
+-- Extend orders: asporto support
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_type     VARCHAR(20) NOT NULL DEFAULT 'table';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name  VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_time    TIME;
+
+-- ============================================================
+-- 10. INDEXES
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_tables_zone         ON tables(zone_id);
 CREATE INDEX IF NOT EXISTS idx_tables_status       ON tables(status);

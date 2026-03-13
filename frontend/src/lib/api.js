@@ -92,6 +92,23 @@ export const adminAPI = {
   weekday:  (weeks)        => api.get('/admin/analytics/weekday', { params: { weeks } }),
 };
 
+// Combos (menù fissi)
+export const comboAPI = {
+  list:             ()            => api.get('/combos'),
+  create:           (data)        => api.post('/combos', data),
+  update:           (id, data)    => api.put(`/combos/${id}`, data),
+  remove:           (id)          => api.delete(`/combos/${id}`),
+  addCourse:        (id, data)    => api.post(`/combos/${id}/courses`, data),
+  removeCourse:     (courseId)    => api.delete(`/combos/courses/${courseId}`),
+  addCourseItem:    (courseId, d) => api.post(`/combos/courses/${courseId}/items`, d),
+  removeCourseItem: (itemId)      => api.delete(`/combos/course-items/${itemId}`),
+};
+
+// Orders (asporto)
+export const asportoAPI = {
+  create: (data) => api.post('/orders', { ...data, order_type: 'takeaway' }),
+};
+
 // Customers
 export const customersAPI = {
   list:   (q)      => api.get('/customers', { params: q ? { q } : {} }),

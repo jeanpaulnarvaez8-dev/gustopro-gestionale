@@ -206,9 +206,23 @@ export default function KDSPage() {
                       mins >= 10 ? 'bg-amber-900/20' :
                                    'bg-[#222]'
                     }`}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[#F5F5DC] font-bold text-xl">{order.table_number}</span>
-                        <span className="text-[#555] text-xs">{order.zone_name}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {order.order_type === 'takeaway' ? (
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-amber-400 font-bold text-sm tracking-wide">ASPORTO</span>
+                            {order.order_customer_name && (
+                              <span className="text-[#888] text-xs truncate">{order.order_customer_name}</span>
+                            )}
+                            {order.pickup_time && (
+                              <span className="text-[#D4AF37] text-xs">⏱ {order.pickup_time.slice(0,5)}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <span className="text-[#F5F5DC] font-bold text-xl">{order.table_number}</span>
+                            <span className="text-[#555] text-xs">{order.zone_name}</span>
+                          </>
+                        )}
                       </div>
                       <ElapsedTick sentAt={oldest} />
                     </div>
@@ -224,13 +238,27 @@ export default function KDSPage() {
 
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1">
-                                <span className="text-[#F5F5DC] text-sm font-semibold">
-                                  {item.quantity > 1 && (
-                                    <span className="text-[#D4AF37] mr-1">×{item.quantity}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[#F5F5DC] text-sm font-semibold">
+                                    {item.quantity > 1 && (
+                                      <span className="text-[#D4AF37] mr-1">×{item.quantity}</span>
+                                    )}
+                                    {item.name}
+                                  </span>
+                                  {item.is_combo && (
+                                    <span className="text-[9px] font-bold bg-[#D4AF37]/20 text-[#D4AF37] px-1.5 py-0.5 rounded-full">MENU</span>
                                   )}
-                                  {item.name}
-                                </span>
-                                {item.modifiers?.length > 0 && (
+                                </div>
+                                {item.is_combo && item.combo_selections && (
+                                  <div className="mt-1 flex flex-col gap-0.5">
+                                    {Object.entries(item.combo_selections).map(([course, selection]) => (
+                                      <p key={course} className="text-[#888] text-xs">
+                                        <span className="text-[#555]">{course}:</span> {Array.isArray(selection) ? selection.join(', ') : selection}
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+                                {!item.is_combo && item.modifiers?.length > 0 && (
                                   <p className="text-[#888] text-xs mt-0.5">
                                     {item.modifiers.join(', ')}
                                   </p>

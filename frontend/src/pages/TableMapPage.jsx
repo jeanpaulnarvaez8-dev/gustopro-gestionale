@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LogOut, LayoutDashboard, ChefHat, Wifi, WifiOff, Users, RefreshCw, Package, UserCog, CalendarDays } from 'lucide-react'
+import { LogOut, LayoutDashboard, ChefHat, Wifi, WifiOff, Users, RefreshCw, Package, UserCog, CalendarDays, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import { tablesAPI, zonesAPI } from '../lib/api'
@@ -104,6 +104,10 @@ export default function TableMapPage() {
               <Package size={16} /> Inventario
             </button>
           )}
+          <button onClick={() => navigate('/asporto')}
+            className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
+            <ShoppingBag size={16} /> Asporto
+          </button>
           <button onClick={() => navigate('/reservations')}
             className="flex items-center gap-2 text-[#888] hover:text-[#D4AF37] transition text-sm">
             <CalendarDays size={16} /> Prenotazioni
