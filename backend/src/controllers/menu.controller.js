@@ -2,8 +2,11 @@ const pool = require('../config/db');
 
 async function listCategories(req, res, next) {
   try {
+    const all = req.query.all === 'true';
     const { rows } = await pool.query(
-      'SELECT * FROM categories WHERE is_active=true ORDER BY sort_order, name'
+      all
+        ? 'SELECT * FROM categories ORDER BY sort_order, name'
+        : 'SELECT * FROM categories WHERE is_active=true ORDER BY sort_order, name'
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -12,10 +15,13 @@ async function listCategories(req, res, next) {
 async function listItems(req, res, next) {
   try {
     const { categoryId } = req.query;
-    let query = 'SELECT * FROM menu_items WHERE is_available=true';
+    const all = req.query.all === 'true';
+    let query = all
+      ? 'SELECT * FROM menu_items WHERE 1=1'
+      : 'SELECT * FROM menu_items WHERE is_available=true';
     const params = [];
     if (categoryId) {
-      query += ' AND category_id=$1';
+      query += ` AND category_id=$1`;
       params.push(categoryId);
     }
     query += ' ORDER BY sort_order, name';
@@ -45,7 +51,6 @@ async function getItemModifiers(req, res, next) {
        ORDER BY mg.id, m.sort_order`,
       [id]
     );
-    // Group by modifier group
     const grouped = {};
     for (const row of rows) {
       if (!grouped[row.group_id]) {
@@ -81,6 +86,32 @@ async function createCategory(req, res, next) {
   } catch (err) { next(err); }
 }
 
+async function updateCategory(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { name, sort_order, tax_rate, is_active } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE categories SET
+         name       = COALESCE($1, name),
+         sort_order = COALESCE($2, sort_order),
+         tax_rate   = COALESCE($3, tax_rate),
+         is_active  = COALESCE($4, is_active)
+       WHERE id=$5 RETURNING *`,
+      [name || null, sort_order ?? null, tax_rate ?? null, is_active ?? null, id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Categoria non trovata' });
+    res.json(rows[0]);
+  } catch (err) { next(err); }
+}
+
+async function deleteCategory(req, res, next) {
+  try {
+    const { id } = req.params;
+    await pool.query('UPDATE categories SET is_active=false WHERE id=$1', [id]);
+    res.status(204).end();
+  } catch (err) { next(err); }
+}
+
 async function createItem(req, res, next) {
   try {
     const { category_id, name, description, base_price, prep_time_mins, sort_order = 0 } = req.body;
@@ -90,7 +121,7 @@ async function createItem(req, res, next) {
     const { rows } = await pool.query(
       `INSERT INTO menu_items (category_id, name, description, base_price, prep_time_mins, sort_order)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [category_id, name, description, base_price, prep_time_mins, sort_order]
+      [category_id, name, description || null, base_price, prep_time_mins || null, sort_order]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -99,22 +130,33 @@ async function createItem(req, res, next) {
 async function updateItem(req, res, next) {
   try {
     const { id } = req.params;
-    const { name, description, base_price, is_available, sort_order } = req.body;
-    const fields = [], values = [];
-    let i = 1;
-    if (name)              { fields.push(`name=$${i++}`);         values.push(name); }
-    if (description)       { fields.push(`description=$${i++}`);  values.push(description); }
-    if (base_price != null){ fields.push(`base_price=$${i++}`);   values.push(base_price); }
-    if (is_available != null){ fields.push(`is_available=$${i++}`); values.push(is_available); }
-    if (sort_order != null){ fields.push(`sort_order=$${i++}`);   values.push(sort_order); }
-    if (!fields.length) return res.status(400).json({ error: 'Nessun campo' });
-    values.push(id);
+    const { name, description, base_price, is_available, sort_order, prep_time_mins } = req.body;
     const { rows } = await pool.query(
-      `UPDATE menu_items SET ${fields.join(',')} WHERE id=$${i} RETURNING *`, values
+      `UPDATE menu_items SET
+         name           = COALESCE($1, name),
+         description    = COALESCE($2, description),
+         base_price     = COALESCE($3, base_price),
+         is_available   = COALESCE($4, is_available),
+         sort_order     = COALESCE($5, sort_order),
+         prep_time_mins = COALESCE($6, prep_time_mins)
+       WHERE id=$7 RETURNING *`,
+      [name || null, description ?? null, base_price ?? null, is_available ?? null, sort_order ?? null, prep_time_mins ?? null, id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Item non trovato' });
     res.json(rows[0]);
   } catch (err) { next(err); }
 }
 
-module.exports = { listCategories, listItems, getItemModifiers, createCategory, createItem, updateItem };
+async function deleteItem(req, res, next) {
+  try {
+    const { id } = req.params;
+    await pool.query('UPDATE menu_items SET is_available=false WHERE id=$1', [id]);
+    res.status(204).end();
+  } catch (err) { next(err); }
+}
+
+module.exports = {
+  listCategories, listItems, getItemModifiers,
+  createCategory, updateCategory, deleteCategory,
+  createItem, updateItem, deleteItem,
+};

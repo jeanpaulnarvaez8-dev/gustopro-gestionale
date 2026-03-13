@@ -30,20 +30,33 @@ async function updateTable(req, res, next) {
   try {
     const { id } = req.params;
     const { table_number, seats, pos_x, pos_y, zone_id } = req.body;
-    const fields = [], values = [];
-    let i = 1;
-    if (table_number) { fields.push(`table_number=$${i++}`); values.push(table_number); }
-    if (seats)        { fields.push(`seats=$${i++}`);        values.push(seats); }
-    if (pos_x != null){ fields.push(`pos_x=$${i++}`);        values.push(pos_x); }
-    if (pos_y != null){ fields.push(`pos_y=$${i++}`);        values.push(pos_y); }
-    if (zone_id)      { fields.push(`zone_id=$${i++}`);      values.push(zone_id); }
-    if (!fields.length) return res.status(400).json({ error: 'Nessun campo' });
-    values.push(id);
     const { rows } = await pool.query(
-      `UPDATE tables SET ${fields.join(',')} WHERE id=$${i} RETURNING *`, values
+      `UPDATE tables SET
+         table_number = COALESCE($1, table_number),
+         seats        = COALESCE($2, seats),
+         pos_x        = COALESCE($3, pos_x),
+         pos_y        = COALESCE($4, pos_y),
+         zone_id      = COALESCE($5, zone_id)
+       WHERE id=$6 RETURNING *`,
+      [table_number || null, seats ?? null, pos_x ?? null, pos_y ?? null, zone_id || null, id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Tavolo non trovato' });
     res.json(rows[0]);
+  } catch (err) { next(err); }
+}
+
+async function deleteTable(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query(
+      `SELECT status FROM tables WHERE id=$1`, [id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tavolo non trovato' });
+    if (rows[0].status === 'occupied') {
+      return res.status(400).json({ error: 'Impossibile eliminare un tavolo occupato.' });
+    }
+    await pool.query('DELETE FROM tables WHERE id=$1', [id]);
+    res.status(204).end();
   } catch (err) { next(err); }
 }
 
@@ -65,4 +78,4 @@ async function setTableStatus(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { listTables, createTable, updateTable, setTableStatus };
+module.exports = { listTables, createTable, updateTable, deleteTable, setTableStatus };

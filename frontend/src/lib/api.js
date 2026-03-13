@@ -40,8 +40,10 @@ export const usersAPI = {
 
 // Zones
 export const zonesAPI = {
-  list:   ()     => api.get('/zones'),
-  create: (data) => api.post('/zones', data),
+  list:   ()          => api.get('/zones'),
+  create: (data)      => api.post('/zones', data),
+  update: (id, data)  => api.put(`/zones/${id}`, data),
+  remove: (id)        => api.delete(`/zones/${id}`),
 };
 
 // Tables
@@ -49,18 +51,24 @@ export const tablesAPI = {
   list:      ()           => api.get('/tables'),
   create:    (data)       => api.post('/tables', data),
   update:    (id, data)   => api.put(`/tables/${id}`, data),
+  remove:    (id)         => api.delete(`/tables/${id}`),
   setStatus: (id, status) => api.patch(`/tables/${id}/status`, { status }),
 };
 
 // Menu
 export const menuAPI = {
-  categories:    ()        => api.get('/menu/categories'),
-  items:         (catId)   => api.get('/menu/items', { params: { categoryId: catId } }),
-  allItems:      ()        => api.get('/menu/items'),
-  itemModifiers: (itemId)  => api.get(`/menu/items/${itemId}/modifiers`),
-  createCategory:(data)    => api.post('/menu/categories', data),
-  createItem:    (data)    => api.post('/menu/items', data),
-  updateItem:    (id, data)=> api.put(`/menu/items/${id}`, data),
+  categories:     ()          => api.get('/menu/categories'),
+  allCategories:  ()          => api.get('/menu/categories', { params: { all: 'true' } }),
+  items:          (catId)     => api.get('/menu/items', { params: { categoryId: catId } }),
+  allItems:       ()          => api.get('/menu/items'),
+  allItemsAdmin:  (catId)     => api.get('/menu/items', { params: { all: 'true', ...(catId ? { categoryId: catId } : {}) } }),
+  itemModifiers:  (itemId)    => api.get(`/menu/items/${itemId}/modifiers`),
+  createCategory: (data)      => api.post('/menu/categories', data),
+  updateCategory: (id, data)  => api.put(`/menu/categories/${id}`, data),
+  deleteCategory: (id)        => api.delete(`/menu/categories/${id}`),
+  createItem:     (data)      => api.post('/menu/items', data),
+  updateItem:     (id, data)  => api.put(`/menu/items/${id}`, data),
+  deleteItem:     (id)        => api.delete(`/menu/items/${id}`),
 };
 
 // Orders
