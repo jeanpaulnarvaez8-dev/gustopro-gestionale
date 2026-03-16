@@ -130,6 +130,9 @@ function TableCard({ table, editMode, canEdit, onNavigate, onDelete, onStatusCha
         <span>{table.seats} posti</span>
       </div>
       <span className={`text-xs font-medium ${cfg.text}`}>{cfg.label}</span>
+      {table.status === 'dirty' && !editMode && (
+        <span className="text-[10px] text-yellow-500/60 mt-[-6px]">tocca per liberare</span>
+      )}
 
       {/* Dirty overlay */}
       <AnimatePresence>
@@ -325,38 +328,41 @@ export default function TableMapPage() {
       </header>
 
       {/* Zone Tabs */}
-      <div className="bg-[#222] border-b border-[#3A3A3A] px-4 flex items-center gap-1 overflow-x-auto scrollbar-none">
-        {zones.map(zone => (
-          <button
-            key={zone.id}
-            onClick={() => setActiveZone(zone.id)}
-            className={`px-5 py-3 text-sm font-medium border-b-2 transition shrink-0 ${
-              activeZone === zone.id
-                ? 'border-[#D4AF37] text-[#D4AF37]'
-                : 'border-transparent text-[#888] hover:text-[#F5F5DC]'
-            }`}
-          >
-            {zone.name}
-          </button>
-        ))}
+      <div className="bg-[#222] border-b border-[#3A3A3A] flex items-center">
+        {/* Scrollable zone tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-1 min-w-0 px-4">
+          {zones.map(zone => (
+            <button
+              key={zone.id}
+              onClick={() => setActiveZone(zone.id)}
+              className={`px-5 py-3 text-sm font-medium border-b-2 transition shrink-0 ${
+                activeZone === zone.id
+                  ? 'border-[#D4AF37] text-[#D4AF37]'
+                  : 'border-transparent text-[#888] hover:text-[#F5F5DC]'
+              }`}
+            >
+              {zone.name}
+            </button>
+          ))}
+        </div>
 
-        <div className="ml-auto flex items-center gap-1 shrink-0 pl-2">
-          {/* Edit mode toggle (admin/manager only) */}
+        {/* Always-visible action buttons */}
+        <div className="flex items-center gap-2 shrink-0 px-3 border-l border-[#3A3A3A]">
           {canEdit && (
             <button
               onClick={() => setEditMode(v => !v)}
               title={editMode ? 'Esci da modalità modifica' : 'Modifica tavoli'}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition border ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition border ${
                 editMode
                   ? 'bg-[#D4AF37]/20 text-[#D4AF37] border-[#D4AF37]/40'
-                  : 'text-[#aaa] border-[#3A3A3A] hover:text-[#D4AF37] hover:border-[#D4AF37]/40 hover:bg-[#D4AF37]/10'
+                  : 'text-[#ccc] border-[#4A4A4A] hover:text-[#D4AF37] hover:border-[#D4AF37]/40 hover:bg-[#D4AF37]/10'
               }`}
             >
               <Pencil size={13} />
-              <span>{editMode ? 'Fine' : 'Modifica'}</span>
+              <span className="hidden sm:inline">{editMode ? 'Fine' : 'Modifica'}</span>
             </button>
           )}
-          <button onClick={loadData} className="text-[#555] hover:text-[#888] p-2 rounded-lg hover:bg-[#2A2A2A] transition">
+          <button onClick={loadData} className="text-[#777] hover:text-[#aaa] p-1.5 rounded-lg hover:bg-[#2A2A2A] transition">
             <RefreshCw size={14} />
           </button>
         </div>
