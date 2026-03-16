@@ -27,7 +27,10 @@ export function SocketProvider({ children }) {
 
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
-    socket.on('connect_error', () => setIsConnected(false));
+    socket.on('connect_error', (err) => {
+      setIsConnected(false);
+      console.error('[Socket] connect_error:', err.message);
+    });
 
     // Inventory alerts
     socket.on('inventory:discrepancy', ({ receivedBy, alerts }) => {
