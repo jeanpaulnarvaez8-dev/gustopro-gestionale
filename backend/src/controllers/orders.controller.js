@@ -110,6 +110,9 @@ async function createOrder(req, res, next) {
 
     await client.query('COMMIT');
 
+    // Re-fetch order so trigger-recalculated totals are included
+    const { rows: [updatedOrder] } = await pool.query('SELECT * FROM orders WHERE id=$1', [order.id]);
+
     // Emit events
     if (table_id) {
       const tableInfo = await pool.query('SELECT table_number FROM tables WHERE id=$1', [table_id]);
@@ -133,7 +136,7 @@ async function createOrder(req, res, next) {
       });
     }
 
-    res.status(201).json({ ...order, items: orderItems });
+    res.status(201).json({ ...updatedOrder, items: orderItems });
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);
