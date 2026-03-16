@@ -46,8 +46,11 @@ async function processPayment(req, res, next) {
   try {
     const { order_id, amount, payment_method, is_split = false, split_index = 1, split_total = 1 } = req.body;
     const VALID_METHODS = ['cash', 'card', 'digital', 'room_charge'];
-    if (!order_id || !amount || !payment_method) {
+    if (!order_id || amount == null || !payment_method) {
       return res.status(400).json({ error: 'order_id, amount, payment_method obbligatori' });
+    }
+    if (parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'amount deve essere maggiore di 0' });
     }
     if (!VALID_METHODS.includes(payment_method)) {
       return res.status(400).json({ error: `Metodo non valido. Valori: ${VALID_METHODS.join(', ')}` });
