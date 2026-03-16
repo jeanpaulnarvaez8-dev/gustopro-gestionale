@@ -224,4 +224,49 @@ async function cancelItem(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { createOrder, getOrder, addItems, cancelItem };
+// ── cancelOrder ──────────────────────────────────────────────
+
+async function cancelOrder(req, res, next) {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { rows: [order] } = await client.query(
+      "SELECT * FROM orders WHERE id=$1 AND status='open'", [id]
+    );
+    if (!order) return res.status(404).json({ error: 'Ordine non trovato o già chiuso' });
+
+    await client.query('BEGIN');
+
+    // Cancel all non-cancelled items
+    await client.query(
+      "UPDATE order_items SET status='cancelled' WHERE order_id=$1 AND status != 'cancelled'",
+      [id]
+    );
+
+    // Mark order cancelled
+    const { rows: [updated] } = await client.query(
+      "UPDATE orders SET status='cancelled' WHERE id=$1 RETURNING *", [id]
+    );
+
+    await client.query('COMMIT');
+
+    // Free the table
+    if (order.table_id) {
+      await pool.query("UPDATE tables SET status='free' WHERE id=$1", [order.table_id]);
+      getIO()?.emit('table-status-changed', {
+        tableId: order.table_id,
+        status: 'free',
+        active_order_id: null,
+      });
+    }
+
+    res.json(updated);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder };

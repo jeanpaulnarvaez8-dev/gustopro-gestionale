@@ -45,8 +45,12 @@ async function processPayment(req, res, next) {
   const client = await pool.connect();
   try {
     const { order_id, amount, payment_method, is_split = false, split_index = 1, split_total = 1 } = req.body;
+    const VALID_METHODS = ['cash', 'card', 'digital', 'room_charge'];
     if (!order_id || !amount || !payment_method) {
       return res.status(400).json({ error: 'order_id, amount, payment_method obbligatori' });
+    }
+    if (!VALID_METHODS.includes(payment_method)) {
+      return res.status(400).json({ error: `Metodo non valido. Valori: ${VALID_METHODS.join(', ')}` });
     }
 
     await client.query('BEGIN');
@@ -106,6 +110,14 @@ async function processPayment(req, res, next) {
 
     if (newPaymentStatus === 'paid') {
       getIO()?.emit('order-settled', { orderId: order_id, tableId: order.table_id });
+      // Notify TableMap: table is now dirty (trigger updated DB, push to clients)
+      if (order.table_id) {
+        getIO()?.emit('table-status-changed', {
+          tableId: order.table_id,
+          status: 'dirty',
+          active_order_id: null,
+        });
+      }
     }
 
     res.status(201).json({ payment, receipt, payment_status: newPaymentStatus });
