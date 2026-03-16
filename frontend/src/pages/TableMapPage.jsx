@@ -346,13 +346,14 @@ export default function TableMapPage() {
             <button
               onClick={() => setEditMode(v => !v)}
               title={editMode ? 'Esci da modalità modifica' : 'Modifica tavoli'}
-              className={`p-2 rounded-lg transition ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition border ${
                 editMode
-                  ? 'bg-[#D4AF37]/20 text-[#D4AF37]'
-                  : 'text-[#555] hover:text-[#888] hover:bg-[#2A2A2A]'
+                  ? 'bg-[#D4AF37]/20 text-[#D4AF37] border-[#D4AF37]/40'
+                  : 'text-[#aaa] border-[#3A3A3A] hover:text-[#D4AF37] hover:border-[#D4AF37]/40 hover:bg-[#D4AF37]/10'
               }`}
             >
-              <Pencil size={14} />
+              <Pencil size={13} />
+              <span>{editMode ? 'Fine' : 'Modifica'}</span>
             </button>
           )}
           <button onClick={loadData} className="text-[#555] hover:text-[#888] p-2 rounded-lg hover:bg-[#2A2A2A] transition">
