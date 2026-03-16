@@ -291,12 +291,14 @@ CREATE TABLE IF NOT EXISTS combo_course_items (
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS combo_menu_id    UUID;
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS combo_menu_name  VARCHAR(255);
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS combo_selections JSONB;
+ALTER TABLE order_items ALTER COLUMN menu_item_id DROP NOT NULL;
 
 -- Extend orders: asporto support
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_type     VARCHAR(20) NOT NULL DEFAULT 'table';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name  VARCHAR(255);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_time    TIME;
+ALTER TABLE orders ALTER COLUMN table_id DROP NOT NULL;
 
 -- ============================================================
 -- 10. INDEXES
