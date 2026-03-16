@@ -8,7 +8,9 @@ function getSocketUrl() {
 }
 
 export function connectSocket(token) {
-  if (socket?.connected) return socket;
+  // Return existing socket even if still connecting — prevents duplicate sockets
+  // when AuthContext + SocketContext both call connectSocket near-simultaneously
+  if (socket) return socket;
 
   socket = io(getSocketUrl(), {
     auth: { token },

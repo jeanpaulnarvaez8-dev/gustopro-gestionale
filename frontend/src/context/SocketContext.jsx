@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { connectSocket, disconnectSocket, getSocket } from '../lib/socket';
+import { connectSocket, disconnectSocket } from '../lib/socket';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 
@@ -8,12 +8,14 @@ const SocketContext = createContext(null);
 export function SocketProvider({ children }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [socketInstance, setSocketInstance] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     if (!user) {
       disconnectSocket();
       setIsConnected(false);
+      setSocketInstance(null);
       return;
     }
 
@@ -21,6 +23,7 @@ export function SocketProvider({ children }) {
     if (!token) return;
 
     const socket = connectSocket(token);
+    setSocketInstance(socket);
 
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
@@ -64,7 +67,7 @@ export function SocketProvider({ children }) {
   }, [user, toast]);
 
   return (
-    <SocketContext.Provider value={{ socket: getSocket(), isConnected }}>
+    <SocketContext.Provider value={{ socket: socketInstance, isConnected }}>
       {children}
     </SocketContext.Provider>
   );
