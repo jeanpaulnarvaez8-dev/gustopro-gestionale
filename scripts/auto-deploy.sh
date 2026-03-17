@@ -40,6 +40,37 @@ if [ $? -ne 0 ]; then
 fi
 echo "$LOG_PREFIX git reset completato"
 
+# Esegui migration SQL pendenti
+MIGRATIONS_DIR="$PROJECT_DIR/migrations"
+DB_CONTAINER="gestionale-postgres"
+DB_USER="gustopro"
+DB_NAME="gustopro"
+
+# Crea tabella di tracking se non esiste
+docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c "
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    filename TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ DEFAULT NOW()
+  );
+" > /dev/null 2>&1
+
+if [ -d "$MIGRATIONS_DIR" ]; then
+  for f in $(ls "$MIGRATIONS_DIR"/*.sql 2>/dev/null | sort); do
+    filename=$(basename "$f")
+    already=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tAc "SELECT 1 FROM schema_migrations WHERE filename='$filename'")
+    if [ "$already" != "1" ]; then
+      echo "$LOG_PREFIX Eseguo migration: $filename"
+      docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" < "$f"
+      if [ $? -eq 0 ]; then
+        docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c "INSERT INTO schema_migrations (filename) VALUES ('$filename');" > /dev/null
+        echo "$LOG_PREFIX Migration completata: $filename"
+      else
+        echo "$LOG_PREFIX ERRORE migration: $filename"
+      fi
+    fi
+  done
+fi
+
 # Rebuild e riavvio container
 docker compose build --no-cache
 if [ $? -ne 0 ]; then
