@@ -39,13 +39,13 @@ fi
 echo "$LOG_PREFIX git reset completato"
 
 # Rebuild e riavvio container
-docker compose build --no-cache
+sudo docker compose build --no-cache
 if [ $? -ne 0 ]; then
   echo "$LOG_PREFIX ERRORE: docker compose build fallito"
   exit 1
 fi
 
-docker compose up -d
+sudo docker compose up -d
 if [ $? -ne 0 ]; then
   echo "$LOG_PREFIX ERRORE: docker compose up fallito"
   exit 1
