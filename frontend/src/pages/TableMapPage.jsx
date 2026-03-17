@@ -269,7 +269,7 @@ export default function TableMapPage() {
           <div className="w-7 h-7 rounded-full bg-[#8B0000] flex items-center justify-center">
             <span className="text-[#D4AF37] font-bold text-xs">G</span>
           </div>
-          <span className="text-[#F5F5DC] font-semibold hidden sm:block">GustoPro</span>
+          <span className="text-[#F5F5DC] font-semibold hidden sm:block">GustoPro <span className="text-[#D4AF37] text-xs font-normal">v1.0</span></span>
           <div className={`flex items-center gap-1 text-xs ${isConnected ? 'text-emerald-400' : 'text-[#888]'}`}>
             {isConnected ? <Wifi size={11} /> : <WifiOff size={11} />}
             <span className="hidden sm:block">{isConnected ? 'Live' : 'Offline'}</span>
