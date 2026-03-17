@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GustoPro Gestionale — Guida Completa</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    :root {
+      --gold: #D4AF37;
+      --dark: #1A1A1A;
+      --mid: #2A2A2A;
+      --light: #3A3A3A;
+      --text: #E5E5E5;
+      --muted: #9CA3AF;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Georgia', serif;
+      background: #fff;
+      color: #1a1a1a;
+      line-height: 1.7;
+      font-size: 13pt;
+    }
+
+    /* ── COVER PAGE ── */
+    .cover {
+      background: #1A1A1A;
+      color: #E5E5E5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 60px 40px;
+      page-break-after: always;
+    }
+
+    .cover .logo-circle {
+      width: 100px;
+      height: 100px;
+      border: 3px solid #D4AF37;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 32px;
+      font-size: 40px;
+    }
+
+    .cover h1 {
+      font-size: 42pt;
+      color: #D4AF37;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+
+    .cover .subtitle {
+      font-size: 16pt;
+      color: #9CA3AF;
+      margin-bottom: 48px;
+      font-style: italic;
+    }
+
+    .cover .divider {
+      width: 80px;
+      height: 2px;
+      background: #D4AF37;
+      margin: 0 auto 48px;
+    }
+
+    .cover .tagline {
+      font-size: 13pt;
+      color: #E5E5E5;
+      max-width: 520px;
+      line-height: 1.8;
+    }
+
+    .cover .version {
+      margin-top: 60px;
+      color: #9CA3AF;
+      font-size: 10pt;
+    }
+
+    /* ── GENERAL ── */
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 60px 48px;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: 'Georgia', serif;
+      color: #1A1A1A;
+    }
+
+    h1 { font-size: 26pt; margin-bottom: 20px; }
+    h2 { font-size: 18pt; margin: 48px 0 16px; color: #B8960C; border-bottom: 2px solid #D4AF37; padding-bottom: 8px; }
+    h3 { font-size: 13pt; margin: 28px 0 10px; color: #1A1A1A; }
+    h4 { font-size: 11pt; margin: 20px 0 8px; color: #4A4A4A; }
+
+    p { margin-bottom: 14px; }
+
+    ul, ol { margin: 12px 0 14px 28px; }
+    li { margin-bottom: 6px; }
+
+    strong { color: #1a1a1a; }
+    em { color: #555; }
+
+    /* ── TOC ── */
+    .toc {
+      background: #f9f6ee;
+      border: 1px solid #D4AF37;
+      border-radius: 8px;
+      padding: 32px 40px;
+      margin: 32px 0 48px;
+      page-break-after: always;
+    }
+
+    .toc h2 {
+      margin-top: 0;
+      border: none;
+      padding: 0;
+      margin-bottom: 20px;
+    }
+
+    .toc ol { margin-left: 20px; }
+    .toc li { margin-bottom: 8px; font-size: 12pt; }
+    .toc .section-num { color: #D4AF37; font-weight: bold; margin-right: 8px; }
+
+    /* ── FEATURE CARD ── */
+    .feature-card {
+      border: 1px solid #e0d9c8;
+      border-left: 4px solid #D4AF37;
+      border-radius: 6px;
+      padding: 20px 24px;
+      margin: 20px 0;
+      background: #fdfcf8;
+    }
+
+    .feature-card h3 {
+      margin-top: 0;
+      font-size: 13pt;
+      color: #B8960C;
+    }
+
+    /* ── ROLE TABLE ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0 28px;
+      font-size: 11pt;
+    }
+
+    thead tr {
+      background: #1A1A1A;
+      color: #D4AF37;
+    }
+
+    thead th {
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: bold;
+    }
+
+    tbody tr:nth-child(even) { background: #f9f6ee; }
+    tbody tr:nth-child(odd) { background: #fff; }
+
+    td {
+      padding: 9px 14px;
+      border-bottom: 1px solid #e8e0cc;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 9pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-admin { background: #fff3cd; color: #856404; }
+    .badge-manager { background: #d1ecf1; color: #0c5460; }
+    .badge-waiter { background: #d4edda; color: #155724; }
+    .badge-cashier { background: #e2d9f3; color: #4a1d8e; }
+    .badge-kitchen { background: #fde8d8; color: #7d3c07; }
+
+    /* ── CALLOUT ── */
+    .callout {
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin: 20px 0;
+    }
+
+    .callout-info { background: #e8f4f8; border-left: 4px solid #17a2b8; }
+    .callout-warning { background: #fff9e6; border-left: 4px solid #D4AF37; }
+    .callout-success { background: #e8f5e9; border-left: 4px solid #28a745; }
+
+    .callout strong { display: block; margin-bottom: 6px; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ── FLOW ── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 20px 0 28px;
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 14px 0;
+      border-left: 2px solid #D4AF37;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .flow-step::before {
+      content: attr(data-n);
+      position: absolute;
+      left: -14px;
+      top: 14px;
+      width: 26px;
+      height: 26px;
+      background: #D4AF37;
+      color: #1A1A1A;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 11pt;
+    }
+
+    .flow-step-content strong { display: block; margin-bottom: 4px; }
+    .flow-step-content p { margin: 0; color: #444; font-size: 11pt; }
+
+    /* ── PAGE BREAK ── */
+    .break { page-break-before: always; }
+
+    /* ── PRINT ── */
+    @media print {
+      body { font-size: 11pt; }
+      .cover { min-height: 100vh; }
+      .no-print { display: none !important; }
+      h2 { page-break-before: auto; }
+      .feature-card, .callout { page-break-inside: avoid; }
+    }
+
+    /* ── PRINT BUTTON ── */
+    .print-btn {
+      position: fixed;
+      bottom: 32px;
+      right: 32px;
+      background: #D4AF37;
+      color: #1A1A1A;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 13pt;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      z-index: 999;
+    }
+
+    .print-btn:hover { background: #B8960C; }
+
+    .print-btn.loading {
+      opacity: 0.7;
+      cursor: wait;
+    }
+
+    /* ── KPI GRID ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 20px 0 28px;
+    }
+
+    .kpi-box {
+      border: 1px solid #e0d9c8;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      background: #fdfcf8;
+    }
+
+    .kpi-box .kpi-label { font-size: 9pt; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .kpi-box .kpi-value { font-size: 20pt; font-weight: bold; color: #D4AF37; }
+
+    footer {
+      text-align: center;
+      margin-top: 60px;
+      padding: 24px 0;
+      border-top: 1px solid #e0d9c8;
+      color: #888;
+      font-size: 9pt;
+    }
+  </style>
+</head>
+<body>
+
+<!-- PRINT BUTTON (hidden on print) -->
+<button class="print-btn no-print" id="downloadBtn" onclick="downloadPDF()">⬇️ Scarica PDF</button>
+
+<script>
+  function downloadPDF() {
+    const btn = document.getElementById('downloadBtn');
+    btn.textContent = '⏳ Generazione in corso...';
+    btn.classList.add('loading');
+    btn.disabled = true;
+
+    const element = document.body;
+    const opt = {
+      margin:       [10, 12, 10, 12],
+      filename:     'GustoPro-Gestionale-Guida.pdf',
+      image:        { type: 'jpeg', quality: 0.97 },
+      html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    html2pdf().set(opt).from(element).save().then(() => {
+      btn.textContent = '⬇️ Scarica PDF';
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    });
+  }
+</script>
+
+<!-- ═══════════════════════════════════════════
+     COVER
+═══════════════════════════════════════════ -->
+<div class="cover">
+  <div class="logo-circle">🍽</div>
+  <h1>GustoPro</h1>
+  <p class="subtitle">Gestionale per Ristorazione</p>
+  <div class="divider"></div>
+  <p class="tagline">
+    Sistema di gestione completo per ristoranti: ordini, cucina, cassa,
+    magazzino, analytics e molto altro — tutto in un'unica piattaforma.
+  </p>
+  <p class="version">Versione 1.0 &nbsp;·&nbsp; Marzo 2026 &nbsp;·&nbsp; Documento riservato</p>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     INDICE
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="toc">
+    <h2 style="color:#B8960C;">Indice</h2>
+    <ol>
+      <li><span class="section-num">1.</span> Panoramica del sistema</li>
+      <li><span class="section-num">2.</span> Ruoli utente e permessi</li>
+      <li><span class="section-num">3.</span> Funzionalità — Sala e Ordini</li>
+      <li><span class="section-num">4.</span> Funzionalità — Cucina (KDS)</li>
+      <li><span class="section-num">5.</span> Funzionalità — Cassa e Pagamenti</li>
+      <li><span class="section-num">6.</span> Funzionalità — Amministrazione</li>
+      <li><span class="section-num">7.</span> Funzionalità — Magazzino e Ingredienti</li>
+      <li><span class="section-num">8.</span> Riconciliazione magazzino</li>
+      <li><span class="section-num">9.</span> Report fiscale corrispettivi</li>
+      <li><span class="section-num">10.</span> Flusso operativo — Una serata tipo</li>
+      <li><span class="section-num">11.</span> Controllo perdite e sprechi</li>
+      <li><span class="section-num">12.</span> Dati tecnici e infrastruttura</li>
+    </ol>
+  </div>
+
+<!-- ═══════════════════════════════════════════
+     1. PANORAMICA
+═══════════════════════════════════════════ -->
+  <h2>1. Panoramica del Sistema</h2>
+
+  <p>
+    <strong>GustoPro Gestionale</strong> è una piattaforma web completa progettata
+    per la gestione moderna di ristoranti. Sostituisce il classico software da cassa
+    con un sistema flessibile, accessibile da qualsiasi dispositivo con browser:
+    tablet in sala, smartphone in cucina, PC in ufficio.
+  </p>
+
+  <p>
+    Il sistema copre l'intero ciclo operativo di un ristorante: dalla presa ordine
+    al tavolo, alla visualizzazione in cucina, al pagamento alla cassa, fino alla
+    reportistica fiscale e al controllo del magazzino.
+  </p>
+
+  <div class="kpi-grid">
+    <div class="kpi-box">
+      <div class="kpi-label">Moduli</div>
+      <div class="kpi-value">14</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Ruoli Utente</div>
+      <div class="kpi-value">5</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Piattaforma</div>
+      <div class="kpi-value">Web</div>
+    </div>
+  </div>
+
+  <div class="callout callout-info">
+    <strong>Accesso</strong>
+    Il sistema è accessibile da browser su qualsiasi dispositivo. Non richiede
+    installazione di software aggiuntivo. L'accesso avviene tramite PIN numerico
+    personale.
+  </div>
+
+<!-- ═══════════════════════════════════════════
+     2. RUOLI
+═══════════════════════════════════════════ -->
+  <h2>2. Ruoli Utente e Permessi</h2>
+
+  <p>
+    Ogni utente ha un ruolo che determina quali sezioni del gestionale può vedere
+    e utilizzare. I ruoli sono assegnati dall'amministratore.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Ruolo</th>
+        <th>Accesso</th>
+        <th>Tipico per</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge badge-admin">Admin</span></td>
+        <td>Accesso completo a tutti i moduli</td>
+        <td>Proprietario, direttore</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-manager">Manager</span></td>
+        <td>Dashboard, analytics, menu, magazzino (no utenti, no report fiscale)</td>
+        <td>Responsabile di sala, responsabile F&amp;B</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-waiter">Cameriere</span></td>
+        <td>Mappa tavoli, presa ordini, prenotazioni, asporto</td>
+        <td>Camerieri di sala</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-cashier">Cassiere</span></td>
+        <td>Mappa tavoli, checkout/pagamento</td>
+        <td>Cassa, front desk</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-kitchen">Cucina</span></td>
+        <td>Solo KDS (schermo cucina)</td>
+        <td>Chef, cuochi, pasticcieri</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-warning">
+    <strong>Sicurezza</strong>
+    Il PIN viene hashato con bcrypt prima di essere salvato nel database.
+    Non è mai memorizzato in chiaro. I token di sessione hanno scadenza automatica.
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     3. SALA E ORDINI
+═══════════════════════════════════════════ -->
+<div class="page break">
+  <h2>3. Sala e Ordini</h2>
+
+  <div class="feature-card">
+    <h3>🗺 Mappa Tavoli</h3>
+    <p>
+      La schermata principale del gestionale. Mostra tutti i tavoli del ristorante
+      organizzati per zone (sala interna, terrazza, bar, ecc.). Ogni tavolo è
+      colorato in base al proprio stato:
+    </p>
+    <ul>
+      <li><strong>Verde — Libero:</strong> nessun ordine aperto</li>
+      <li><strong>Giallo — Occupato:</strong> ordine aperto con items</li>
+      <li><strong>Arancione — Da pulire:</strong> ordine chiuso, tavolo da preparare</li>
+      <li><strong>Blu — Parcheggiato:</strong> conto emesso, in attesa di pagamento</li>
+    </ul>
+    <p>
+      Aggiornamenti in tempo reale tramite WebSocket: lo stato cambia su tutti
+      i dispositivi connessi istantaneamente, senza ricaricare la pagina.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <h3>📋 Presa Ordini</h3>
+    <p>
+      Toccando un tavolo si accede alla pagina ordine. Il menu è suddiviso per
+      categorie (antipasti, primi, secondi, dessert, bevande, ecc.).
+      Il cameriere può:
+    </p>
+    <ul>
+      <li>Aggiungere piatti al carrello con un tocco</li>
+      <li>Specificare varianti e modificatori (es. cottura, allergie, senza glutine)</li>
+      <li>Inserire note libere per ogni piatto</li>
+      <li>Inviare l'ordine direttamente in cucina</li>
+      <li>Aggiungere altri piatti in un secondo momento (follow-up order)</li>
+    </ul>
+    <p>
+      Una volta inviato, l'ordine appare immediatamente sullo schermo cucina KDS.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <h3>🥡 Asporto</h3>
+    <p>
+      Sezione dedicata agli ordini da asporto e delivery. Funziona in modo analogo
+      all'ordine al tavolo ma senza selezionare un tavolo. Ogni ordine asporto
+      riceve un numero progressivo e viene inviato in cucina come gli altri ordini.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <h3>📅 Prenotazioni</h3>
+    <p>
+      Gestione del calendario prenotazioni: nome cliente, numero di coperti,
+      data e ora, telefono, note speciali. Permette di organizzare la sala
+      in anticipo e gestire l'occupazione per fasce orarie.
+    </p>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     4. CUCINA — KDS
+═══════════════════════════════════════════ -->
+<div class="page break">
+  <h2>4. Schermo Cucina — KDS</h2>
+
+  <p>
+    Il <strong>KDS (Kitchen Display System)</strong> è lo schermo cucina digitale
+    che sostituisce le comande cartacee. È progettato per essere visibile da lontano
+    e usabile con le mani bagnate o con guanti.
+  </p>
+
+  <div class="feature-card">
+    <h3>Come funziona</h3>
+    <ul>
+      <li>Ogni ordine appare come una card con il numero tavolo e i piatti ordinati</li>
+      <li>I piatti sono raggruppati per ordine e mostrano eventuali note</li>
+      <li>Il cuoco tocca un piatto per marcarlo come <strong>in preparazione</strong></li>
+      <li>Quando è pronto, tocca di nuovo per marcarlo come <strong>pronto</strong></li>
+      <li>Quando tutti i piatti di un ordine sono pronti, l'ordine scompare dal KDS</li>
+    </ul>
+  </div>
+
+  <div class="feature-card">
+    <h3>Timer e Urgenza</h3>
+    <p>
+      Ogni card ordine mostra il tempo trascorso dall'invio. Il bordo della card
+      cambia colore in base all'urgenza:
+    </p>
+    <ul>
+      <li>🟢 <strong>Verde:</strong> meno di 10 minuti</li>
+      <li>🟡 <strong>Giallo:</strong> tra 10 e 20 minuti</li>
+      <li>🔴 <strong>Rosso:</strong> oltre 20 minuti — richiede attenzione immediata</li>
+    </ul>
+  </div>
+
+  <div class="callout callout-success">
+    <strong>Vantaggio operativo</strong>
+    Il KDS elimina le comande perse, i refusi di scrittura e i tempi morti dovuti
+    al passaggio fisico dei fogli. La cucina riceve gli ordini in tempo reale
+    e può gestire il flusso di lavoro in modo più efficiente.
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     5. CASSA E PAGAMENTI
+═══════════════════════════════════════════ -->
+<div class="page break">
+  <h2>5. Cassa e Pagamenti</h2>
+
+  <div class="feature-card">
+    <h3>💳 Checkout</h3>
+    <p>
+      Dalla mappa tavoli, il cassiere seleziona il tavolo e accede alla schermata
+      di checkout. Qui può vedere il riepilogo completo di tutti i piatti ordinati
+      con prezzi e totale.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <h3>Modalità di Pagamento</h3>
+    <p>Il sistema supporta quattro modalità di pagamento e divisione del conto:</p>
+    <ol>
+      <li>
+        <strong>Conto unico:</strong> tutto il tavolo paga insieme.
+        Selezionabile tra contanti, carta o misto.
+      </li>
+      <li>
+        <strong>Dividi per numero:</strong> il totale viene diviso equamente
+        tra N persone indicate dal cassiere.
+      </li>
+      <li>
+        <strong>Dividi per piatto:</strong> ogni commensale paga solo i propri
+        piatti. Il cassiere assegna ogni piatto a una persona.
+      </li>
+      <li>
+        <strong>Importo personalizzato:</strong> ciascuno paga una cifra libera,
+        il sistema tiene traccia del residuo.
+      </li>
+    </ol>
+  </div>
+
+  <div class="feature-card">
+    <h3>🔗 Integrazione SumUp</h3>
+    <p>
+      Per i pagamenti con carta, il sistema genera automaticamente un deep-link
+      verso l'app SumUp con l'importo precompilato. Il cassiere apre l'app
+      sul tablet, conferma, e il pagamento viene registrato.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <h3>🧾 Scontrino Elettronico</h3>
+    <p>
+      Completato il pagamento, il sistema genera automaticamente uno scontrino
+      (ricevuta) con tutti i dettagli: piatti, IVA per aliquota, totale,
+      metodo di pagamento. I dati vengono archiviati per il report fiscale.
+    </p>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     6. AMMINISTRAZIONE
+═══════════════════════════════════════════ -->
+<div class="page break">
+  <h2>6. Moduli di Amministrazione</h2>
+
+  <div class="feature-card">
+    <h3>📊 Dashboard Operativa</h3>
+    <p>
+      Panoramica in tempo reale delle prestazioni del giorno. I dati si aggiornano
+      automaticamente ogni pochi secondi. Mostra:
+    </p>
+    <ul>
+      <li>Incasso del giorno vs ieri (con indicatore +/- %)</li>
+      <li>Tavoli attualmente aperti</li>
+      <li>Numero di coperti serviti oggi</li>
+      <li>Scontrino medio del giorno</li>
+      <li>Grafico delle entrate ora per ora</li>
+    </ul>
+  </div>
+
+  <div class="feature-card">
+    <h3>📈 Analytics</h3>
+    <p>
+      Analisi approfondita delle performance del ristorante su periodi personalizzabili:
+    </p>
+    <ul>
+      <li><strong>Top piatti:</strong> classifica dei piatti più venduti per quantità e fatturato</li>
+      <li><strong>Performance per giorno:</strong> confronto tra i giorni della settimana —
+          utile per pianificare il personale</li>
+      <li><strong>Trend temporali:</strong> andamento dei ricavi su settimane o mesi selezionabili</li>
+    </ul>
+  </div>
+
+  <div class="feature-card">
+    <h3>🍽 Gestione Menu</h3>
+    <p>
+      Editor completo del menu digitale:
+    </p>
+    <ul>
+      <li>Creazione e modifica di categorie (con ordine e colore personalizzabile)</li>
+      <li>Aggiunta/modifica piatti con nome, descrizione, prezzo, foto, allergeni</li>
+      <li>Configurazione modificatori per ogni piatto (es. cottura, extra, varianti)</li>
+      <li>
+        <strong>Calcolatore porzioni:</strong> inserendo la quantità totale di un ingrediente
+        e il numero di piatti previsti, il sistema calcola automaticamente la quantità
+        per porzione — utile per standardizzare le ricette e controllare i costi
+      </li>
+      <li>Attivazione/disattivazione piatti in tempo reale (es. piatto esaurito)</li>
+    </ul>
+  </div>
+
+  <div class="feature-card">
+    <h3>🍱 Menù Fissi e Combo</h3>
+    <p>
+      Gestione di menù fissi (es. menu degustazione, business lunch) e combinazioni
+      promozionali. Una combo può includere piatti di categorie diverse a un prezzo
+      unico. Le combo vengono visualizzate come voce singola nell'ordine ma inviate
+      in cucina come piatti separati.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <h3>🏠 Configurazione Locale</h3>
+    <p>
+      Gestione della struttura fisica del ristorante:
+    </p>
+    <ul>
+      <li>Creazione e modifica di zone (sala, terrazza, bar, privé)</li>
+      <li>Aggiunta/rimozione tavoli con numero di posti e posizione visiva</li>
+      <li>Il layout si riflette immediatamente sulla mappa tavoli</li>
+    </ul>
+  </div>
+
+  <div class="feature-card">
+    <h3>👥 Clienti e CRM</h3>
+    <p>
+      Rubrica clienti con storico visite, spesa media, preferenze e allergie.
+      Permette di personalizzare l'accoglienza e gestire programmi fedeltà.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <h3>👤 Gestione Utenti</h3>
+    <p>
+      (Solo Admin) Creazione, modifica e disattivazione degli account del personale.
+      Assegnazione di ruoli, PIN di accesso e nome visualizzato.
+      Possibilità di resettare il PIN in caso di smarrimento.
+    </p>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     7. MAGAZZINO E INGREDIENTI
+═══════════════════════════════════════════ -->
+<div class="page break">
+  <h2>7. Magazzino e Ingredienti</h2>
+
+  <p>
+    Il modulo magazzino permette di tracciare le scorte di tutti gli ingredienti
+    e di collegare il consumo degli ingredienti ai piatti venduti.
+  </p>
+
+  <div class="feature-card">
+    <h3>🧂 Anagrafica Ingredienti</h3>
+    <p>Per ogni ingrediente si configurano:</p>
+    <ul>
+      <li><strong>Nome e unità di misura</strong> (kg, g, L, pz, ecc.)</li>
+      <li><strong>Stock attuale</strong> — quantità presente in magazzino</li>
+      <li><strong>Stock minimo</strong> — soglia di allerta per il riordino</li>
+      <li><strong>Costo per unità</strong> — per calcolare il valore del magazzino e il costo dei piatti</li>
+      <li><strong>Fornitore</strong> — collegamento al fornitore preferito</li>
+    </ul>
+    <p>
+      Gli ingredienti al di sotto del livello minimo vengono evidenziati in rosso
+      nella lista, segnalando la necessità di riordino.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <h3>📦 Movimenti di Magazzino</h3>
+    <p>Ogni movimento di stock viene registrato con tipo e data:</p>
+    <ul>
+      <li><strong>Carico (in):</strong> arrivo merce da fornitore</li>
+      <li><strong>Consumo (out - ordine):</strong> scarico automatico per piatto venduto</li>
+      <li><strong>Scarico manuale:</strong> perdita, scarto, assaggio, spreco</li>
+      <li><strong>Rettifica:</strong> correzione manuale dopo conteggio fisico</li>
+    </ul>
+  </div>
+
+  <div class="feature-card">
+    <h3>🔗 Collegamento Ricette</h3>
+    <p>
+      Ogni piatto del menu può avere una <strong>ricetta</strong> associata:
+      un elenco di ingredienti con le rispettive quantità per porzione.
+      Quando un piatto viene venduto e l'ordine è completato, il sistema
+      scala automaticamente le quantità degli ingredienti dallo stock.
+    </p>
+    <p>
+      Grazie al <strong>calcolatore porzioni</strong> integrato nel menu admin,
+      è semplice standardizzare le ricette: inserendo la quantità totale
+      dell'ingrediente e il numero di porzioni previste, il sistema
+      calcola la quantità esatta per porzione.
+    </p>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     8. RICONCILIAZIONE MAGAZZINO
+═══════════════════════════════════════════ -->
+<div class="page break">
+  <h2>8. Riconciliazione Magazzino</h2>
+
+  <p>
+    La <strong>Riconciliazione Magazzino</strong> è lo strumento per confrontare
+    il magazzino <em>teorico</em> (quello che il sistema calcola in base agli ordini)
+    con il magazzino <em>fisico</em> (quello che si conta realmente in dispensa).
+    Permette di identificare sprechi, furti, porzioni eccessive o errori nelle ricette.
+  </p>
+
+  <div class="feature-card">
+    <h3>Come si usa</h3>
+    <ol>
+      <li>Selezionare il periodo da analizzare (oggi / settimana / mese / date personalizzate)</li>
+      <li>Il sistema carica automaticamente tutti i dati del periodo: carichi, consumi, scarichi</li>
+      <li>Per ogni ingrediente, inserire la <strong>quantità fisica</strong> contata in magazzino</li>
+      <li>Il sistema calcola immediatamente la <strong>differenza</strong> tra stock teorico e fisico</li>
+      <li>La <strong>perdita stimata in €</strong> viene calcolata moltiplicando la differenza negativa per il costo unitario</li>
+      <li>Esportare il report in CSV per archiviazione o ulteriore analisi</li>
+    </ol>
+  </div>
+
+  <div class="feature-card">
+    <h3>Dati visualizzati per ogni ingrediente</h3>
+    <table>
+      <thead>
+        <tr><th>Colonna</th><th>Significato</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Carichi</td><td>Quantità ricevuta dai fornitori nel periodo</td></tr>
+        <tr><td>Consumo ordini</td><td>Scaricato automaticamente per i piatti venduti</td></tr>
+        <tr><td>Scarichi manuali</td><td>Sprechi, assaggi, scarti registrati manualmente</td></tr>
+        <tr><td>Rettifiche</td><td>Correzioni manuali dello stock</td></tr>
+        <tr><td>Stock sistema</td><td>Stock attuale secondo il gestionale</td></tr>
+        <tr><td>Inventario fisico</td><td>Quantità inserita dal gestore dopo conteggio fisico</td></tr>
+        <tr><td>Differenza</td><td>Fisico − Sistema. Negativo = mancante</td></tr>
+        <tr><td>Costo perdita</td><td>|Differenza| × costo unitario (solo se negativa)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout callout-warning">
+    <strong>Caso d'uso tipico</strong>
+    A fine settimana il gestore conta fisicamente frigoriferi e dispensa, inserisce
+    le quantità nel sistema e verifica dove ci sono discrepanze. Se la carne risulta
+    costantemente in difetto rispetto al teorico, potrebbe indicare porzioni eccessive
+    o sprechi non registrati.
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     9. REPORT FISCALE
+═══════════════════════════════════════════ -->
+<div class="page break">
+  <h2>9. Report Fiscale — Corrispettivi</h2>
+
+  <p>
+    Il modulo <strong>Report Fiscale</strong> genera i corrispettivi telematici
+    compatibili con le richieste dell'Agenzia delle Entrate italiana.
+  </p>
+
+  <div class="feature-card">
+    <h3>Cosa contiene il report</h3>
+    <ul>
+      <li>
+        <strong>Breakdown IVA per aliquota:</strong> separazione automatica del fatturato
+        per aliquota IVA (es. 10% per cibo, 22% per alcolici).
+        Per ogni aliquota mostra lordo, imponibile e IVA.
+      </li>
+      <li>
+        <strong>Corrispettivi giornalieri:</strong> riepilogo giorno per giorno
+        del numero di scontrini, totale lordo e IVA.
+      </li>
+      <li>
+        <strong>Totali di periodo:</strong> somma complessiva per il periodo selezionato.
+      </li>
+    </ul>
+  </div>
+
+  <div class="feature-card">
+    <h3>Periodo personalizzabile</h3>
+    <p>
+      Il gestore seleziona un intervallo di date (oggi, settimana corrente, mese corrente,
+      mese precedente, oppure date personalizzate) e il sistema calcola in tempo reale
+      i dati del periodo.
+    </p>
+  </div>
+
+  <div class="callout callout-info">
+    <strong>Nota</strong>
+    I dati del report fiscale si basano sulle ricevute emesse (<em>receipts</em>),
+    non sugli ordini aperti. Solo i pagamenti completati concorrono ai corrispettivi.
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     10. FLUSSO OPERATIVO
+═══════════════════════════════════════════ -->
+<div class="page break">
+  <h2>10. Flusso Operativo — Una Serata Tipo</h2>
+
+  <div class="flow">
+    <div class="flow-step" data-n="1">
+      <div class="flow-step-content">
+        <strong>Apertura servizio</strong>
+        <p>Il gestore accede con PIN e verifica la mappa tavoli. Tutti i tavoli risultano liberi (verde). Eventualmente consulta le prenotazioni del giorno.</p>
+      </div>
+    </div>
+    <div class="flow-step" data-n="2">
+      <div class="flow-step-content">
+        <strong>Arrivo cliente e apertura tavolo</strong>
+        <p>Il cameriere tocca il tavolo sulla mappa → il tavolo diventa giallo (occupato). Accede alla pagina ordine.</p>
+      </div>
+    </div>
+    <div class="flow-step" data-n="3">
+      <div class="flow-step-content">
+        <strong>Presa ordine</strong>
+        <p>Il cameriere sfoglia il menu digitale, aggiunge i piatti al carrello con eventuali note e modificatori, quindi preme "Invia in cucina".</p>
+      </div>
+    </div>
+    <div class="flow-step" data-n="4">
+      <div class="flow-step-content">
+        <strong>Cucina riceve l'ordine</strong>
+        <p>Il KDS mostra immediatamente la card con il numero tavolo e i piatti. Il cuoco lavora seguendo lo schermo, marcando i piatti man mano che sono pronti.</p>
+      </div>
+    </div>
+    <div class="flow-step" data-n="5">
+      <div class="flow-step-content">
+        <strong>Ordini aggiuntivi</strong>
+        <p>Il cameriere può tornare al tavolo e aggiungere altri piatti in qualsiasi momento. Vengono inviati in cucina come nuova comanda.</p>
+      </div>
+    </div>
+    <div class="flow-step" data-n="6">
+      <div class="flow-step-content">
+        <strong>Richiesta conto</strong>
+        <p>Il cameriere o il cassiere seleziona il tavolo e accede al checkout. Sceglie la modalità di pagamento più adatta (conto unico, diviso, ecc.).</p>
+      </div>
+    </div>
+    <div class="flow-step" data-n="7">
+      <div class="flow-step-content">
+        <strong>Pagamento</strong>
+        <p>Contanti: inserisce l'importo ricevuto, il sistema calcola il resto. Carta: si apre il deep-link SumUp con importo precompilato. Il cassiere conferma il pagamento nel gestionale.</p>
+      </div>
+    </div>
+    <div class="flow-step" data-n="8">
+      <div class="flow-step-content">
+        <strong>Chiusura tavolo</strong>
+        <p>Il tavolo torna libero (verde) e lo stock degli ingredienti viene scalato automaticamente in base ai piatti venduti. La ricevuta viene archiviata per il report fiscale.</p>
+      </div>
+    </div>
+    <div class="flow-step" data-n="9">
+      <div class="flow-step-content">
+        <strong>Fine serata — Verifica</strong>
+        <p>Il gestore consulta la dashboard per il totale incassato e il scontrino medio. Opzionalmente esegue la riconciliazione magazzino confrontando le scorte fisiche con il sistema.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     11. CONTROLLO PERDITE
+═══════════════════════════════════════════ -->
+<div class="page break">
+  <h2>11. Controllo Perdite e Sprechi</h2>
+
+  <p>
+    Il controllo degli sprechi è una delle funzioni più importanti per la redditività
+    di un ristorante. GustoPro offre un sistema strutturato per identificare e
+    quantificare le perdite.
+  </p>
+
+  <h3>Cause comuni di discrepanza magazzino</h3>
+  <ul>
+    <li><strong>Porzioni eccessive:</strong> il cuoco serve più del previsto per piatto</li>
+    <li><strong>Sprechi non registrati:</strong> cibo scartato o andato a male senza registrazione</li>
+    <li><strong>Errori ricetta:</strong> le quantità nella ricetta digitale non corrispondono alla realtà</li>
+    <li><strong>Furti o prelievi non autorizzati</strong></li>
+    <li><strong>Errori di pesatura</strong> o misurazione in cucina</li>
+  </ul>
+
+  <h3>Processo consigliato di controllo</h3>
+
+  <div class="callout callout-success">
+    <strong>Procedura settimanale consigliata</strong>
+    <ol style="margin-top:8px; margin-left:20px;">
+      <li>Ogni sabato sera (o domenica mattina), contare fisicamente frigoriferi, congelatori e dispensa</li>
+      <li>Aprire la Riconciliazione Magazzino → selezionare "Settimana corrente"</li>
+      <li>Inserire i valori contati per ogni ingrediente</li>
+      <li>Analizzare gli ingredienti con differenza negativa maggiore</li>
+      <li>Per le discrepanze grandi: confrontare le porzioni reali servite con la ricetta</li>
+      <li>Correggere le ricette o formare il personale di conseguenza</li>
+      <li>Esportare il report CSV per archiviazione contabile</li>
+    </ol>
+  </div>
+
+  <h3>Indicatori di allerta</h3>
+  <table>
+    <thead>
+      <tr><th>Soglia perdita</th><th>Azione consigliata</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>&lt; 2% del valore totale</td>
+        <td>Normale — dentro i parametri standard di settore</td>
+      </tr>
+      <tr>
+        <td>2% – 5%</td>
+        <td>Monitorare — verificare le ricette degli ingredienti con più scarto</td>
+      </tr>
+      <tr>
+        <td>&gt; 5%</td>
+        <td>Allerta — indagine necessaria: sprechi, porzioni, possibile furto</td>
+      </tr>
+    </tbody>
+  </table>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     12. DATI TECNICI
+═══════════════════════════════════════════ -->
+<div class="page break">
+  <h2>12. Dati Tecnici e Infrastruttura</h2>
+
+  <div class="feature-card">
+    <h3>Architettura</h3>
+    <p>
+      GustoPro è un'applicazione web a due livelli (frontend + backend) con
+      comunicazione in tempo reale:
+    </p>
+    <table>
+      <thead>
+        <tr><th>Componente</th><th>Tecnologia</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Frontend</td><td>React 19 + Vite + Tailwind CSS</td></tr>
+        <tr><td>Backend API</td><td>Node.js + Express 5</td></tr>
+        <tr><td>Database</td><td>PostgreSQL 15</td></tr>
+        <tr><td>Real-time</td><td>Socket.io (WebSocket)</td></tr>
+        <tr><td>Autenticazione</td><td>JWT (JSON Web Token) + bcrypt</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="feature-card">
+    <h3>Accesso</h3>
+    <ul>
+      <li>
+        <strong>Gestionale principale:</strong>
+        <code>gestione.gustopro.it</code>
+      </li>
+      <li>
+        <strong>API backend:</strong>
+        <code>api.gustopro.it</code>
+      </li>
+    </ul>
+    <p>
+      Il sistema è accessibile da qualsiasi dispositivo con browser moderno:
+      tablet, smartphone, computer. Non richiede app da scaricare.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <h3>Backup e Sicurezza</h3>
+    <ul>
+      <li>Database PostgreSQL con backup automatici</li>
+      <li>Tutte le comunicazioni in HTTPS</li>
+      <li>PIN hashati con bcrypt (non recuperabili)</li>
+      <li>Token JWT con scadenza automatica</li>
+      <li>Rate limiting sugli endpoint di autenticazione</li>
+      <li>Validazione input su tutti i controller backend</li>
+    </ul>
+  </div>
+
+  <div class="callout callout-info">
+    <strong>Compatibilità browser</strong>
+    Chrome 90+, Safari 14+, Firefox 90+, Edge 90+.
+    Ottimizzato per touchscreen (tablet/iPad).
+  </div>
+
+  <footer>
+    <p><strong>GustoPro Gestionale</strong> — Documento riservato ad uso interno</p>
+    <p>Versione 1.0 · Marzo 2026 · Tutti i diritti riservati</p>
+  </footer>
+
+</div>
+
+</body>
+</html>
