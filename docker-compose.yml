@@ -1,0 +1,52 @@
+services:
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: gestionale-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gustopro
+      POSTGRES_USER: gustopro
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gustopro"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API + Socket.io
+  backend:
+    build: ./backend
+    container_name: gestionale-backend
+    restart: unless-stopped
+    ports:
+      - "3011:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://gustopro:${POSTGRES_PASSWORD}@postgres:5432/gustopro
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGINS: http://gestione.gustopro.it,https://gestione.gustopro.it
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Frontend React
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://gestione.gustopro.it/api
+    container_name: gestionale-frontend
+    restart: unless-stopped
+    ports:
+      - "3012:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
