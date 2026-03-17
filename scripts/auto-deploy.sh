@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────
-# GustoPro — Auto Deploy Script — v1.2
+# GustoPro — Auto Deploy Script — v1.3
 # Controlla GitHub ogni 5 min. Se ci sono nuovi commit
 # fa git pull + docker compose build + up -d
 #
