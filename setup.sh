@@ -54,7 +54,7 @@ echo "      OK"
 # ── 4. Docker ─────────────────────────────────────
 echo ""
 echo "[4/4] Build e avvio containers Docker..."
-docker-compose -f "$REPO_DIR/docker-compose.yml" up -d --build
+docker compose -f "$REPO_DIR/docker-compose.yml" up -d --build
 
 echo ""
 echo "============================================="
@@ -65,7 +65,7 @@ echo "  Backend  → http://${IP}:3011"
 echo "  Frontend → http://${IP}:3012"
 echo ""
 echo "  Comandi utili:"
-echo "    Ver log:    docker-compose -f $REPO_DIR/docker-compose.yml logs -f"
-echo "    Stop:       docker-compose -f $REPO_DIR/docker-compose.yml down"
+echo "    Ver log:    docker compose -f $REPO_DIR/docker-compose.yml logs -f"
+echo "    Stop:       docker compose -f $REPO_DIR/docker-compose.yml down"
 echo "    Aggiorna:   sh $REPO_DIR/setup.sh --update"
 echo ""
