@@ -6,6 +6,17 @@
 -- ── 1. ALLERGENI su menu_items ────────────────────────────────
 ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS allergens JSONB NOT NULL DEFAULT '[]';
 
+-- ── 1b. SUPPLIERS (necessario per FK ingredients) ─────────────
+CREATE TABLE IF NOT EXISTS suppliers (
+    id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    name       VARCHAR(100) NOT NULL,
+    contact    VARCHAR(200),
+    email      VARCHAR(200),
+    notes      TEXT,
+    is_active  BOOLEAN      NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
 -- ── 2. INGREDIENTI (magazzino) ────────────────────────────────
 CREATE TABLE IF NOT EXISTS ingredients (
     id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
