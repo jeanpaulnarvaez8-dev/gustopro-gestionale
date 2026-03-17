@@ -211,4 +211,56 @@ async function getTaxReport(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getDashboardStats, getHourlyRevenue, getTopItems, getByWeekday, getTaxReport };
+async function getStockReconciliation(req, res, next) {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const from  = req.query.from || today;
+    const to    = req.query.to   || today;
+
+    const { rows } = await pool.query(`
+      WITH movements_in_period AS (
+        SELECT
+          ingredient_id,
+          COALESCE(SUM(quantity) FILTER (WHERE type = 'in'), 0)                               AS qty_in,
+          COALESCE(SUM(quantity) FILTER (WHERE type = 'out' AND reference_type = 'order'), 0) AS qty_consumed,
+          COALESCE(SUM(quantity) FILTER (WHERE type = 'out' AND (reference_type IS NULL OR reference_type != 'order')), 0) AS qty_manual_out,
+          COALESCE(SUM(quantity) FILTER (WHERE type = 'adjustment'), 0)                       AS qty_adjustment
+        FROM stock_movements
+        WHERE created_at >= $1::date
+          AND created_at <  $2::date + INTERVAL '1 day'
+        GROUP BY ingredient_id
+      )
+      SELECT
+        i.id,
+        i.name,
+        i.unit,
+        i.current_stock,
+        i.cost_per_unit,
+        COALESCE(m.qty_in, 0)          AS qty_in,
+        COALESCE(m.qty_consumed, 0)    AS qty_consumed,
+        COALESCE(m.qty_manual_out, 0)  AS qty_manual_out,
+        COALESCE(m.qty_adjustment, 0)  AS qty_adjustment
+      FROM ingredients i
+      LEFT JOIN movements_in_period m ON m.ingredient_id = i.id
+      WHERE i.is_active = true
+      ORDER BY i.name
+    `, [from, to]);
+
+    res.json({
+      periodo: { from, to },
+      items: rows.map(r => ({
+        id:             r.id,
+        name:           r.name,
+        unit:           r.unit,
+        current_stock:  parseFloat(r.current_stock),
+        cost_per_unit:  parseFloat(r.cost_per_unit),
+        qty_in:         parseFloat(r.qty_in),
+        qty_consumed:   parseFloat(r.qty_consumed),
+        qty_manual_out: parseFloat(r.qty_manual_out),
+        qty_adjustment: parseFloat(r.qty_adjustment),
+      })),
+    });
+  } catch (err) { next(err); }
+}
+
+module.exports = { getDashboardStats, getHourlyRevenue, getTopItems, getByWeekday, getTaxReport, getStockReconciliation };

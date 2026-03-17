@@ -17,6 +17,7 @@ import MenuAdminPage from './pages/MenuAdminPage'
 import VenueAdminPage from './pages/VenueAdminPage'
 import TaxReportPage from './pages/TaxReportPage'
 import IngredientsPage from './pages/IngredientsPage'
+import StockReconciliationPage from './pages/StockReconciliationPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function ProtectedRoute() {
@@ -95,6 +96,11 @@ export default function App() {
         <Route path="/ingredients" element={
           <RoleRoute roles={['admin', 'manager']}>
             <IngredientsPage />
+          </RoleRoute>
+        } />
+        <Route path="/stock-reconciliation" element={
+          <RoleRoute roles={['admin', 'manager']}>
+            <StockReconciliationPage />
           </RoleRoute>
         } />
         <Route path="/staff" element={<Navigate to="/users" replace />} />

@@ -98,7 +98,8 @@ export const adminAPI = {
   hourly:    ()            => api.get('/admin/stats/hourly'),
   topItems:  (days, limit) => api.get('/admin/analytics/top-items', { params: { days, limit } }),
   weekday:   (weeks)       => api.get('/admin/analytics/weekday', { params: { weeks } }),
-  taxReport: (from, to)    => api.get('/admin/tax-report', { params: { from, to } }),
+  taxReport:           (from, to) => api.get('/admin/tax-report', { params: { from, to } }),
+  stockReconciliation: (from, to) => api.get('/admin/stock-reconciliation', { params: { from, to } }),
 };
 
 // Combos (menù fissi)
