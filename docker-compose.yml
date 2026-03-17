@@ -41,7 +41,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: http://gestione.gustopro.it/api
+        VITE_API_URL: /api
     container_name: gestionale-frontend
     restart: unless-stopped
     ports:
