@@ -17,14 +17,14 @@ LOG_PREFIX="[$(date '+%Y-%m-%d %H:%M:%S')]"
 
 cd "$PROJECT_DIR" || { echo "$LOG_PREFIX ERRORE: directory non trovata $PROJECT_DIR"; exit 1; }
 
-# Evita errore "dubious ownership" quando lo script gira come root
-git config --global --add safe.directory "$PROJECT_DIR"
-
 # Scarica info dal remoto senza applicare
-git fetch origin main --quiet
+# -c safe.directory evita "dubious ownership" quando lo script gira come root
+GIT="git -c safe.directory=$PROJECT_DIR"
 
-LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse origin/main)
+$GIT fetch origin main --quiet
+
+LOCAL=$($GIT rev-parse HEAD)
+REMOTE=$($GIT rev-parse origin/main)
 
 if [ "$LOCAL" = "$REMOTE" ]; then
   # Nessuna modifica — niente da fare (nessun log per non riempire il file)
@@ -36,7 +36,7 @@ echo "$LOG_PREFIX Commit locale:  $LOCAL"
 echo "$LOG_PREFIX Commit remoto:  $REMOTE"
 
 # Scarta modifiche locali e allinea al remoto
-git reset --hard origin/main
+$GIT reset --hard origin/main
 if [ $? -ne 0 ]; then
   echo "$LOG_PREFIX ERRORE: git reset fallito"
   exit 1
