@@ -20,5 +20,7 @@ router.use('/inventory',    require('./inventory.routes'));
 router.use('/customers',    require('./customers.routes'));
 router.use('/reservations', require('./reservations.routes'));
 router.use('/combos',       require('./combo.routes'));
+router.use('/ingredients',  require('./ingredients.routes'));
+router.use('/recipes',      require('./recipes.routes'));
 
 module.exports = router;

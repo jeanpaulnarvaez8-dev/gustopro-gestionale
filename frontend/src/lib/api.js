@@ -136,6 +136,24 @@ export const reservationsAPI = {
   remove:   (id)    => api.delete(`/reservations/${id}`),
 };
 
+// Ingredients (stock)
+export const ingredientsAPI = {
+  list:      ()              => api.get('/ingredients'),
+  lowStock:  ()              => api.get('/ingredients/low-stock'),
+  create:    (data)          => api.post('/ingredients', data),
+  update:    (id, data)      => api.put(`/ingredients/${id}`, data),
+  adjust:    (id, data)      => api.post(`/ingredients/${id}/adjust`, data),
+  movements: (id)            => api.get(`/ingredients/${id}/movements`),
+};
+
+// Recipes
+export const recipesAPI = {
+  get:    (itemId)                => api.get(`/recipes/${itemId}`),
+  cost:   (itemId)                => api.get(`/recipes/${itemId}/cost`),
+  upsert: (itemId, data)          => api.post(`/recipes/${itemId}`, data),
+  remove: (recipeId)              => api.delete(`/recipes/entry/${recipeId}`),
+};
+
 // Inventory
 export const inventoryAPI = {
   // Suppliers

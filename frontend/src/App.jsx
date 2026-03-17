@@ -16,6 +16,7 @@ import ComboAdminPage from './pages/ComboAdminPage'
 import MenuAdminPage from './pages/MenuAdminPage'
 import VenueAdminPage from './pages/VenueAdminPage'
 import TaxReportPage from './pages/TaxReportPage'
+import IngredientsPage from './pages/IngredientsPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function ProtectedRoute() {
@@ -89,6 +90,11 @@ export default function App() {
         <Route path="/tax-report" element={
           <RoleRoute roles={['admin']}>
             <TaxReportPage />
+          </RoleRoute>
+        } />
+        <Route path="/ingredients" element={
+          <RoleRoute roles={['admin', 'manager']}>
+            <IngredientsPage />
           </RoleRoute>
         } />
         <Route path="/staff" element={<Navigate to="/users" replace />} />
