@@ -30,13 +30,13 @@ echo "$LOG_PREFIX Nuovi commit rilevati. Avvio deploy..."
 echo "$LOG_PREFIX Commit locale:  $LOCAL"
 echo "$LOG_PREFIX Commit remoto:  $REMOTE"
 
-# Pull
-git pull origin main
+# Scarta modifiche locali e allinea al remoto
+git reset --hard origin/main
 if [ $? -ne 0 ]; then
-  echo "$LOG_PREFIX ERRORE: git pull fallito"
+  echo "$LOG_PREFIX ERRORE: git reset fallito"
   exit 1
 fi
-echo "$LOG_PREFIX git pull completato"
+echo "$LOG_PREFIX git reset completato"
 
 # Rebuild e riavvio container
 docker compose build --no-cache
