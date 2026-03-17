@@ -17,6 +17,9 @@ LOG_PREFIX="[$(date '+%Y-%m-%d %H:%M:%S')]"
 
 cd "$PROJECT_DIR" || { echo "$LOG_PREFIX ERRORE: directory non trovata $PROJECT_DIR"; exit 1; }
 
+# Evita errore "dubious ownership" quando lo script gira come root
+git config --global --add safe.directory "$PROJECT_DIR"
+
 # Scarica info dal remoto senza applicare
 git fetch origin main --quiet
 
