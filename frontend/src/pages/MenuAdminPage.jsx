@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, UtensilsCrossed, Plus, Pencil, Trash2, RefreshCw, Check, X,
-  ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Clock, BookOpen, AlertTriangle,
+  ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Clock, BookOpen, AlertTriangle, Calculator,
 } from 'lucide-react'
 import { menuAPI, recipesAPI, ingredientsAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
@@ -36,6 +36,9 @@ function RecipeModal({ item, onClose }) {
   const [selIngr, setSelIngr]         = useState('')
   const [qty, setQty]                 = useState('')
   const [saving, setSaving]           = useState(false)
+  const [useCalc, setUseCalc]         = useState(false)
+  const [calcTot, setCalcTot]         = useState('')
+  const [calcPiatti, setCalcPiatti]   = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -106,7 +109,13 @@ function RecipeModal({ item, onClose }) {
               ))}
 
               <div className="border-t border-[#2A2A2A] pt-3 flex flex-col gap-2">
-                <p className="text-[#888] text-xs font-semibold">Aggiungi ingrediente</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[#888] text-xs font-semibold">Aggiungi ingrediente</p>
+                  <button onClick={() => { setUseCalc(p => !p); setCalcTot(''); setCalcPiatti('') }}
+                    className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition ${useCalc ? 'border-[#D4AF37]/40 text-[#D4AF37] bg-[#D4AF37]/10' : 'border-[#3A3A3A] text-[#555] hover:border-[#555]'}`}>
+                    <Calculator size={10} /> Calcolatore
+                  </button>
+                </div>
                 <select value={selIngr} onChange={e => setSelIngr(e.target.value)}
                   className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60">
                   <option value="">Seleziona ingrediente...</option>
@@ -114,15 +123,38 @@ function RecipeModal({ item, onClose }) {
                     <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>
                   ))}
                 </select>
-                <div className="flex gap-2">
+                {useCalc ? (
+                  <div className="bg-[#1A1A1A] border border-[#D4AF37]/20 rounded-lg p-3 flex flex-col gap-2">
+                    <p className="text-[#D4AF37] text-xs font-semibold flex items-center gap-1"><Calculator size={10} /> Con X quantità faccio Y piatti</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[#555] text-xs mb-1">Quantità totale {selIngr ? `(${ingredients.find(i=>i.id===selIngr)?.unit})` : ''}</p>
+                        <input type="number" step="0.001" value={calcTot} onChange={e => { setCalcTot(e.target.value); if (e.target.value && calcPiatti) setQty((parseFloat(e.target.value)/parseFloat(calcPiatti)).toFixed(4)) }}
+                          placeholder="es. 5"
+                          className="w-full bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-1.5 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
+                      </div>
+                      <div>
+                        <p className="text-[#555] text-xs mb-1">N. piatti</p>
+                        <input type="number" step="1" value={calcPiatti} onChange={e => { setCalcPiatti(e.target.value); if (calcTot && e.target.value) setQty((parseFloat(calcTot)/parseFloat(e.target.value)).toFixed(4)) }}
+                          placeholder="es. 30"
+                          className="w-full bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-1.5 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
+                      </div>
+                    </div>
+                    {qty && calcTot && calcPiatti && (
+                      <p className="text-emerald-400 text-xs text-center">
+                        → <strong>{qty}</strong> {ingredients.find(i=>i.id===selIngr)?.unit ?? ''} per porzione
+                      </p>
+                    )}
+                  </div>
+                ) : (
                   <input type="number" step="0.001" value={qty} onChange={e => setQty(e.target.value)}
                     placeholder="Quantità per porzione"
-                    className="flex-1 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
-                  <button onClick={handleAdd} disabled={saving || !selIngr || !qty}
-                    className="px-4 py-2 bg-[#D4AF37] text-[#1A1A1A] font-bold text-sm rounded-lg flex items-center gap-1 disabled:opacity-40 hover:bg-[#c9a42e] transition">
-                    {saving ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
-                  </button>
-                </div>
+                    className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
+                )}
+                <button onClick={handleAdd} disabled={saving || !selIngr || !qty}
+                  className="w-full py-2 bg-[#D4AF37] text-[#1A1A1A] font-bold text-sm rounded-lg flex items-center justify-center gap-1.5 disabled:opacity-40 hover:bg-[#c9a42e] transition">
+                  {saving ? <RefreshCw size={12} className="animate-spin" /> : <><Plus size={12} /> Aggiungi</>}
+                </button>
               </div>
             </>
           )}
