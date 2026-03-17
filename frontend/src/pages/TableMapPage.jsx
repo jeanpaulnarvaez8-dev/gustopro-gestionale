@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LogOut, LayoutDashboard, ChefHat, Wifi, WifiOff, Users, RefreshCw,
   Package, UserCog, CalendarDays, ShoppingBag, Pencil, X, Plus,
-  CheckCircle2,
+  CheckCircle2, FlaskConical,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
@@ -293,6 +293,12 @@ export default function TableMapPage() {
             <button onClick={() => navigate('/inventory')}
               className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
               <Package size={14} /> <span className="hidden md:block">Inventario</span>
+            </button>
+          )}
+          {['admin', 'manager'].includes(user?.role) && (
+            <button onClick={() => navigate('/ingredients')}
+              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+              <FlaskConical size={14} /> <span className="hidden md:block">Ingredienti</span>
             </button>
           )}
           <button onClick={() => navigate('/asporto')}
