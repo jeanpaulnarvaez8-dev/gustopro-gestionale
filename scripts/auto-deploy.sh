@@ -10,7 +10,7 @@
 #   Aggiungere: */5 * * * * /share/ZFS20_DATA/dev-projects/gustopro-gestionale/scripts/auto-deploy.sh >> /share/ZFS20_DATA/dev-projects/gustopro-gestionale/logs/deploy.log 2>&1
 # ─────────────────────────────────────────────────────
 
-export PATH="/opt/bin:/opt/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+export PATH="/share/ZFS530_DATA/.qpkg/container-station/bin:/opt/bin:/opt/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
 PROJECT_DIR="/share/ZFS20_DATA/dev-projects/gustopro-gestionale"
 LOG_PREFIX="[$(date '+%Y-%m-%d %H:%M:%S')]"
