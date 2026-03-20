@@ -28,6 +28,8 @@ function initSocket(server) {
   io.on('connection', (socket) => {
     // Join role-based room for targeted broadcasts
     socket.join(`role:${socket.user.role}`);
+    // Join personal room for direct notifications (es. "piatto pronto" al cameriere)
+    socket.join(`user:${socket.user.id}`);
 
     socket.on('disconnect', () => {
       // cleanup handled by socket.io

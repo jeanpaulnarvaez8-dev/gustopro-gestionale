@@ -57,6 +57,16 @@ export function SocketProvider({ children }) {
       toast({ type: 'success', title: 'Merce confermata', message: `Confermato da ${confirmedBy}` });
     });
 
+    // Notifica al cameriere: piatto pronto in cucina
+    socket.on('item-ready-notify', ({ itemName, quantity, tableNumber }) => {
+      toast({
+        type: 'success',
+        title: `🍽️ Pronto — Tavolo ${tableNumber}`,
+        message: `${quantity}× ${itemName} è pronto per il servizio`,
+        duration: 8000,
+      });
+    });
+
     setIsConnected(socket.connected);
 
     return () => {
@@ -66,6 +76,7 @@ export function SocketProvider({ children }) {
       socket.off('inventory:discrepancy');
       socket.off('inventory:spoilage-alert');
       socket.off('inventory:confirmed');
+      socket.off('item-ready-notify');
     };
   }, [user, toast]);
 

@@ -97,6 +97,31 @@ async function updateItemStatus(req, res, next) {
       status,
     });
 
+    // Notifica diretta al cameriere quando il piatto è pronto
+    if (status === 'ready') {
+      const { rows: [info] } = await pool.query(
+        `SELECT o.waiter_id,
+                COALESCE(t.table_number, 'ASPORTO') AS table_number,
+                COALESCE(mi.name, oi.combo_menu_name, 'Piatto') AS item_name,
+                oi.quantity
+           FROM order_items oi
+           JOIN orders o       ON o.id = oi.order_id
+           LEFT JOIN tables t  ON t.id = o.table_id
+           LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+          WHERE oi.id = $1`,
+        [id]
+      );
+      if (info) {
+        getIO()?.to(`user:${info.waiter_id}`).emit('item-ready-notify', {
+          orderId: item.order_id,
+          itemId: id,
+          itemName: info.item_name,
+          quantity: info.quantity,
+          tableNumber: info.table_number,
+        });
+      }
+    }
+
     res.json(item);
   } catch (err) { next(err); }
 }
