@@ -89,15 +89,17 @@ async function createCategory(req, res, next) {
 async function updateCategory(req, res, next) {
   try {
     const { id } = req.params;
-    const { name, sort_order, tax_rate, is_active } = req.body;
+    const { name, sort_order, tax_rate, is_active, course_type, is_beverage } = req.body;
     const { rows } = await pool.query(
       `UPDATE categories SET
-         name       = COALESCE($1, name),
-         sort_order = COALESCE($2, sort_order),
-         tax_rate   = COALESCE($3, tax_rate),
-         is_active  = COALESCE($4, is_active)
-       WHERE id=$5 RETURNING *`,
-      [name || null, sort_order ?? null, tax_rate ?? null, is_active ?? null, id]
+         name        = COALESCE($1, name),
+         sort_order  = COALESCE($2, sort_order),
+         tax_rate    = COALESCE($3, tax_rate),
+         is_active   = COALESCE($4, is_active),
+         course_type = COALESCE($5, course_type),
+         is_beverage = COALESCE($6, is_beverage)
+       WHERE id=$7 RETURNING *`,
+      [name || null, sort_order ?? null, tax_rate ?? null, is_active ?? null, course_type ?? null, is_beverage ?? null, id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Categoria non trovata' });
     res.json(rows[0]);
