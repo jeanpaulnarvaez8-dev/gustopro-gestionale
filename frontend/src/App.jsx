@@ -19,10 +19,17 @@ import TaxReportPage from './pages/TaxReportPage'
 import IngredientsPage from './pages/IngredientsPage'
 import StockReconciliationPage from './pages/StockReconciliationPage'
 import NotFoundPage from './pages/NotFoundPage'
+import ServiceAlertBanner from './components/ServiceAlertBanner'
 
 function ProtectedRoute() {
   const { isAuthenticated } = useAuth()
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  return (
+    <>
+      <ServiceAlertBanner />
+      <Outlet />
+    </>
+  )
 }
 
 function RoleRoute({ roles, children }) {

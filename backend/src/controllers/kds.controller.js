@@ -86,7 +86,11 @@ async function updateItemStatus(req, res, next) {
     }
 
     const { rows: [item] } = await pool.query(
-      'UPDATE order_items SET status=$1 WHERE id=$2 RETURNING *',
+      `UPDATE order_items SET
+         status    = $1,
+         ready_at  = CASE WHEN $1 = 'ready'  AND ready_at  IS NULL THEN NOW() ELSE ready_at  END,
+         served_at = CASE WHEN $1 = 'served' AND served_at IS NULL THEN NOW() ELSE served_at END
+       WHERE id = $2 RETURNING *`,
       [status, id]
     );
     if (!item) return res.status(404).json({ error: 'Item non trovato' });
@@ -96,6 +100,15 @@ async function updateItemStatus(req, res, next) {
       itemId: id,
       status,
     });
+
+    // Quando servito: pulisci alert e notifica tutti
+    if (status === 'served') {
+      await pool.query(
+        'DELETE FROM service_alerts WHERE order_item_id = $1',
+        [id]
+      );
+      getIO()?.emit('item-served', { orderId: item.order_id, itemId: id });
+    }
 
     // Notifica diretta al cameriere quando il piatto è pronto
     if (status === 'ready') {

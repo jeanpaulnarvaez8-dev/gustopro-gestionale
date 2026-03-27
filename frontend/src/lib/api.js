@@ -181,4 +181,12 @@ export const inventoryAPI = {
   barcode:       (code)    => api.get(`/inventory/barcode/${code}`),
 };
 
+export const serviceAPI = {
+  alerts:      ()   => api.get('/service/alerts'),
+  readyItems:  ()   => api.get('/service/ready-items'),
+  postpone:    (id) => api.post(`/service/alerts/${id}/postpone`),
+  acknowledge: (id) => api.post(`/service/alerts/${id}/acknowledge`),
+  markServed:  (id) => api.patch(`/kds/items/${id}/status`, { status: 'served' }),
+};
+
 export default api;
