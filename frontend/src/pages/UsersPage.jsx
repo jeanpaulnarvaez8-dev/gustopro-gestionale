@@ -13,6 +13,13 @@ const ROLES = [
   { id: 'kitchen', label: 'Cucina',   color: 'text-emerald-400 bg-emerald-900/20 border-emerald-500/30' },
 ]
 
+const SUB_ROLES = [
+  { id: '',              label: 'Nessuno' },
+  { id: 'accompagnatore',label: 'Accompagnatore' },
+  { id: 'bevandista',    label: 'Bevandista' },
+  { id: 'comi',          label: 'Comì' },
+]
+
 function roleBadge(role) {
   const r = ROLES.find(x => x.id === role)
   return r
@@ -26,6 +33,7 @@ function UserForm({ initial, onClose, onSaved }) {
   const [form, setForm] = useState({
     name: initial?.name ?? '',
     role: initial?.role ?? 'waiter',
+    sub_role: initial?.sub_role ?? '',
     pin: '',
     pinConfirm: '',
   })
@@ -41,7 +49,7 @@ function UserForm({ initial, onClose, onSaved }) {
 
     setSaving(true)
     try {
-      const payload = { name: form.name, role: form.role }
+      const payload = { name: form.name, role: form.role, sub_role: form.sub_role || null }
       if (form.pin) payload.pin = form.pin
 
       if (isEdit) {
@@ -94,6 +102,25 @@ function UserForm({ initial, onClose, onSaved }) {
               ))}
             </div>
           </div>
+
+          {/* Sub-role (solo per camerieri) */}
+          {form.role === 'waiter' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[#888] text-xs">Sotto-ruolo</label>
+              <div className="grid grid-cols-2 gap-2">
+                {SUB_ROLES.map(sr => (
+                  <button key={sr.id} onClick={() => update('sub_role', sr.id)}
+                    className={`py-1.5 rounded-lg border text-xs font-medium transition ${
+                      form.sub_role === sr.id
+                        ? 'text-cyan-400 bg-cyan-900/20 border-cyan-500/30'
+                        : 'border-[#3A3A3A] text-[#555] hover:text-[#888]'
+                    }`}>
+                    {sr.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* PIN */}
           <div className="flex flex-col gap-1.5">
@@ -212,7 +239,14 @@ export default function UsersPage() {
                       <td className="px-5 py-3">
                         <span className="text-[#F5F5DC] font-medium">{u.name}</span>
                       </td>
-                      <td className="px-4 py-3">{roleBadge(u.role)}</td>
+                      <td className="px-4 py-3">
+                        {roleBadge(u.role)}
+                        {u.sub_role && (
+                          <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-cyan-900/20 text-cyan-400 border border-cyan-500/30">
+                            {u.sub_role}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-block w-2 h-2 rounded-full ${u.is_active ? 'bg-emerald-400' : 'bg-[#555]'}`} />
                       </td>

@@ -1,7 +1,22 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
+const pool = require('./config/db');
 
 let io = null;
+
+async function joinZoneRooms(socket) {
+  try {
+    const { rows } = await pool.query(
+      'SELECT zone_id FROM zone_assignments WHERE user_id = $1 AND shift_date = CURRENT_DATE',
+      [socket.user.id]
+    );
+    for (const row of rows) {
+      socket.join(`zone:${row.zone_id}`);
+    }
+  } catch (err) {
+    console.error('[Socket] Errore join zone rooms:', err.message);
+  }
+}
 
 function initSocket(server) {
   const ALLOWED = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
@@ -25,11 +40,16 @@ function initSocket(server) {
     }
   });
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     // Join role-based room for targeted broadcasts
     socket.join(`role:${socket.user.role}`);
-    // Join personal room for direct notifications (es. "piatto pronto" al cameriere)
+    // Join personal room for direct notifications
     socket.join(`user:${socket.user.id}`);
+    // Join zone rooms based on today's assignments
+    await joinZoneRooms(socket);
+
+    // Quando le assegnazioni cambiano, ri-joina le room
+    socket.on('refresh-zone-rooms', () => joinZoneRooms(socket));
 
     socket.on('disconnect', () => {
       // cleanup handled by socket.io

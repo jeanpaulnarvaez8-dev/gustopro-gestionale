@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { getIO } = require('../socket');
 const { ORDER_ITEM_STATUSES } = require('../config/constants');
+const { trackItemServed } = require('../services/performanceTracker');
 
 async function getPendingOrders(req, res, next) {
   try {
@@ -101,13 +102,17 @@ async function updateItemStatus(req, res, next) {
       status,
     });
 
-    // Quando servito: pulisci alert e notifica tutti
+    // Quando servito: pulisci alert, traccia performance, notifica tutti
     if (status === 'served') {
-      await pool.query(
-        'DELETE FROM service_alerts WHERE order_item_id = $1',
-        [id]
-      );
+      await pool.query('DELETE FROM service_alerts WHERE order_item_id = $1', [id]);
       getIO()?.emit('item-served', { orderId: item.order_id, itemId: id });
+      // Traccia performance cameriere
+      const { rows: [orderInfo] } = await pool.query(
+        'SELECT waiter_id FROM orders WHERE id = $1', [item.order_id]
+      );
+      if (orderInfo) {
+        trackItemServed(orderInfo.waiter_id, item.ready_at, item.served_at);
+      }
     }
 
     // Notifica diretta al cameriere quando il piatto è pronto

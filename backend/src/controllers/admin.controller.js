@@ -263,4 +263,33 @@ async function getStockReconciliation(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getDashboardStats, getHourlyRevenue, getTopItems, getByWeekday, getTaxReport, getStockReconciliation };
+async function getStaffPerformance(req, res, next) {
+  try {
+    const { period = 'today' } = req.query;
+    let dateFilter;
+    if (period === 'today') dateFilter = 'spl.shift_date = CURRENT_DATE';
+    else if (period === 'week') dateFilter = "spl.shift_date >= CURRENT_DATE - INTERVAL '7 days'";
+    else if (period === 'month') dateFilter = "spl.shift_date >= CURRENT_DATE - INTERVAL '30 days'";
+    else dateFilter = 'spl.shift_date = CURRENT_DATE';
+
+    const { rows } = await pool.query(
+      `SELECT
+         u.id, u.name, u.sub_role,
+         COALESCE(SUM(spl.items_served), 0)::int AS items_served,
+         CASE WHEN SUM(spl.items_served) > 0
+           THEN ROUND(SUM(spl.total_response_ms)::numeric / SUM(spl.items_served) / 60000, 1)
+           ELSE 0 END AS avg_response_min,
+         COALESCE(SUM(spl.alerts_received), 0)::int AS alerts_received,
+         COALESCE(SUM(spl.escalations), 0)::int AS escalations,
+         ROUND(COALESCE(AVG(spl.score), 100), 1) AS avg_score
+       FROM users u
+       LEFT JOIN staff_performance_log spl ON spl.user_id = u.id AND ${dateFilter}
+       WHERE u.role = 'waiter' AND u.is_active = true
+       GROUP BY u.id, u.name, u.sub_role
+       ORDER BY avg_score DESC, items_served DESC`
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+}
+
+module.exports = { getDashboardStats, getHourlyRevenue, getTopItems, getByWeekday, getTaxReport, getStockReconciliation, getStaffPerformance };

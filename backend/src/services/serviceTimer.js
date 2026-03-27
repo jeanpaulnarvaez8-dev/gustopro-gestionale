@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { getIO } = require('../socket');
+const { trackAlertReceived, trackEscalation } = require('./performanceTracker');
 
 const INTERVAL_MS = 30_000; // controlla ogni 30 secondi
 
@@ -64,6 +65,7 @@ async function checkReadyItems() {
             elapsedMinutes: Math.round(elapsedMin),
             isBeverage: row.is_beverage,
           });
+          trackAlertReceived(row.waiter_id);
         } else {
           // Alert già esiste — check se postpone è scaduto per re-inviare
           await maybeResendAlert(io, row, alertType, elapsedMin);
@@ -87,6 +89,7 @@ async function checkReadyItems() {
             elapsedMinutes: Math.round(elapsedMin),
             isBeverage: row.is_beverage,
           });
+          trackEscalation(row.waiter_id);
         }
       }
     }

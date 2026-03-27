@@ -100,6 +100,7 @@ export const adminAPI = {
   weekday:   (weeks)       => api.get('/admin/analytics/weekday', { params: { weeks } }),
   taxReport:           (from, to) => api.get('/admin/tax-report', { params: { from, to } }),
   stockReconciliation: (from, to) => api.get('/admin/stock-reconciliation', { params: { from, to } }),
+  staffPerformance:    (period)   => api.get('/admin/staff-performance', { params: { period } }),
 };
 
 // Combos (menù fissi)
@@ -187,6 +188,14 @@ export const serviceAPI = {
   postpone:    (id) => api.post(`/service/alerts/${id}/postpone`),
   acknowledge: (id) => api.post(`/service/alerts/${id}/acknowledge`),
   markServed:  (id) => api.patch(`/kds/items/${id}/status`, { status: 'served' }),
+};
+
+export const assignmentsAPI = {
+  list:          (date) => api.get('/assignments', { params: date ? { date } : {} }),
+  my:            ()     => api.get('/assignments/my'),
+  create:        (data) => api.post('/assignments', data),
+  remove:        (id)   => api.delete(`/assignments/${id}`),
+  copyYesterday: ()     => api.post('/assignments/copy-yesterday'),
 };
 
 export default api;

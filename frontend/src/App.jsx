@@ -18,6 +18,9 @@ import VenueAdminPage from './pages/VenueAdminPage'
 import TaxReportPage from './pages/TaxReportPage'
 import IngredientsPage from './pages/IngredientsPage'
 import StockReconciliationPage from './pages/StockReconciliationPage'
+import ZoneAssignmentPage from './pages/ZoneAssignmentPage'
+import WaiterDashboardPage from './pages/WaiterDashboardPage'
+import StaffPerformancePage from './pages/StaffPerformancePage'
 import NotFoundPage from './pages/NotFoundPage'
 import ServiceAlertBanner from './components/ServiceAlertBanner'
 
@@ -108,6 +111,17 @@ export default function App() {
         <Route path="/stock-reconciliation" element={
           <RoleRoute roles={['admin', 'manager']}>
             <StockReconciliationPage />
+          </RoleRoute>
+        } />
+        <Route path="/my-tables" element={<WaiterDashboardPage />} />
+        <Route path="/assignments" element={
+          <RoleRoute roles={['admin', 'manager']}>
+            <ZoneAssignmentPage />
+          </RoleRoute>
+        } />
+        <Route path="/performance" element={
+          <RoleRoute roles={['admin', 'manager']}>
+            <StaffPerformancePage />
           </RoleRoute>
         } />
         <Route path="/staff" element={<Navigate to="/users" replace />} />
