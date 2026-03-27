@@ -321,21 +321,27 @@ export default function KDSPage() {
                               </span>
                             </div>
 
-                            {cfg.next && (
-                              <button
-                                onClick={() => handleAdvance(item.id, cfg.next)}
-                                disabled={isUpdating}
-                                className={`w-full py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 ${
-                                  cfg.next === 'ready'
-                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                                    : 'bg-orange-600 hover:bg-orange-500 text-white'
-                                } disabled:opacity-50`}>
-                                {isUpdating
-                                  ? <RefreshCw size={12} className="animate-spin" />
-                                  : cfg.nextLabel
-                                }
-                              </button>
-                            )}
+                            {(() => {
+                              // Bevande: skip "Inizia", vai diretto a "Pronto" (non si preparano)
+                              const isBev = item.course_type === 'bevanda'
+                              const nextStatus = isBev && cfg.next === 'cooking' ? 'ready' : cfg.next
+                              const nextLabel = isBev && cfg.next === 'cooking' ? 'Pronto' : cfg.nextLabel
+                              const btnColor = nextStatus === 'ready'
+                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                                : 'bg-orange-600 hover:bg-orange-500 text-white'
+
+                              return nextStatus && (
+                                <button
+                                  onClick={() => handleAdvance(item.id, nextStatus)}
+                                  disabled={isUpdating}
+                                  className={`w-full py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 ${btnColor} disabled:opacity-50`}>
+                                  {isUpdating
+                                    ? <RefreshCw size={12} className="animate-spin" />
+                                    : nextLabel
+                                  }
+                                </button>
+                              )
+                            })()}
                           </div>
                         )
                       })}
