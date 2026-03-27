@@ -43,6 +43,7 @@ export default function KDSPage() {
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState({}) // itemId → true
   const loadedRef = useRef(false)
+  const updatingRef = useRef({})
 
   const loadOrders = useCallback(async () => {
     try {
@@ -98,15 +99,17 @@ export default function KDSPage() {
     }
   }, [socket, loadOrders])
 
-  // Fallback polling ogni 15s — garantisce aggiornamento anche con socket instabile (mobile)
+  // Fallback polling ogni 15s — salta se c'è un aggiornamento in corso
   useEffect(() => {
-    const interval = setInterval(loadOrders, 15000)
+    const interval = setInterval(() => {
+      if (Object.keys(updatingRef.current).length === 0) loadOrders()
+    }, 15000)
     return () => clearInterval(interval)
   }, [loadOrders])
 
   const handleAdvance = async (itemId, nextStatus) => {
     if (!nextStatus) return
-    setUpdating(prev => ({ ...prev, [itemId]: true }))
+    setUpdating(prev => { const n = { ...prev, [itemId]: true }; updatingRef.current = n; return n })
 
     // Optimistic update — don't wait for socket (works even when offline)
     setOrders(prev => {
@@ -125,7 +128,7 @@ export default function KDSPage() {
       toast({ type: 'error', title: 'Errore aggiornamento stato' })
       loadOrders() // revert to true DB state on failure
     } finally {
-      setUpdating(prev => { const n = { ...prev }; delete n[itemId]; return n })
+      setUpdating(prev => { const n = { ...prev }; delete n[itemId]; updatingRef.current = n; return n })
     }
   }
 
