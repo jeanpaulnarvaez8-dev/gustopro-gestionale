@@ -88,9 +88,9 @@ async function updateItemStatus(req, res, next) {
 
     const { rows: [item] } = await pool.query(
       `UPDATE order_items SET
-         status    = $1,
-         ready_at  = CASE WHEN $1 = 'ready'  AND ready_at  IS NULL THEN NOW() ELSE ready_at  END,
-         served_at = CASE WHEN $1 = 'served' AND served_at IS NULL THEN NOW() ELSE served_at END
+         status    = $1::varchar,
+         ready_at  = CASE WHEN $1::varchar = 'ready'  AND ready_at  IS NULL THEN NOW() ELSE ready_at  END,
+         served_at = CASE WHEN $1::varchar = 'served' AND served_at IS NULL THEN NOW() ELSE served_at END
        WHERE id = $2 RETURNING *`,
       [status, id]
     );
