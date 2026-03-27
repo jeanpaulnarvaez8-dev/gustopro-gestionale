@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LogOut, LayoutDashboard, ChefHat, Wifi, WifiOff, Users, RefreshCw,
   Package, UserCog, CalendarDays, ShoppingBag, Pencil, X, Plus,
-  CheckCircle2, FlaskConical, ClipboardList,
+  CheckCircle2, FlaskConical, ClipboardList, MapPin, Trophy, UtensilsCrossed,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
@@ -319,6 +319,22 @@ export default function TableMapPage() {
             <button onClick={() => navigate('/customers')}
               className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
               <Users size={14} /> <span className="hidden md:block">Clienti</span>
+            </button>
+          )}
+          <button onClick={() => navigate('/my-tables')}
+            className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+            <UtensilsCrossed size={14} /> <span className="hidden md:block">I Miei Piatti</span>
+          </button>
+          {['admin', 'manager'].includes(user?.role) && (
+            <button onClick={() => navigate('/assignments')}
+              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+              <MapPin size={14} /> <span className="hidden md:block">Zone</span>
+            </button>
+          )}
+          {['admin', 'manager'].includes(user?.role) && (
+            <button onClick={() => navigate('/performance')}
+              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+              <Trophy size={14} /> <span className="hidden md:block">Performance</span>
             </button>
           )}
           {user?.role === 'admin' && (
