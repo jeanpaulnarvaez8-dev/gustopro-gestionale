@@ -86,12 +86,23 @@ export default function KDSPage() {
     socket.on('order-item-added', onItemAdded)
     socket.on('item-status-updated', onItemUpdated)
 
+    // Ricarica quando il socket si riconnette (dopo disconnessione mobile)
+    const onReconnect = () => loadOrders()
+    socket.on('connect', onReconnect)
+
     return () => {
       socket.off('new-order', onNewOrder)
       socket.off('order-item-added', onItemAdded)
       socket.off('item-status-updated', onItemUpdated)
+      socket.off('connect', onReconnect)
     }
   }, [socket, loadOrders])
+
+  // Fallback polling ogni 15s — garantisce aggiornamento anche con socket instabile (mobile)
+  useEffect(() => {
+    const interval = setInterval(loadOrders, 15000)
+    return () => clearInterval(interval)
+  }, [loadOrders])
 
   const handleAdvance = async (itemId, nextStatus) => {
     if (!nextStatus) return

@@ -116,7 +116,7 @@ async function createOrder(req, res, next) {
     // Emit events
     if (table_id) {
       const tableInfo = await pool.query('SELECT table_number FROM tables WHERE id=$1', [table_id]);
-      getIO()?.to('role:kitchen').emit('new-order', {
+      getIO()?.emit('new-order', {
         orderId: order.id, tableId: table_id,
         tableNumber: tableInfo.rows[0]?.table_number,
         itemCount: orderItems.length,
@@ -126,8 +126,7 @@ async function createOrder(req, res, next) {
         tableId: table_id, status: 'occupied', active_order_id: order.id,
       });
     } else {
-      // Asporto → notify kitchen directly
-      getIO()?.to('role:kitchen').emit('new-order', {
+      getIO()?.emit('new-order', {
         orderId: order.id, tableId: null,
         tableNumber: `ASPORTO - ${customer_name || ''}`,
         itemCount: orderItems.length,
@@ -200,7 +199,7 @@ async function addItems(req, res, next) {
 
     await client.query('COMMIT');
 
-    getIO()?.to('role:kitchen').emit('order-item-added', { orderId: order_id, items: addedItems });
+    getIO()?.emit('order-item-added', { orderId: order_id, items: addedItems });
     res.status(201).json(addedItems);
   } catch (err) {
     await client.query('ROLLBACK');
