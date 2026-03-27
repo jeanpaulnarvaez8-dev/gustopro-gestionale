@@ -146,12 +146,103 @@ async function maybeResendAlert(io, row, alertType, elapsedMin) {
   }
 }
 
+/**
+ * Controlla i timer a cascata tra portate.
+ * Quando una portata è stata servita, calcola quando deve partire la successiva.
+ */
+async function checkCascadeTimers() {
+  try {
+    // Trova portate servite con timer attivi per portate successive in attesa
+    const { rows } = await pool.query(`
+      SELECT csl.order_id, csl.course_type AS served_course, csl.served_at,
+             ctc.to_course, ctc.minutes, ctc.pre_alert_mins,
+             o.waiter_id,
+             COALESCE(t.table_number, 'ASPORTO') AS table_number,
+             u.name AS waiter_name
+      FROM course_served_log csl
+      JOIN course_timing_config ctc ON ctc.from_course = csl.course_type
+      JOIN orders o ON o.id = csl.order_id
+      LEFT JOIN tables t ON t.id = o.table_id
+      LEFT JOIN users u ON u.id = o.waiter_id
+      WHERE o.status = 'open'
+        -- Solo se ci sono items in attesa per questo corso
+        AND EXISTS (
+          SELECT 1 FROM order_items oi
+          JOIN menu_items mi ON mi.id = oi.menu_item_id
+          JOIN categories c ON c.id = mi.category_id
+          WHERE oi.order_id = csl.order_id
+            AND c.course_type = ctc.to_course
+            AND oi.display_status = 'waiting'
+        )
+    `);
+
+    const io = getIO();
+    if (!io || rows.length === 0) return;
+
+    for (const row of rows) {
+      const elapsedMs = Date.now() - new Date(row.served_at).getTime();
+      const elapsedMin = elapsedMs / 60_000;
+      const targetMin = row.minutes;
+      const preAlertMin = targetMin - row.pre_alert_mins;
+
+      // Pre-alert: X minuti prima
+      if (elapsedMin >= preAlertMin && elapsedMin < targetMin) {
+        const alertKey = `pre_${row.order_id}_${row.to_course}`;
+        const inserted = await tryInsertAlert(null, 'waiter_20min', row.waiter_id, alertKey);
+        if (inserted) {
+          io.to(`user:${row.waiter_id}`).emit('course-pre-alert', {
+            orderId: row.order_id,
+            tableNumber: row.table_number,
+            nextCourse: row.to_course,
+            inMinutes: Math.round(targetMin - elapsedMin),
+          });
+        }
+      }
+
+      // Alert principale: è ora di mandare la portata
+      if (elapsedMin >= targetMin) {
+        io.to(`user:${row.waiter_id}`).emit('course-send-alert', {
+          orderId: row.order_id,
+          tableNumber: row.table_number,
+          courseType: row.to_course,
+          elapsedMinutes: Math.round(elapsedMin),
+          targetMinutes: targetMin,
+        });
+      }
+
+      // Alert ritardo: 5+ minuti dopo il target
+      if (elapsedMin >= targetMin + 5) {
+        io.to(`user:${row.waiter_id}`).emit('course-delay-alert', {
+          orderId: row.order_id,
+          tableNumber: row.table_number,
+          courseType: row.to_course,
+          delayMinutes: Math.round(elapsedMin - targetMin),
+        });
+        // Escalation a manager se > 10 min di ritardo
+        if (elapsedMin >= targetMin + 10) {
+          io.to('role:admin').to('role:manager').emit('service-escalation', {
+            orderId: row.order_id,
+            tableNumber: row.table_number,
+            itemName: `Portata ${row.to_course}`,
+            waiterName: row.waiter_name,
+            elapsedMinutes: Math.round(elapsedMin),
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[CascadeTimer] Errore:', err.message);
+  }
+}
+
 function startServiceTimer() {
   if (timer) return;
   console.log('[ServiceTimer] Avviato — controllo ogni 30s');
-  timer = setInterval(checkReadyItems, INTERVAL_MS);
-  // Prima esecuzione immediata dopo 5s (tempo di avvio)
-  setTimeout(checkReadyItems, 5000);
+  timer = setInterval(() => {
+    checkReadyItems();
+    checkCascadeTimers();
+  }, INTERVAL_MS);
+  setTimeout(() => { checkReadyItems(); checkCascadeTimers(); }, 5000);
 }
 
 function stopServiceTimer() {

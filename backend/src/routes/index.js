@@ -24,5 +24,6 @@ router.use('/ingredients',  require('./ingredients.routes'));
 router.use('/recipes',      require('./recipes.routes'));
 router.use('/service',      require('./service.routes'));
 router.use('/assignments',  require('./assignments.routes'));
+router.use('/courses',      require('./courses.routes'));
 
 module.exports = router;

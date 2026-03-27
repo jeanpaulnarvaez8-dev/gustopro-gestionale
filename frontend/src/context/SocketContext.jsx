@@ -108,6 +108,37 @@ export function SocketProvider({ children }) {
       setServiceAlerts(prev => prev.filter(a => a.itemId !== itemId));
     });
 
+    // === CASCADE TIMER: alert tra portate ===
+    // Pre-alert: 5 min prima della prossima portata
+    socket.on('course-pre-alert', (data) => {
+      toast({
+        type: 'info',
+        title: `📋 Tavolo ${data.tableNumber} — tra ${data.inMinutes}min`,
+        message: `Prepararsi per portata: ${data.nextCourse}`,
+        duration: 10000,
+      });
+    });
+
+    // Alert principale: è ora di mandare la portata
+    socket.on('course-send-alert', (data) => {
+      toast({
+        type: 'warning',
+        title: `🍽️ Tavolo ${data.tableNumber} — INVIA ${data.courseType.toUpperCase()}`,
+        message: `È il momento di inviare la portata in cucina`,
+        duration: 30000,
+      });
+    });
+
+    // Alert ritardo: portata in ritardo
+    socket.on('course-delay-alert', (data) => {
+      toast({
+        type: 'error',
+        title: `⚠️ RITARDO Tavolo ${data.tableNumber}`,
+        message: `${data.courseType} in ritardo di ${data.delayMinutes}min`,
+        duration: 30000,
+      });
+    });
+
     setIsConnected(socket.connected);
 
     return () => {
@@ -122,6 +153,9 @@ export function SocketProvider({ children }) {
       socket.off('service-escalation');
       socket.off('alert-postponed');
       socket.off('item-served');
+      socket.off('course-pre-alert');
+      socket.off('course-send-alert');
+      socket.off('course-delay-alert');
     };
   }, [user, toast]);
 

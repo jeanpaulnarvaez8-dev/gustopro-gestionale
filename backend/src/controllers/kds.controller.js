@@ -17,12 +17,14 @@ async function getPendingOrders(req, res, next) {
          oi.id             AS item_id,
          oi.quantity,
          oi.status         AS item_status,
+         oi.display_status AS display_status,
          oi.notes          AS item_notes,
          oi.sent_at,
          oi.combo_menu_name,
          oi.combo_selections,
          COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name,
          mi.prep_time_mins,
+         COALESCE(c.course_type, 'altro')   AS course_type,
          COALESCE(
            json_agg(m.name ORDER BY m.name) FILTER (WHERE m.id IS NOT NULL),
            '[]'
@@ -32,16 +34,19 @@ async function getPendingOrders(req, res, next) {
        LEFT JOIN tables t   ON t.id = o.table_id
        LEFT JOIN zones z    ON z.id = t.zone_id
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+       LEFT JOIN categories c  ON c.id = mi.category_id
        LEFT JOIN order_item_modifiers oim ON oim.order_item_id = oi.id
        LEFT JOIN modifiers m ON m.id = oim.modifier_id
-       WHERE oi.status IN ('pending','cooking')
-         AND o.status = 'open'
+       WHERE o.status = 'open'
+         AND oi.status NOT IN ('served','cancelled')
        GROUP BY o.id, o.created_at, o.order_type, o.customer_name, o.pickup_time,
                 t.table_number, z.name,
-                oi.id, oi.quantity, oi.status, oi.notes, oi.sent_at,
+                oi.id, oi.quantity, oi.status, oi.display_status, oi.notes, oi.sent_at,
                 oi.combo_menu_name, oi.combo_selections,
-                mi.name, mi.prep_time_mins
-       ORDER BY oi.sent_at ASC`
+                mi.name, mi.prep_time_mins, c.course_type
+       ORDER BY
+         CASE oi.display_status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 ELSE 2 END,
+         oi.sent_at ASC`
     );
 
     // Group by order
@@ -64,6 +69,8 @@ async function getPendingOrders(req, res, next) {
         name:             row.item_name,
         quantity:         row.quantity,
         status:           row.item_status,
+        display_status:   row.display_status,
+        course_type:      row.course_type,
         notes:            row.item_notes,
         sent_at:          row.sent_at,
         prep_time_mins:   row.prep_time_mins,

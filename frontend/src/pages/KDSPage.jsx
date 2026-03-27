@@ -241,11 +241,41 @@ export default function KDSPage() {
                       <ElapsedTick sentAt={oldest} />
                     </div>
 
-                    {/* Items */}
-                    <div className="flex-1 p-3 flex flex-col gap-2">
+                    {/* Items — gerarchia visiva: active > waiting (A) > delivered (c) */}
+                    <div className="flex-1 p-3 flex flex-col gap-1.5">
                       {order.items.map(item => {
                         const cfg = ITEM_STATUS[item.status] ?? ITEM_STATUS.pending
                         const isUpdating = updating[item.id]
+                        const ds = item.display_status || 'active'
+
+                        // === DELIVERED (c) — minimo impatto visivo ===
+                        if (ds === 'delivered') {
+                          return (
+                            <div key={item.id} className="flex items-center gap-2 px-2 py-0.5 opacity-30">
+                              <span className="text-[9px] font-mono text-[#555]">c</span>
+                              <span className="text-[#555] text-[10px] line-through">
+                                {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
+                              </span>
+                            </div>
+                          )
+                        }
+
+                        // === WAITING (A) — visibile ma secondario ===
+                        if (ds === 'waiting') {
+                          return (
+                            <div key={item.id} className="flex items-center gap-2 px-2 py-1 rounded border border-[#333] bg-[#1A1A1A]/50 opacity-60">
+                              <span className="text-xs font-bold text-amber-500 w-4">A</span>
+                              <span className="text-[#888] text-xs">
+                                {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
+                              </span>
+                              {item.course_type && (
+                                <span className="ml-auto text-[9px] text-[#555] italic">{item.course_type}</span>
+                              )}
+                            </div>
+                          )
+                        }
+
+                        // === ACTIVE — da eseguire ORA (grassetto, grande, dominante) ===
                         return (
                           <div key={item.id}
                             className={`rounded-lg border p-3 flex flex-col gap-2 ${cfg.bg} ${cfg.border}`}>
@@ -253,7 +283,7 @@ export default function KDSPage() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="text-[#F5F5DC] text-sm font-semibold">
+                                  <span className="text-[#F5F5DC] font-bold text-base uppercase tracking-wide">
                                     {item.quantity > 1 && (
                                       <span className="text-[#D4AF37] mr-1">×{item.quantity}</span>
                                     )}
@@ -261,6 +291,9 @@ export default function KDSPage() {
                                   </span>
                                   {item.is_combo && (
                                     <span className="text-[9px] font-bold bg-[#D4AF37]/20 text-[#D4AF37] px-1.5 py-0.5 rounded-full">MENU</span>
+                                  )}
+                                  {item.course_type && item.course_type !== 'altro' && (
+                                    <span className="text-[9px] font-medium bg-[#333] text-[#888] px-1.5 py-0.5 rounded">{item.course_type}</span>
                                   )}
                                 </div>
                                 {item.is_combo && item.combo_selections && (

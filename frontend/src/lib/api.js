@@ -198,4 +198,13 @@ export const assignmentsAPI = {
   copyYesterday: ()     => api.post('/assignments/copy-yesterday'),
 };
 
+export const coursesAPI = {
+  timing:           ()          => api.get('/courses/timing'),
+  updateTiming:     (id, data)  => api.put(`/courses/timing/${id}`, data),
+  updateDisplay:    (itemId, display_status) => api.patch(`/courses/items/${itemId}/display`, { display_status }),
+  sendCourse:       (order_id, course_type) => api.post('/courses/send-course', { order_id, course_type }),
+  markCourseServed: (order_id, course_type) => api.post('/courses/mark-course-served', { order_id, course_type }),
+  orderStatus:      (orderId)   => api.get(`/courses/order/${orderId}/status`),
+};
+
 export default api;
