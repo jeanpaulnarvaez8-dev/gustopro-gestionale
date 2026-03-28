@@ -17,6 +17,55 @@ LOG_PREFIX="[$(date '+%Y-%m-%d %H:%M:%S')]"
 
 cd "$PROJECT_DIR" || { echo "$LOG_PREFIX ERRORE: directory non trovata $PROJECT_DIR"; exit 1; }
 
+# ── Fix nginx gustopro.conf (gira SEMPRE, anche senza nuovi commit) ──
+NGINX_CONF_DIR="/share/Container/fix-point/nginx/conf.d"
+GUSTOPRO_CONF="$NGINX_CONF_DIR/gustopro.conf"
+if [ -d "$NGINX_CONF_DIR" ] && [ ! -f "$GUSTOPRO_CONF" ]; then
+  echo "$LOG_PREFIX nginx gustopro.conf mancante — lo ricreo"
+  cat > "$GUSTOPRO_CONF" << 'NGINXEOF'
+server {
+    listen 80; listen [::]:80;
+    server_name gestione.gustopro.it;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; try_files $uri =404; }
+    location /socket.io/ {
+        proxy_pass http://gestionale-backend:3001; proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "Upgrade";
+        proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme; proxy_read_timeout 3600s;
+    }
+    location /api/ {
+        proxy_pass http://gestionale-backend:3001; proxy_http_version 1.1;
+        proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme; proxy_read_timeout 300s;
+    }
+    location /health { proxy_pass http://gestionale-backend:3001; }
+    location / {
+        proxy_pass http://gestionale-frontend:80; proxy_http_version 1.1;
+        proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+server {
+    listen 80; listen [::]:80;
+    server_name gustopro.it www.gustopro.it;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; try_files $uri =404; }
+    location / {
+        proxy_pass http://gustopro-website:80; proxy_http_version 1.1;
+        proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+NGINXEOF
+  docker network connect gustopro-gestionale_default fix-point-nginx 2>/dev/null
+  docker network connect gustopro-website_default fix-point-nginx 2>/dev/null
+  docker exec fix-point-nginx nginx -s reload 2>/dev/null
+  echo "$LOG_PREFIX nginx gustopro.conf ricreato e ricaricato"
+fi
+
 # Scarica info dal remoto senza applicare
 # -c safe.directory evita "dubious ownership" quando lo script gira come root
 GIT="git -c safe.directory=$PROJECT_DIR"
@@ -27,7 +76,6 @@ LOCAL=$($GIT rev-parse HEAD)
 REMOTE=$($GIT rev-parse origin/main)
 
 if [ "$LOCAL" = "$REMOTE" ]; then
-  # Nessuna modifica — niente da fare (nessun log per non riempire il file)
   exit 0
 fi
 
@@ -85,84 +133,6 @@ docker compose up -d
 if [ $? -ne 0 ]; then
   echo "$LOG_PREFIX ERRORE: docker compose up fallito"
   exit 1
-fi
-
-# Assicura che nginx abbia la config gustopro (potrebbe perdersi dopo rebuild fix-point)
-NGINX_CONF_DIR="/share/Container/fix-point/nginx/conf.d"
-GUSTOPRO_CONF="$NGINX_CONF_DIR/gustopro.conf"
-
-if [ -d "$NGINX_CONF_DIR" ] && [ ! -f "$GUSTOPRO_CONF" ]; then
-  echo "$LOG_PREFIX nginx gustopro.conf mancante — lo ricreo"
-  cat > "$GUSTOPRO_CONF" << 'NGINXEOF'
-# GustoPro — Virtual Hosts (Cloudflare Flexible SSL — NO HTTPS redirect)
-
-server {
-    listen      80;
-    listen      [::]:80;
-    server_name gestione.gustopro.it;
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-        try_files $uri =404;
-    }
-    location /socket.io/ {
-        proxy_pass         http://gestionale-backend:3001;
-        proxy_http_version 1.1;
-        proxy_set_header   Upgrade    $http_upgrade;
-        proxy_set_header   Connection "Upgrade";
-        proxy_set_header   Host       $host;
-        proxy_set_header   X-Real-IP  $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_read_timeout 3600s;
-    }
-    location /api/ {
-        proxy_pass         http://gestionale-backend:3001;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300s;
-    }
-    location /health {
-        proxy_pass http://gestionale-backend:3001;
-    }
-    location / {
-        proxy_pass         http://gestionale-frontend:80;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-    }
-}
-
-server {
-    listen      80;
-    listen      [::]:80;
-    server_name gustopro.it www.gustopro.it;
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-        try_files $uri =404;
-    }
-    location / {
-        proxy_pass         http://gustopro-website:80;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-    }
-}
-NGINXEOF
-  # Connetti nginx alle reti gustopro se non già connesso
-  docker network connect gustopro-gestionale_default fix-point-nginx 2>/dev/null
-  docker network connect gustopro-website_default fix-point-nginx 2>/dev/null
-  # Ricarica nginx
-  docker exec fix-point-nginx nginx -s reload 2>/dev/null
-  echo "$LOG_PREFIX nginx gustopro.conf ricreato e ricaricato"
 fi
 
 echo "$LOG_PREFIX Deploy completato con successo"
