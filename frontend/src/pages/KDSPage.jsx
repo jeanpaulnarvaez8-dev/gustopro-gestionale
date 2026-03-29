@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock, LayoutDashboard, Package } from 'lucide-react'
+import { ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock, LayoutDashboard, Package, LogOut } from 'lucide-react'
 import { useSocket } from '../context/SocketContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
@@ -38,7 +38,7 @@ export default function KDSPage() {
   const navigate = useNavigate()
   const { socket, isConnected } = useSocket()
   const { toast } = useToast()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState({}) // itemId → true
@@ -142,10 +142,12 @@ export default function KDSPage() {
 
       {/* Header */}
       <header className="bg-[#1A1A1A] border-b border-[#2A2A2A] px-5 py-3 flex items-center gap-4">
-        <button onClick={() => navigate('/tables')}
-          className="text-[#555] hover:text-[#888] transition">
-          <ArrowLeft size={18} />
-        </button>
+        {user?.role !== 'kitchen' && (
+          <button onClick={() => navigate('/tables')}
+            className="text-[#555] hover:text-[#888] transition">
+            <ArrowLeft size={18} />
+          </button>
+        )}
         <ChefHat size={20} className="text-[#D4AF37]" />
         <span className="text-[#F5F5DC] font-bold text-base tracking-wide">KDS CUCINA</span>
 
@@ -175,6 +177,11 @@ export default function KDSPage() {
             {isConnected ? <Wifi size={12} /> : <WifiOff size={12} />}
             <span>{isConnected ? 'Live' : 'Offline'}</span>
           </div>
+          {user?.role === 'kitchen' && (
+            <button onClick={logout} className="text-[#555] hover:text-red-400 transition p-1">
+              <LogOut size={15} />
+            </button>
+          )}
         </div>
       </header>
 

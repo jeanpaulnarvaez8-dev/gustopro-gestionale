@@ -41,13 +41,20 @@ function RoleRoute({ roles, children }) {
   return children
 }
 
+function HomeRedirect() {
+  const { user } = useAuth()
+  // Chef va diretto al KDS
+  if (user?.role === 'kitchen') return <Navigate to="/kds" replace />
+  return <Navigate to="/tables" replace />
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
       <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<Navigate to="/tables" replace />} />
+        <Route path="/" element={<HomeRedirect />} />
         <Route path="/tables" element={<TableMapPage />} />
         <Route path="/order/:tableId" element={<OrderPage />} />
         <Route path="/checkout/:orderId" element={<CheckoutPage />} />

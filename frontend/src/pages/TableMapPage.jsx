@@ -277,65 +277,72 @@ export default function TableMapPage() {
         </div>
 
         <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0 scrollbar-none">
-          {['kitchen', 'admin', 'manager'].includes(user?.role) && (
-            <button onClick={() => navigate('/kds')}
-              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-              <ChefHat size={14} /> <span className="hidden md:block">KDS</span>
-            </button>
+          {/* === CAMERIERE: solo le sue funzioni === */}
+          {user?.role === 'waiter' && (
+            <>
+              <button onClick={() => navigate('/my-tables')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <UtensilsCrossed size={14} /> <span className="hidden md:block">I Miei Piatti</span>
+              </button>
+              <button onClick={() => navigate('/asporto')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <ShoppingBag size={14} /> <span className="hidden md:block">Asporto</span>
+              </button>
+              <button onClick={() => navigate('/reservations')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <CalendarDays size={14} /> <span className="hidden md:block">Prenotazioni</span>
+              </button>
+            </>
           )}
+
+          {/* === ADMIN/MANAGER: tutto === */}
           {['admin', 'manager'].includes(user?.role) && (
-            <button onClick={() => navigate('/dashboard')}
-              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-              <LayoutDashboard size={14} /> <span className="hidden md:block">Dashboard</span>
-            </button>
-          )}
-          {['admin', 'manager'].includes(user?.role) && (
-            <button onClick={() => navigate('/inventory')}
-              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-              <Package size={14} /> <span className="hidden md:block">Inventario</span>
-            </button>
-          )}
-          {['admin', 'manager'].includes(user?.role) && (
-            <button onClick={() => navigate('/ingredients')}
-              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-              <FlaskConical size={14} /> <span className="hidden md:block">Ingredienti</span>
-            </button>
-          )}
-          {['admin', 'manager'].includes(user?.role) && (
-            <button onClick={() => navigate('/stock-reconciliation')}
-              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-              <ClipboardList size={14} /> <span className="hidden md:block">Riconciliazione</span>
-            </button>
-          )}
-          <button onClick={() => navigate('/asporto')}
-            className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-            <ShoppingBag size={14} /> <span className="hidden md:block">Asporto</span>
-          </button>
-          <button onClick={() => navigate('/reservations')}
-            className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-            <CalendarDays size={14} /> <span className="hidden md:block">Prenotazioni</span>
-          </button>
-          {['admin', 'manager'].includes(user?.role) && (
-            <button onClick={() => navigate('/customers')}
-              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-              <Users size={14} /> <span className="hidden md:block">Clienti</span>
-            </button>
-          )}
-          <button onClick={() => navigate('/my-tables')}
-            className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-            <UtensilsCrossed size={14} /> <span className="hidden md:block">I Miei Piatti</span>
-          </button>
-          {['admin', 'manager'].includes(user?.role) && (
-            <button onClick={() => navigate('/assignments')}
-              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-              <MapPin size={14} /> <span className="hidden md:block">Zone</span>
-            </button>
-          )}
-          {['admin', 'manager'].includes(user?.role) && (
-            <button onClick={() => navigate('/performance')}
-              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-              <Trophy size={14} /> <span className="hidden md:block">Performance</span>
-            </button>
+            <>
+              <button onClick={() => navigate('/kds')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <ChefHat size={14} /> <span className="hidden md:block">KDS</span>
+              </button>
+              <button onClick={() => navigate('/my-tables')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <UtensilsCrossed size={14} /> <span className="hidden md:block">I Miei Piatti</span>
+              </button>
+              <button onClick={() => navigate('/dashboard')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <LayoutDashboard size={14} /> <span className="hidden md:block">Dashboard</span>
+              </button>
+              <button onClick={() => navigate('/asporto')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <ShoppingBag size={14} /> <span className="hidden md:block">Asporto</span>
+              </button>
+              <button onClick={() => navigate('/reservations')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <CalendarDays size={14} /> <span className="hidden md:block">Prenotazioni</span>
+              </button>
+              <button onClick={() => navigate('/assignments')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <MapPin size={14} /> <span className="hidden md:block">Zone</span>
+              </button>
+              <button onClick={() => navigate('/performance')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <Trophy size={14} /> <span className="hidden md:block">Performance</span>
+              </button>
+              <button onClick={() => navigate('/customers')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <Users size={14} /> <span className="hidden md:block">Clienti</span>
+              </button>
+              <button onClick={() => navigate('/inventory')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <Package size={14} /> <span className="hidden md:block">Inventario</span>
+              </button>
+              <button onClick={() => navigate('/ingredients')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <FlaskConical size={14} /> <span className="hidden md:block">Ingredienti</span>
+              </button>
+              <button onClick={() => navigate('/stock-reconciliation')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <ClipboardList size={14} /> <span className="hidden md:block">Riconciliazione</span>
+              </button>
+            </>
           )}
           {user?.role === 'admin' && (
             <button onClick={() => navigate('/users')}
