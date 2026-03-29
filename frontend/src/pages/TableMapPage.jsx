@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
-import { tablesAPI, zonesAPI } from '../lib/api'
+import { tablesAPI, zonesAPI, assignmentsAPI } from '../lib/api'
 
 const STATUS_CONFIG = {
   free:     { label: 'Libero',    color: 'bg-emerald-900/30 border-emerald-500/40 hover:border-emerald-400', dot: 'bg-emerald-400', text: 'text-emerald-400' },
@@ -181,6 +181,7 @@ export default function TableMapPage() {
   const [deletingId, setDeletingId] = useState(null)
 
   const canEdit = ['admin', 'manager'].includes(user?.role)
+  const [myZoneIds, setMyZoneIds] = useState(null) // null = non caricato, [] = nessuna assegnazione
 
   const loadData = useCallback(async () => {
     try {
@@ -190,15 +191,30 @@ export default function TableMapPage() {
         zonesAPI.list(),
         tablesAPI.list(),
       ])
-      setZones(zonesRes.data)
+
+      let allowedZones = zonesRes.data
+      // Cameriere: mostra solo le zone assegnate
+      if (user?.role === 'waiter') {
+        try {
+          const { data: myAssignments } = await assignmentsAPI.my()
+          const ids = myAssignments.map(a => a.zone_id)
+          setMyZoneIds(ids)
+          if (ids.length > 0) {
+            allowedZones = zonesRes.data.filter(z => ids.includes(z.id))
+          }
+          // Se nessuna assegnazione, mostra tutte (fallback)
+        } catch { /* fallback: mostra tutte */ }
+      }
+
+      setZones(allowedZones)
       setTables(tablesRes.data)
-      setActiveZone(prev => prev ?? zonesRes.data[0]?.id ?? null)
+      setActiveZone(prev => prev && allowedZones.some(z => z.id === prev) ? prev : allowedZones[0]?.id ?? null)
     } catch {
       setError('Errore caricamento tavoli')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user?.role])
 
   useEffect(() => { loadData() }, [loadData])
 
