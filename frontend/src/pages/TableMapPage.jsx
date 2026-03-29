@@ -243,13 +243,24 @@ export default function TableMapPage() {
     }
   }
 
+  const [coversModal, setCoversModal] = useState(null) // table object o null
+
   function handleNavigate(table) {
     const isCashier = ['cashier', 'admin', 'manager'].includes(user?.role)
     if (isCashier && table.status === 'occupied' && table.active_order_id) {
       navigate(`/checkout/${table.active_order_id}`)
+    } else if (table.status === 'free' || !table.active_order_id) {
+      // Tavolo libero → chiedi coperti
+      setCoversModal(table)
     } else {
       navigate(`/order/${table.id}`)
     }
+  }
+
+  function handleCoversConfirm(covers) {
+    if (!coversModal) return
+    navigate(`/order/${coversModal.id}?covers=${covers}`)
+    setCoversModal(null)
   }
 
   const filteredTables = tables.filter(t => t.zone_id === activeZone)
@@ -480,6 +491,34 @@ export default function TableMapPage() {
           </motion.div>
         )}
       </div>
+
+      {/* Modale selezione coperti */}
+      <AnimatePresence>
+        {coversModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+            onClick={() => setCoversModal(null)}>
+            <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}
+              className="bg-[#222] border border-[#3A3A3A] rounded-2xl w-full max-w-sm"
+              onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-[#3A3A3A] text-center">
+                <h3 className="text-[#F5F5DC] font-bold text-lg">
+                  Tavolo {coversModal.table_number}
+                </h3>
+                <p className="text-[#888] text-xs mt-1">Quante persone?</p>
+              </div>
+              <div className="p-5 grid grid-cols-5 gap-2">
+                {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map(n => (
+                  <button key={n} onClick={() => handleCoversConfirm(n)}
+                    className="aspect-square rounded-xl bg-[#2A2A2A] border border-[#3A3A3A] text-[#F5F5DC] font-bold text-lg hover:bg-[#D4AF37] hover:text-[#1A1A1A] hover:border-[#D4AF37] transition flex items-center justify-center">
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

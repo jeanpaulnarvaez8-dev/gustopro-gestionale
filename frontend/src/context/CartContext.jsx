@@ -14,20 +14,31 @@ function cartReducer(state, action) {
       return { ...state, tableId: action.tableId, tableNumber: action.tableNumber };
 
     case 'ADD_ITEM': {
-      const { item, quantity = 1, modifiers = [], notes } = action;
-      const key = `${item.id}-${JSON.stringify(modifiers.map(m => m.modifier_id).sort())}`;
-      const existing = state.items.find(i => i._key === key);
-      if (existing) {
-        return {
-          ...state,
-          items: state.items.map(i =>
-            i._key === key ? { ...i, quantity: i.quantity + quantity } : i
-          ),
-        };
+      const { item, quantity = 1, modifiers = [], notes, weight_g } = action;
+      // Piatti a peso: ogni aggiunta è unica (peso diverso)
+      const key = weight_g
+        ? `${item.id}-w${weight_g}-${Date.now()}`
+        : `${item.id}-${JSON.stringify(modifiers.map(m => m.modifier_id).sort())}`;
+      if (!weight_g) {
+        const existing = state.items.find(i => i._key === key);
+        if (existing) {
+          return {
+            ...state,
+            items: state.items.map(i =>
+              i._key === key ? { ...i, quantity: i.quantity + quantity } : i
+            ),
+          };
+        }
       }
+      const computedPrice = weight_g
+        ? (parseFloat(item.base_price) * weight_g) / 1000
+        : parseFloat(item.base_price);
       return {
         ...state,
-        items: [...state.items, { _key: key, item, quantity, modifiers, notes }],
+        items: [...state.items, {
+          _key: key, item: { ...item, computed_price: computedPrice },
+          quantity, modifiers, notes, weight_g,
+        }],
       };
     }
 
@@ -74,8 +85,8 @@ export function CartProvider({ children }) {
     dispatch({ type: 'SET_TABLE', tableId, tableNumber });
   }, []);
 
-  const addItem = useCallback((item, quantity, modifiers, notes) => {
-    dispatch({ type: 'ADD_ITEM', item, quantity, modifiers, notes });
+  const addItem = useCallback((item, quantity, modifiers, notes, weight_g) => {
+    dispatch({ type: 'ADD_ITEM', item, quantity, modifiers, notes, weight_g });
   }, []);
 
   const addCombo = useCallback((combo, selections) => {
@@ -96,7 +107,8 @@ export function CartProvider({ children }) {
 
   const total = state.items.reduce((sum, i) => {
     const modExtra = i.modifiers.reduce((s, m) => s + (m.price_extra || 0), 0);
-    return sum + (i.item.base_price + modExtra) * i.quantity;
+    const price = i.item.computed_price ?? i.item.base_price;
+    return sum + (price + modExtra) * i.quantity;
   }, 0);
 
   const itemCount = state.items.reduce((s, i) => s + i.quantity, 0);

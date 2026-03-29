@@ -4,10 +4,10 @@ const { getIO } = require('../socket');
 // ── Helpers ──────────────────────────────────────────────────
 
 async function insertRegularItem(client, order_id, item) {
-  const { menu_item_id, quantity = 1, notes: itemNotes, modifiers = [] } = item;
+  const { menu_item_id, quantity = 1, notes: itemNotes, modifiers = [], weight_g } = item;
 
   const { rows: [menuItem] } = await client.query(
-    'SELECT base_price, name FROM menu_items WHERE id=$1 AND is_available=true',
+    'SELECT base_price, pricing_type, name FROM menu_items WHERE id=$1 AND is_available=true',
     [menu_item_id]
   );
   if (!menuItem) throw { status: 400, message: `Item ${menu_item_id} non disponibile` };
@@ -20,14 +20,22 @@ async function insertRegularItem(client, order_id, item) {
     if (m) modifierTotal += parseFloat(m.price_extra);
   }
 
-  const unitPrice = parseFloat(menuItem.base_price);
-  const subtotal  = (unitPrice + modifierTotal) * quantity;
+  let unitPrice = parseFloat(menuItem.base_price);
+  let subtotal;
+
+  if (menuItem.pricing_type === 'per_kg' && weight_g) {
+    // Prezzo al kg: base_price = €/kg, calcolo in base al peso
+    unitPrice = (parseFloat(menuItem.base_price) * weight_g) / 1000;
+    subtotal = (unitPrice + modifierTotal) * quantity;
+  } else {
+    subtotal = (unitPrice + modifierTotal) * quantity;
+  }
 
   const { rows: [orderItem] } = await client.query(
     `INSERT INTO order_items
-       (order_id, menu_item_id, quantity, unit_price, modifier_total, subtotal, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [order_id, menu_item_id, quantity, unitPrice, modifierTotal, subtotal, itemNotes || null]
+       (order_id, menu_item_id, quantity, unit_price, modifier_total, subtotal, notes, weight_g)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [order_id, menu_item_id, quantity, unitPrice, modifierTotal, subtotal, itemNotes || null, weight_g || null]
   );
 
   for (const mod of modifiers) {
@@ -73,7 +81,7 @@ async function createOrder(req, res, next) {
   const client = await pool.connect();
   try {
     const {
-      table_id, items, notes,
+      table_id, items, notes, covers = 1,
       order_type = 'table',
       customer_name, customer_phone, pickup_time,
     } = req.body;
@@ -89,10 +97,11 @@ async function createOrder(req, res, next) {
 
     const { rows: [order] } = await client.query(
       `INSERT INTO orders
-         (table_id, waiter_id, notes, order_type, customer_name, customer_phone, pickup_time)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+         (table_id, waiter_id, notes, order_type, customer_name, customer_phone, pickup_time, covers)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [table_id || null, req.user.id, notes || null,
-       order_type, customer_name || null, customer_phone || null, pickup_time || null]
+       order_type, customer_name || null, customer_phone || null, pickup_time || null,
+       Math.max(1, parseInt(covers) || 1)]
     );
 
     const orderItems = [];

@@ -149,6 +149,10 @@ export default function OrderPage() {
   const { items: cartItems, total, itemCount, setTable, addItem, addCombo, removeItem, updateQuantity, clearCart } = useCart()
   const { toast } = useToast()
 
+  // Coperti dalla URL (?covers=N)
+  const searchParams = new URLSearchParams(window.location.search)
+  const initialCovers = parseInt(searchParams.get('covers')) || 1
+
   const [table, setTableData]         = useState(null)
   const [categories, setCategories]   = useState([])
   const [menuItems, setMenuItems]     = useState([])
@@ -158,7 +162,10 @@ export default function OrderPage() {
   const [loadingItems, setLoadingItems] = useState(false)
   const [sending, setSending]         = useState(false)
   const [sent, setSent]               = useState(false)
-  const [comboModal, setComboModal]   = useState(null) // combo obj
+  const [comboModal, setComboModal]   = useState(null)
+  const [covers, setCovers]           = useState(initialCovers)
+  const [weightModal, setWeightModal] = useState(null) // menu item per peso
+  const [weightInput, setWeightInput] = useState('')
 
   // Load table + categories + combos on mount
   useEffect(() => {
@@ -226,6 +233,7 @@ export default function OrderPage() {
           quantity: ci.quantity,
           notes: ci.notes || null,
           modifiers: ci.modifiers.map(m => ({ modifier_id: m.id })),
+          ...(ci.weight_g ? { weight_g: ci.weight_g } : {}),
         }))
 
       const comboItems = cartItems
@@ -241,7 +249,7 @@ export default function OrderPage() {
       if (table?.active_order_id) {
         await ordersAPI.addItems(table.active_order_id, items)
       } else {
-        await ordersAPI.create({ table_id: tableId, items })
+        await ordersAPI.create({ table_id: tableId, items, covers })
         await tablesAPI.setStatus(tableId, 'occupied').catch(() => {})
       }
 
@@ -282,8 +290,11 @@ export default function OrderPage() {
           <span className="text-[#F5F5DC] font-semibold text-sm">
             Tavolo {table?.table_number ?? '...'}
           </span>
+          <span className="ml-2 text-xs text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded-full">
+            {covers} pers.
+          </span>
           {table?.active_order_id && (
-            <span className="ml-2 text-xs text-amber-400 bg-amber-900/30 px-2 py-0.5 rounded-full">
+            <span className="ml-1 text-xs text-amber-400 bg-amber-900/30 px-2 py-0.5 rounded-full">
               Ordine aperto
             </span>
           )}
@@ -365,7 +376,15 @@ export default function OrderPage() {
               /* Regular items grid */
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {menuItems.map(item => (
-                  <motion.button key={item.id} onClick={() => addItem(item, 1, [], null)}
+                  <motion.button key={item.id}
+                    onClick={() => {
+                      if (item.pricing_type === 'per_kg') {
+                        setWeightModal(item)
+                        setWeightInput('')
+                      } else {
+                        addItem(item, 1, [], null)
+                      }
+                    }}
                     whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                     className="bg-[#2A2A2A] border border-[#3A3A3A] hover:border-[#D4AF37]/50 rounded-xl p-4 text-left transition flex flex-col gap-2">
                     <span className="text-[#F5F5DC] text-sm font-medium leading-tight">{item.name}</span>
@@ -373,8 +392,13 @@ export default function OrderPage() {
                       <span className="text-[#555] text-xs leading-tight line-clamp-2">{item.description}</span>
                     )}
                     <div className="flex items-center justify-between mt-auto pt-1">
-                      <span className="text-[#D4AF37] font-semibold text-sm">{formatPrice(item.base_price)}</span>
-                      <Plus size={14} className="text-[#888]" />
+                      <span className="text-[#D4AF37] font-semibold text-sm">
+                        {formatPrice(item.base_price)}{item.pricing_type === 'per_kg' ? '/kg' : ''}
+                      </span>
+                      {item.pricing_type === 'per_kg'
+                        ? <span className="text-[9px] text-amber-400 font-medium bg-amber-900/20 px-1.5 py-0.5 rounded">A PESO</span>
+                        : <Plus size={14} className="text-[#888]" />
+                      }
                     </div>
                   </motion.button>
                 ))}
@@ -408,6 +432,9 @@ export default function OrderPage() {
                             <span className="text-[9px] font-bold bg-[#D4AF37]/20 text-[#D4AF37] px-1 py-0.5 rounded mr-1">M</span>
                           )}
                           {ci.item.name}
+                          {ci.weight_g && (
+                            <span className="text-[#888] text-[9px] ml-1">{ci.weight_g}g</span>
+                          )}
                         </span>
                         {ci.item.is_combo && ci.combo_selections && (
                           <div className="mt-0.5">
@@ -442,7 +469,7 @@ export default function OrderPage() {
                         <span className="text-[#555] text-[10px]">×1</span>
                       )}
                       <span className="text-[#D4AF37] text-xs font-medium">
-                        {formatPrice(ci.item.base_price * ci.quantity)}
+                        {formatPrice((ci.item.computed_price ?? ci.item.base_price) * ci.quantity)}
                       </span>
                     </div>
                   </motion.div>
@@ -478,6 +505,56 @@ export default function OrderPage() {
             onClose={() => setComboModal(null)}
             onConfirm={handleComboConfirm}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Modale peso per piatti a peso (pesce al kg) */}
+      <AnimatePresence>
+        {weightModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+            onClick={() => setWeightModal(null)}>
+            <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}
+              className="bg-[#222] border border-[#3A3A3A] rounded-2xl w-full max-w-xs"
+              onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-[#3A3A3A] text-center">
+                <h3 className="text-[#F5F5DC] font-bold">{weightModal.name}</h3>
+                <p className="text-[#D4AF37] text-sm mt-1">{formatPrice(weightModal.base_price)}/kg</p>
+              </div>
+              <div className="p-5 flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[#888] text-xs">Peso in grammi</label>
+                  <input type="number" inputMode="numeric" value={weightInput}
+                    onChange={e => setWeightInput(e.target.value)}
+                    placeholder="es. 350"
+                    className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-4 py-3 text-[#F5F5DC] text-lg text-center font-bold placeholder-[#555]"
+                    autoFocus />
+                </div>
+                {weightInput && parseInt(weightInput) > 0 && (
+                  <div className="text-center">
+                    <span className="text-[#888] text-xs">Prezzo: </span>
+                    <span className="text-[#D4AF37] font-bold text-lg">
+                      {formatPrice((parseFloat(weightModal.base_price) * parseInt(weightInput)) / 1000)}
+                    </span>
+                    <span className="text-[#555] text-xs ml-1">({parseInt(weightInput)}g)</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    const g = parseInt(weightInput)
+                    if (!g || g <= 0) { toast({ type: 'warning', title: 'Inserisci un peso valido' }); return }
+                    addItem(weightModal, 1, [], null, g)
+                    const price = (parseFloat(weightModal.base_price) * g) / 1000
+                    toast({ type: 'success', title: `${weightModal.name} ${g}g`, message: formatPrice(price) })
+                    setWeightModal(null)
+                  }}
+                  disabled={!weightInput || parseInt(weightInput) <= 0}
+                  className="w-full py-3 rounded-xl bg-[#D4AF37] text-[#1A1A1A] font-bold text-sm disabled:opacity-30 hover:bg-[#c9a42e] transition">
+                  Aggiungi al carrello
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

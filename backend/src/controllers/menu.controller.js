@@ -116,14 +116,14 @@ async function deleteCategory(req, res, next) {
 
 async function createItem(req, res, next) {
   try {
-    const { category_id, name, description, base_price, prep_time_mins, sort_order = 0, allergens = [] } = req.body;
+    const { category_id, name, description, base_price, prep_time_mins, sort_order = 0, allergens = [], pricing_type = 'fixed' } = req.body;
     if (!category_id || !name || base_price == null) {
       return res.status(400).json({ error: 'category_id, name, base_price obbligatori' });
     }
     const { rows } = await pool.query(
-      `INSERT INTO menu_items (category_id, name, description, base_price, prep_time_mins, sort_order, allergens)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [category_id, name, description || null, base_price, prep_time_mins || null, sort_order, JSON.stringify(allergens)]
+      `INSERT INTO menu_items (category_id, name, description, base_price, prep_time_mins, sort_order, allergens, pricing_type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [category_id, name, description || null, base_price, prep_time_mins || null, sort_order, JSON.stringify(allergens), pricing_type]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -132,7 +132,7 @@ async function createItem(req, res, next) {
 async function updateItem(req, res, next) {
   try {
     const { id } = req.params;
-    const { name, description, base_price, is_available, sort_order, prep_time_mins, allergens } = req.body;
+    const { name, description, base_price, is_available, sort_order, prep_time_mins, allergens, pricing_type } = req.body;
     const { rows } = await pool.query(
       `UPDATE menu_items SET
          name           = COALESCE($1, name),
@@ -141,11 +141,13 @@ async function updateItem(req, res, next) {
          is_available   = COALESCE($4, is_available),
          sort_order     = COALESCE($5, sort_order),
          prep_time_mins = COALESCE($6, prep_time_mins),
-         allergens      = COALESCE($7, allergens)
-       WHERE id=$8 RETURNING *`,
+         allergens      = COALESCE($7, allergens),
+         pricing_type   = COALESCE($8, pricing_type)
+       WHERE id=$9 RETURNING *`,
       [name || null, description ?? null, base_price ?? null, is_available ?? null,
        sort_order ?? null, prep_time_mins ?? null,
-       allergens !== undefined ? JSON.stringify(allergens) : null, id]
+       allergens !== undefined ? JSON.stringify(allergens) : null,
+       pricing_type ?? null, id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Item non trovato' });
     res.json(rows[0]);
