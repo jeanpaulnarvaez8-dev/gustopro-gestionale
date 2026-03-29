@@ -21,6 +21,7 @@ import StockReconciliationPage from './pages/StockReconciliationPage'
 import ZoneAssignmentPage from './pages/ZoneAssignmentPage'
 import WaiterDashboardPage from './pages/WaiterDashboardPage'
 import StaffPerformancePage from './pages/StaffPerformancePage'
+import FloorPlanPage from './pages/FloorPlanPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ServiceAlertBanner from './components/ServiceAlertBanner'
 
@@ -124,6 +125,11 @@ export default function App() {
         <Route path="/assignments" element={
           <RoleRoute roles={['admin', 'manager']}>
             <ZoneAssignmentPage />
+          </RoleRoute>
+        } />
+        <Route path="/floor-plan" element={
+          <RoleRoute roles={['admin', 'manager']}>
+            <FloorPlanPage />
           </RoleRoute>
         } />
         <Route path="/performance" element={

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LogOut, LayoutDashboard, ChefHat, Wifi, WifiOff, Users, RefreshCw,
   Package, UserCog, CalendarDays, ShoppingBag, Pencil, X, Plus,
-  CheckCircle2, FlaskConical, ClipboardList, MapPin, Trophy, UtensilsCrossed,
+  CheckCircle2, FlaskConical, ClipboardList, MapPin, Trophy, UtensilsCrossed, Map,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
@@ -348,6 +348,10 @@ export default function TableMapPage() {
               <button onClick={() => navigate('/assignments')}
                 className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
                 <MapPin size={14} /> <span className="hidden md:block">Zone</span>
+              </button>
+              <button onClick={() => navigate('/floor-plan')}
+                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
+                <Map size={14} /> <span className="hidden md:block">Pianta</span>
               </button>
               <button onClick={() => navigate('/performance')}
                 className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">

@@ -9,11 +9,11 @@ async function listZones(req, res, next) {
 
 async function createZone(req, res, next) {
   try {
-    const { name, sort_order = 0 } = req.body;
+    const { name, sort_order = 0, color = '#3B82F6', floor_x = 0, floor_y = 0, floor_w = 400, floor_h = 300 } = req.body;
     if (!name) return res.status(400).json({ error: 'name obbligatorio' });
     const { rows } = await pool.query(
-      'INSERT INTO zones (name, sort_order) VALUES ($1,$2) RETURNING *',
-      [name, sort_order]
+      'INSERT INTO zones (name, sort_order, color, floor_x, floor_y, floor_w, floor_h) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [name, sort_order, color, floor_x, floor_y, floor_w, floor_h]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -22,13 +22,19 @@ async function createZone(req, res, next) {
 async function updateZone(req, res, next) {
   try {
     const { id } = req.params;
-    const { name, sort_order } = req.body;
+    const { name, sort_order, color, floor_x, floor_y, floor_w, floor_h } = req.body;
     const { rows } = await pool.query(
       `UPDATE zones SET
          name       = COALESCE($1, name),
-         sort_order = COALESCE($2, sort_order)
-       WHERE id=$3 RETURNING *`,
-      [name || null, sort_order ?? null, id]
+         sort_order = COALESCE($2, sort_order),
+         color      = COALESCE($3, color),
+         floor_x    = COALESCE($4, floor_x),
+         floor_y    = COALESCE($5, floor_y),
+         floor_w    = COALESCE($6, floor_w),
+         floor_h    = COALESCE($7, floor_h)
+       WHERE id=$8 RETURNING *`,
+      [name || null, sort_order ?? null, color ?? null,
+       floor_x ?? null, floor_y ?? null, floor_w ?? null, floor_h ?? null, id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Zona non trovata' });
     res.json(rows[0]);
