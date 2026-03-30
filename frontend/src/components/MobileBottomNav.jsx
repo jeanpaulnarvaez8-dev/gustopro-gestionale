@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
-import { LayoutGrid, UtensilsCrossed, ShoppingBag, ChefHat, LayoutDashboard, MapPin, LogOut } from 'lucide-react'
+import { LayoutGrid, UtensilsCrossed, ShoppingBag, ChefHat, LayoutDashboard, MapPin, LogOut, Home } from 'lucide-react'
 
 const WAITER_TABS = [
   { path: '/tables', icon: LayoutGrid, label: 'Tavoli' },
@@ -14,10 +14,9 @@ const KITCHEN_TABS = [
 ]
 
 const ADMIN_TABS = [
+  { path: '/admin-home', icon: Home, label: 'Home' },
   { path: '/tables', icon: LayoutGrid, label: 'Tavoli' },
-  { path: '/my-tables', icon: UtensilsCrossed, label: 'Piatti' },
   { path: '/kds', icon: ChefHat, label: 'KDS' },
-  { path: '/dashboard', icon: LayoutDashboard, label: 'Stats' },
   { path: '/assignments', icon: MapPin, label: 'Zone' },
 ]
 

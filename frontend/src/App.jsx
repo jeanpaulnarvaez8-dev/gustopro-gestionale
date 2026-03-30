@@ -22,6 +22,7 @@ import ZoneAssignmentPage from './pages/ZoneAssignmentPage'
 import WaiterDashboardPage from './pages/WaiterDashboardPage'
 import StaffPerformancePage from './pages/StaffPerformancePage'
 import FloorPlanPage from './pages/FloorPlanPage'
+import AdminHomePage from './pages/AdminHomePage'
 import NotFoundPage from './pages/NotFoundPage'
 import ServiceAlertBanner from './components/ServiceAlertBanner'
 import MobileBottomNav from './components/MobileBottomNav'
@@ -48,8 +49,8 @@ function RoleRoute({ roles, children }) {
 
 function HomeRedirect() {
   const { user } = useAuth()
-  // Chef va diretto al KDS
   if (user?.role === 'kitchen') return <Navigate to="/kds" replace />
+  if (['admin', 'manager'].includes(user?.role)) return <Navigate to="/admin-home" replace />
   return <Navigate to="/tables" replace />
 }
 
@@ -126,6 +127,11 @@ export default function App() {
           </RoleRoute>
         } />
         <Route path="/my-tables" element={<WaiterDashboardPage />} />
+        <Route path="/admin-home" element={
+          <RoleRoute roles={['admin', 'manager']}>
+            <AdminHomePage />
+          </RoleRoute>
+        } />
         <Route path="/assignments" element={
           <RoleRoute roles={['admin', 'manager']}>
             <ZoneAssignmentPage />
