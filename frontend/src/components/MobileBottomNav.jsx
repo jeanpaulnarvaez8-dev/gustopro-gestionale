@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
-import { LayoutGrid, UtensilsCrossed, ShoppingBag, ChefHat, LayoutDashboard, MapPin, LogOut, Home } from 'lucide-react'
+import { LayoutGrid, UtensilsCrossed, ShoppingBag, ChefHat, LayoutDashboard, MapPin, LogOut, Home, CreditCard } from 'lucide-react'
 
 const WAITER_TABS = [
   { path: '/tables', icon: LayoutGrid, label: 'Tavoli' },
@@ -11,6 +11,11 @@ const WAITER_TABS = [
 
 const KITCHEN_TABS = [
   { path: '/kds', icon: ChefHat, label: 'Cucina' },
+]
+
+const CASHIER_TABS = [
+  { path: '/tables', icon: LayoutGrid, label: 'Tavoli' },
+  { path: '/asporto', icon: ShoppingBag, label: 'Asporto' },
 ]
 
 const ADMIN_TABS = [
@@ -31,7 +36,8 @@ export default function MobileBottomNav() {
   let tabs
   if (user.role === 'kitchen') tabs = KITCHEN_TABS
   else if (user.role === 'waiter') tabs = WAITER_TABS
-  else tabs = ADMIN_TABS // admin, manager, cashier
+  else if (user.role === 'cashier') tabs = CASHIER_TABS
+  else tabs = ADMIN_TABS // admin, manager
 
   const alertCount = serviceAlerts?.length || 0
 
