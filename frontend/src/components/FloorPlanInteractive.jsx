@@ -152,23 +152,44 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
   const [local, setLocal] = useState(tables)
   const [saving, setSaving] = useState(false)
 
-  // Auto-fit: scala la pianta per riempire lo schermo
+  // Auto-fit: scala in base ai tavoli reali, non alla canvas fissa
   useEffect(() => {
     const el = containerRef.current
-    if (!el) return
+    if (!el || tables.length === 0) return
     const fit = () => {
       const rect = el.getBoundingClientRect()
-      const scaleX = rect.width / PLAN_W
-      const scaleY = rect.height / PLAN_H
-      const s = Math.min(scaleX, scaleY) * 0.95
+      // Calcola bounding box di tutti i tavoli + zone
+      let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0
+      for (const t of tables) {
+        const x2 = t.pos_x + (t.width || 60) + 30
+        const y2 = t.pos_y + (t.height || 60) + 30
+        if (t.pos_x < minX) minX = t.pos_x
+        if (t.pos_y < minY) minY = t.pos_y
+        if (x2 > maxX) maxX = x2
+        if (y2 > maxY) maxY = y2
+      }
+      for (const z of zones) {
+        const zx2 = (z.floor_x || 0) + (z.floor_w || 400)
+        const zy2 = (z.floor_y || 0) + (z.floor_h || 300)
+        if (zx2 > maxX) maxX = zx2
+        if (zy2 > maxY) maxY = zy2
+      }
+      const contentW = maxX + 40
+      const contentH = maxY + 40
+      const scaleX = rect.width / contentW
+      const scaleY = rect.height / contentH
+      const s = Math.min(scaleX, scaleY) * 0.92
       setZoom(s)
-      setPan({ x: (rect.width - PLAN_W * s) / 2, y: (rect.height - PLAN_H * s) / 2 })
+      setPan({
+        x: (rect.width - contentW * s) / 2,
+        y: Math.max(5, (rect.height - contentH * s) / 2),
+      })
     }
     fit()
     const obs = new ResizeObserver(fit)
     obs.observe(el)
     return () => obs.disconnect()
-  }, [tables.length])
+  }, [tables, zones])
 
   useEffect(() => { setLocal(tables) }, [tables])
 
