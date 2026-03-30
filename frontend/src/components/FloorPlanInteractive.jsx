@@ -92,11 +92,11 @@ function Restaurant({ zones }) {
   return (
     <g>
       {/* Mare */}
-      <rect x={920} y={0} width={300} height={900} fill="#071a2c" />
-      <text x={1010} y={450} textAnchor="middle" fill="#0d3a5c" fontSize="28" fontWeight="800"
-        fontFamily="system-ui" transform="rotate(90,1010,450)" letterSpacing="8">MARE</text>
-      {[80,200,320,440,560,680].map(y => (
-        <path key={y} d={`M 920 ${y} Q 955 ${y-12} 990 ${y} Q 1025 ${y+12} 1060 ${y}`}
+      <rect x={1140} y={0} width={300} height={950} fill="#071a2c" />
+      <text x={1230} y={480} textAnchor="middle" fill="#0d3a5c" fontSize="28" fontWeight="800"
+        fontFamily="system-ui" transform="rotate(90,1230,480)" letterSpacing="8">MARE</text>
+      {[100,220,340,460,580,700,820].map(y => (
+        <path key={y} d={`M 1140 ${y} Q 1175 ${y-12} 1210 ${y} Q 1245 ${y+12} 1280 ${y}`}
           stroke="#0d3a5c" strokeWidth="1.5" fill="none" />
       ))}
 
@@ -132,15 +132,15 @@ function Restaurant({ zones }) {
       <text x={35} y={56} textAnchor="middle" fill="#4488bb" fontSize="7" fontWeight="600" fontFamily="system-ui">FRIGO PESCE</text>
 
       {/* Muro divisorio */}
-      <line x1={500} y1={210} x2={500} y2={790} stroke="#5a1515" strokeWidth="4" />
+      <line x1={640} y1={340} x2={640} y2={910} stroke="#5a1515" strokeWidth="4" />
     </g>
   )
 }
 
 export default function FloorPlanInteractive({ tables, zones, onTableClick, canEdit, onRefresh }) {
   const { toast } = useToast()
-  const [zoom, setZoom] = useState(0.65)
-  const [pan, setPan] = useState({ x: 5, y: 5 })
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 10, y: 10 })
   const [panning, setPanning] = useState(false)
   const panStart = useRef(null)
   const [selected, setSelected] = useState(null)
@@ -237,7 +237,7 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
                 <path d={`M ${GRID} 0 L 0 0 0 ${GRID}`} fill="none" stroke="#141414" strokeWidth="0.3"/>
               </pattern>
             </defs>
-            <rect className="bg-layer" width="1200" height="900" fill="url(#grid2)"/>
+            <rect className="bg-layer" width="1450" height="950" fill="url(#grid2)"/>
             <Restaurant zones={zones} />
             {local.map(t => (
               <TableShape key={t.id} table={t} zone={zones.find(z => z.id === t.zone_id)}
