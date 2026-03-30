@@ -218,6 +218,58 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
     finally { setSaving(false) }
   }
 
+  // Touch: pinch-to-zoom + pan
+  const touchRef = useRef({ dist: 0, zoom: 1, pan: { x: 0, y: 0 }, mid: { x: 0, y: 0 } })
+
+  const getTouchDist = (touches) => {
+    const dx = touches[0].clientX - touches[1].clientX
+    const dy = touches[0].clientY - touches[1].clientY
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+
+  const onTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault()
+      touchRef.current = {
+        dist: getTouchDist(e.touches),
+        zoom,
+        pan: { ...pan },
+        mid: {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+        },
+      }
+    } else if (e.touches.length === 1) {
+      panStart.current = { x: e.touches[0].clientX - pan.x, y: e.touches[0].clientY - pan.y }
+    }
+  }
+
+  const onTouchMove = (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault()
+      const newDist = getTouchDist(e.touches)
+      const scale = newDist / touchRef.current.dist
+      const newZoom = Math.min(3, Math.max(0.2, touchRef.current.zoom * scale))
+      setZoom(newZoom)
+      // Pan segue il midpoint
+      const newMid = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+      }
+      setPan({
+        x: touchRef.current.pan.x + (newMid.x - touchRef.current.mid.x),
+        y: touchRef.current.pan.y + (newMid.y - touchRef.current.mid.y),
+      })
+    } else if (e.touches.length === 1 && panStart.current) {
+      setPan({
+        x: e.touches[0].clientX - panStart.current.x,
+        y: e.touches[0].clientY - panStart.current.y,
+      })
+    }
+  }
+
+  const onTouchEnd = () => { panStart.current = null }
+
   const onBgDown = e => {
     if (e.target.tagName === 'svg' || e.target.classList?.contains('bg-layer'))
       { setPanning(true); panStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y } }
@@ -232,37 +284,36 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Mini toolbar */}
-      <div className="flex items-center gap-3 px-4 py-1.5 bg-[#1A1A1A] border-b border-[#2A2A2A]">
-        <div className="flex items-center gap-3 text-[10px]">
-          <span className="text-emerald-400">{free} liberi</span>
-          <span className="text-red-400">{occupied} occupati</span>
-          <span className="text-[#555]">{tables.length} tavoli</span>
+      {/* Mini toolbar — responsive */}
+      <div className="flex items-center gap-2 px-2 sm:px-4 py-1.5 bg-[#1A1A1A] border-b border-[#2A2A2A] shrink-0">
+        <div className="flex items-center gap-2 text-[10px]">
+          <span className="text-emerald-400">{free} <span className="hidden sm:inline">liberi</span></span>
+          <span className="text-red-400">{occupied} <span className="hidden sm:inline">occupati</span></span>
         </div>
-        <div className="flex items-center gap-1 ml-2">
+        <div className="hidden md:flex items-center gap-1 ml-1">
           {Object.entries(STATUS_COLORS).slice(0,3).map(([k,v]) => (
             <div key={k} className="flex items-center gap-0.5">
               <div className="w-2 h-2 rounded-full" style={{background:v.stroke}}/>
-              <span className="text-[9px] text-[#444]">{k==='free'?'Libero':k==='occupied'?'Occupato':'Riservato'}</span>
+              <span className="text-[9px] text-[#444]">{k==='free'?'Libero':k==='occupied'?'Occ.':'Ris.'}</span>
             </div>
           ))}
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5">
           <div className="flex items-center bg-[#222] rounded border border-[#333]">
-            <button onClick={() => setZoom(z => Math.max(0.25, z-0.1))} className="px-1.5 py-1 text-[#888]"><Minus size={10}/></button>
+            <button onClick={() => setZoom(z => Math.max(0.2, z-0.1))} className="px-1.5 py-1 text-[#888]"><Minus size={10}/></button>
             <span className="text-[9px] text-[#666] w-7 text-center">{Math.round(zoom*100)}%</span>
-            <button onClick={() => setZoom(z => Math.min(2, z+0.1))} className="px-1.5 py-1 text-[#888]"><Plus size={10}/></button>
+            <button onClick={() => setZoom(z => Math.min(3, z+0.1))} className="px-1.5 py-1 text-[#888]"><Plus size={10}/></button>
           </div>
           {canEdit && (
             editing ? (
               <button onClick={handleSave} disabled={saving}
-                className="px-2.5 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold flex items-center gap-1 disabled:opacity-50">
-                <Save size={10}/> Salva
+                className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold flex items-center gap-1 disabled:opacity-50">
+                <Save size={10}/> <span className="hidden sm:inline">Salva</span>
               </button>
             ) : (
               <button onClick={() => setEditing(true)}
-                className="px-2.5 py-1 bg-[#222] text-[#888] border border-[#333] rounded text-[10px] flex items-center gap-1 hover:text-[#D4AF37]">
-                <Move size={10}/> Sposta tavoli
+                className="px-2 py-1 bg-[#222] text-[#888] border border-[#333] rounded text-[10px] flex items-center gap-1">
+                <Move size={10}/> <span className="hidden sm:inline">Sposta</span>
               </button>
             )
           )}
@@ -271,7 +322,9 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
 
       {/* Canvas */}
       <div ref={containerRef} className="flex-1 overflow-hidden bg-[#090909]"
-        onWheel={onWheel} onPointerDown={onBgDown} onPointerMove={onBgMove} onPointerUp={onBgUp}
+        onWheel={onWheel}
+        onPointerDown={onBgDown} onPointerMove={onBgMove} onPointerUp={onBgUp}
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
         style={{ touchAction: 'none' }}>
         <svg width="100%" height="100%" style={{ cursor: panning ? 'grabbing' : 'default' }}>
           <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>

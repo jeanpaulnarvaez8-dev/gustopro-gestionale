@@ -292,7 +292,7 @@ export default function TableMapPage() {
     <div className="h-screen bg-[#1A1A1A] flex flex-col overflow-hidden">
 
       {/* Header */}
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-4 py-3 flex items-center gap-3">
+      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-2 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3 shrink-0">
         <div className="flex items-center gap-2 shrink-0">
           <div className="w-7 h-7 rounded-full bg-[#8B0000] flex items-center justify-center">
             <span className="text-[#D4AF37] font-bold text-xs">G</span>
