@@ -310,28 +310,28 @@ export default function OrderPage() {
 
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
 
-        {/* Menu (piena larghezza su mobile) */}
+        {/* Menu */}
         <div className="flex-1 flex flex-col overflow-hidden">
 
-          {/* Categorie — bottoni pill grandi su mobile, tab su desktop */}
-          <div className="bg-[#222] border-b border-[#3A3A3A] px-3 py-2 md:py-0 overflow-x-auto shrink-0">
-            <div className="flex gap-2 md:gap-0 min-w-max">
+          {/* DESKTOP: tab categorie classici */}
+          <div className="hidden md:block bg-[#222] border-b border-[#3A3A3A] px-4 overflow-x-auto shrink-0">
+            <div className="flex gap-0 min-w-max">
               {categories.map(cat => (
                 <button key={cat.id} onClick={() => handleSelectCategory(cat.id)}
-                  className={`px-4 py-2 md:py-3 rounded-full md:rounded-none text-sm font-semibold md:font-medium md:border-b-2 transition whitespace-nowrap ${
+                  className={`px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap ${
                     activeCategory === cat.id
-                      ? 'bg-[#D4AF37] text-[#1A1A1A] md:bg-transparent md:text-[#D4AF37] md:border-[#D4AF37]'
-                      : 'bg-[#2A2A2A] text-[#999] md:bg-transparent md:border-transparent md:text-[#888] hover:text-[#F5F5DC]'
+                      ? 'border-[#D4AF37] text-[#D4AF37]'
+                      : 'border-transparent text-[#888] hover:text-[#F5F5DC]'
                   }`}>
                   {cat.name}
                 </button>
               ))}
               {combos.length > 0 && (
                 <button onClick={() => handleSelectCategory(COMBO_TAB_ID)}
-                  className={`px-4 py-2 md:py-3 rounded-full md:rounded-none text-sm font-semibold md:font-medium md:border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
                     activeCategory === COMBO_TAB_ID
-                      ? 'bg-[#D4AF37] text-[#1A1A1A] md:bg-transparent md:text-[#D4AF37] md:border-[#D4AF37]'
-                      : 'bg-[#2A2A2A] text-[#999] md:bg-transparent md:border-transparent md:text-[#888] hover:text-[#F5F5DC]'
+                      ? 'border-[#D4AF37] text-[#D4AF37]'
+                      : 'border-transparent text-[#888] hover:text-[#F5F5DC]'
                   }`}>
                   <BookOpen size={13} /> Menù Fissi
                 </button>
@@ -339,25 +339,103 @@ export default function OrderPage() {
             </div>
           </div>
 
-          {/* Piatti — lista verticale su mobile, griglia su desktop */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+          {/* MOBILE: Dashboard portate accordion */}
+          <div className="md:hidden flex-1 overflow-y-auto">
+            {loadingMenu ? (
+              <div className="flex items-center justify-center h-40">
+                <RefreshCw size={18} className="animate-spin text-[#888]" />
+              </div>
+            ) : (
+              <div className="pb-32">
+                {categories.map(cat => {
+                  const isOpen = activeCategory === cat.id
+                  const courseEmoji = cat.course_type === 'antipasto' ? '🥗' :
+                    cat.course_type === 'primo' ? '🍝' :
+                    cat.course_type === 'secondo' ? '🥩' :
+                    cat.course_type === 'contorno' ? '🥬' :
+                    cat.course_type === 'dessert' ? '🍰' :
+                    cat.course_type === 'bevanda' ? '🍷' : '📋'
+
+                  return (
+                    <div key={cat.id}>
+                      <button onClick={() => handleSelectCategory(isOpen ? null : cat.id)}
+                        className={`w-full flex items-center justify-between px-4 py-4 border-b transition active:bg-[#2A2A2A] ${
+                          isOpen ? 'bg-[#2A2A2A] border-[#D4AF37]/30' : 'bg-[#1A1A1A] border-[#2A2A2A]'
+                        }`}>
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{courseEmoji}</span>
+                          <div className="text-left">
+                            <span className={`text-base font-bold block ${isOpen ? 'text-[#D4AF37]' : 'text-[#F5F5DC]'}`}>
+                              {cat.name}
+                            </span>
+                            {cartItems.filter(ci => {
+                              const catItem = menuItems.find(mi => mi.id === ci.item?.id)
+                              return catItem || ci.item?.category_id === cat.id
+                            }).length > 0 && (
+                              <span className="text-[#D4AF37] text-xs">
+                                {cartItems.filter(ci => ci.item?.category_id === cat.id).length} nel carrello
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <ChevronRight size={18} className={`text-[#888] transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                      </button>
+
+                      {isOpen && !loadingItems && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                          className="bg-[#111] overflow-hidden">
+                          {menuItems.map(item => (
+                            <button key={item.id}
+                              onClick={() => {
+                                if (item.pricing_type === 'per_kg') { setWeightModal(item); setWeightInput('') }
+                                else { addItem(item, 1, [], null) }
+                              }}
+                              className="w-full flex items-center gap-3 px-5 py-3.5 border-b border-[#1E1E1E] active:bg-[#D4AF37]/10 transition text-left">
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[#F5F5DC] text-[15px] font-semibold block">{item.name}</span>
+                                {item.description && (
+                                  <span className="text-[#666] text-xs block mt-0.5 line-clamp-1">{item.description}</span>
+                                )}
+                              </div>
+                              <span className="text-[#D4AF37] font-bold text-[15px] shrink-0">
+                                {formatPrice(item.base_price)}{item.pricing_type === 'per_kg' ? '/kg' : ''}
+                              </span>
+                              {item.pricing_type === 'per_kg'
+                                ? <span className="text-[10px] text-amber-400 font-bold bg-amber-900/20 px-2 py-1 rounded shrink-0">PESO</span>
+                                : <div className="w-10 h-10 rounded-xl bg-[#D4AF37]/15 flex items-center justify-center shrink-0">
+                                    <Plus size={20} className="text-[#D4AF37]" strokeWidth={2.5} />
+                                  </div>
+                              }
+                            </button>
+                          ))}
+                          {menuItems.length === 0 && (
+                            <p className="text-[#555] text-sm text-center py-8">Nessun piatto disponibile</p>
+                          )}
+                        </motion.div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* DESKTOP: griglia piatti classica */}
+          <div className="hidden md:block flex-1 overflow-y-auto p-4">
             {loadingMenu || loadingItems ? (
               <div className="flex items-center justify-center h-40">
                 <RefreshCw size={18} className="animate-spin text-[#888]" />
               </div>
             ) : activeCategory === COMBO_TAB_ID ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {combos.map(combo => (
                   <motion.button key={combo.id} onClick={() => setComboModal(combo)}
                     whileTap={{ scale: 0.97 }}
                     className="bg-[#2A2A2A] border border-[#3A3A3A] hover:border-[#D4AF37]/50 rounded-xl p-4 text-left transition flex flex-col gap-2">
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-[#F5F5DC] font-semibold text-sm leading-tight">{combo.name}</span>
-                      <span className="text-[9px] font-bold bg-[#D4AF37]/20 text-[#D4AF37] px-1.5 py-0.5 rounded-full flex-shrink-0">MENU</span>
+                      <span className="text-[#F5F5DC] font-semibold text-sm">{combo.name}</span>
+                      <span className="text-[9px] font-bold bg-[#D4AF37]/20 text-[#D4AF37] px-1.5 py-0.5 rounded-full">MENU</span>
                     </div>
-                    {combo.description && (
-                      <span className="text-[#555] text-xs leading-tight line-clamp-2">{combo.description}</span>
-                    )}
                     <div className="flex items-center justify-between mt-auto pt-1">
                       <span className="text-[#D4AF37] font-bold text-sm">{formatPrice(combo.price)}</span>
                       <ChevronRight size={14} className="text-[#555]" />
@@ -366,38 +444,22 @@ export default function OrderPage() {
                 ))}
               </div>
             ) : (
-              {/* Piatti: lista full-width su mobile, griglia su desktop */}
-              <div className="flex flex-col gap-1.5 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 {menuItems.map(item => (
                   <motion.button key={item.id}
                     onClick={() => {
-                      if (item.pricing_type === 'per_kg') {
-                        setWeightModal(item)
-                        setWeightInput('')
-                      } else {
-                        addItem(item, 1, [], null)
-                      }
+                      if (item.pricing_type === 'per_kg') { setWeightModal(item); setWeightInput('') }
+                      else { addItem(item, 1, [], null) }
                     }}
                     whileTap={{ scale: 0.96 }}
-                    className="bg-[#2A2A2A] border border-[#3A3A3A] active:border-[#D4AF37] active:bg-[#D4AF37]/5 rounded-xl px-4 py-3.5 md:p-4 text-left transition flex items-center gap-3 md:flex-col md:items-start md:gap-2">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[#F5F5DC] text-base md:text-sm font-semibold leading-snug block">
-                        {item.name}
-                      </span>
-                      {item.description && (
-                        <span className="text-[#666] text-xs leading-tight line-clamp-1 md:line-clamp-2 block mt-0.5">{item.description}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2.5 shrink-0 md:w-full md:justify-between md:mt-auto md:pt-1">
-                      <span className="text-[#D4AF37] font-bold text-base md:text-sm">
+                    className="bg-[#2A2A2A] border border-[#3A3A3A] hover:border-[#D4AF37]/50 rounded-xl p-4 text-left transition flex flex-col gap-2">
+                    <span className="text-[#F5F5DC] text-sm font-semibold">{item.name}</span>
+                    {item.description && <span className="text-[#555] text-xs line-clamp-2">{item.description}</span>}
+                    <div className="flex items-center justify-between mt-auto pt-1">
+                      <span className="text-[#D4AF37] font-semibold text-sm">
                         {formatPrice(item.base_price)}{item.pricing_type === 'per_kg' ? '/kg' : ''}
                       </span>
-                      {item.pricing_type === 'per_kg'
-                        ? <span className="text-[10px] text-amber-400 font-bold bg-amber-900/20 px-2 py-1 rounded">PESO</span>
-                        : <div className="w-10 h-10 md:w-auto md:h-auto rounded-xl bg-[#D4AF37]/15 flex items-center justify-center md:bg-transparent">
-                            <Plus size={20} className="text-[#D4AF37] md:text-[#888]" strokeWidth={2.5} />
-                          </div>
-                      }
+                      <Plus size={14} className="text-[#888]" />
                     </div>
                   </motion.button>
                 ))}
