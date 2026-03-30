@@ -137,16 +137,38 @@ function Restaurant({ zones }) {
   )
 }
 
+const PLAN_W = 1450
+const PLAN_H = 950
+
 export default function FloorPlanInteractive({ tables, zones, onTableClick, canEdit, onRefresh }) {
   const { toast } = useToast()
+  const containerRef = useRef(null)
   const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState({ x: 10, y: 10 })
+  const [pan, setPan] = useState({ x: 0, y: 0 })
   const [panning, setPanning] = useState(false)
   const panStart = useRef(null)
   const [selected, setSelected] = useState(null)
   const [editing, setEditing] = useState(false)
   const [local, setLocal] = useState(tables)
   const [saving, setSaving] = useState(false)
+
+  // Auto-fit: scala la pianta per riempire lo schermo
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const fit = () => {
+      const rect = el.getBoundingClientRect()
+      const scaleX = rect.width / PLAN_W
+      const scaleY = rect.height / PLAN_H
+      const s = Math.min(scaleX, scaleY) * 0.95
+      setZoom(s)
+      setPan({ x: (rect.width - PLAN_W * s) / 2, y: (rect.height - PLAN_H * s) / 2 })
+    }
+    fit()
+    const obs = new ResizeObserver(fit)
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [tables.length])
 
   useEffect(() => { setLocal(tables) }, [tables])
 
@@ -227,7 +249,7 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
       </div>
 
       {/* Canvas */}
-      <div className="flex-1 overflow-hidden bg-[#090909]"
+      <div ref={containerRef} className="flex-1 overflow-hidden bg-[#090909]"
         onWheel={onWheel} onPointerDown={onBgDown} onPointerMove={onBgMove} onPointerUp={onBgUp}
         style={{ touchAction: 'none' }}>
         <svg width="100%" height="100%" style={{ cursor: panning ? 'grabbing' : 'default' }}>
