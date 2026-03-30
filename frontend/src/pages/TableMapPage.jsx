@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import { tablesAPI, zonesAPI, assignmentsAPI } from '../lib/api'
+import FloorPlanInteractive from '../components/FloorPlanInteractive'
 
 const STATUS_CONFIG = {
   free:     { label: 'Libero',    color: 'bg-emerald-900/30 border-emerald-500/40 hover:border-emerald-400', dot: 'bg-emerald-400', text: 'text-emerald-400' },
@@ -393,122 +394,20 @@ export default function TableMapPage() {
         </div>
       </header>
 
-      {/* Zone Tabs */}
-      <div className="bg-[#222] border-b border-[#3A3A3A] flex items-center">
-        {/* Scrollable zone tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto scrollbar-none flex-1 min-w-0 px-4">
-          {zones.map(zone => (
-            <button
-              key={zone.id}
-              onClick={() => setActiveZone(zone.id)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition shrink-0 ${
-                activeZone === zone.id
-                  ? 'border-[#D4AF37] text-[#D4AF37]'
-                  : 'border-transparent text-[#888] hover:text-[#F5F5DC]'
-              }`}
-            >
-              {zone.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Always-visible action buttons */}
-        <div className="flex items-center gap-2 shrink-0 px-3 border-l border-[#3A3A3A]">
-          {canEdit && (
-            <button
-              onClick={() => setEditMode(v => !v)}
-              title={editMode ? 'Esci da modalità modifica' : 'Modifica tavoli'}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition border ${
-                editMode
-                  ? 'bg-[#D4AF37]/20 text-[#D4AF37] border-[#D4AF37]/40'
-                  : 'text-[#ccc] border-[#4A4A4A] hover:text-[#D4AF37] hover:border-[#D4AF37]/40 hover:bg-[#D4AF37]/10'
-              }`}
-            >
-              <Pencil size={13} />
-              <span className="hidden sm:inline">{editMode ? 'Fine' : 'Modifica'}</span>
-            </button>
-          )}
-          <button onClick={loadData} className="text-[#777] hover:text-[#aaa] p-1.5 rounded-lg hover:bg-[#2A2A2A] transition">
-            <RefreshCw size={14} />
-          </button>
-        </div>
-      </div>
-
-      {/* Edit mode banner */}
-      <AnimatePresence>
-        {editMode && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="bg-[#D4AF37]/10 border-b border-[#D4AF37]/20 px-6 py-2 flex items-center gap-2 text-xs text-[#D4AF37]">
-              <Pencil size={12} />
-              <span>Modalità modifica — clicca X per eliminare un tavolo, usa il modulo + per aggiungerne uno nuovo</span>
-              <button onClick={() => setEditMode(false)} className="ml-auto hover:text-white transition">
-                <X size={13} />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Stats bar */}
-      {!loading && !error && (
-        <div className="px-6 py-2 flex items-center gap-5 text-xs border-b border-[#3A3A3A] bg-[#1E1E1E]">
-          <span className="text-[#555]">{activeZoneName}</span>
-          <span className="text-emerald-400">{stats.free} liberi</span>
-          <span className="text-red-400">{stats.occupied} occupati</span>
-          <span className="text-[#555]">{stats.total} tavoli</span>
-        </div>
-      )}
-
-      {/* Main content */}
-      <div className="flex-1 p-6">
-
-        {loading && (
+      {/* Pianta ristorante interattiva */}
+      <div className="flex-1 overflow-hidden">
+        {loading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="flex items-center gap-2 text-[#888] text-sm">
-              <RefreshCw size={16} className="animate-spin" />
-              Caricamento tavoli...
-            </div>
+            <RefreshCw size={16} className="animate-spin text-[#888]" />
           </div>
-        )}
-
-        {error && (
-          <div className="flex flex-col items-center justify-center h-64 gap-3">
-            <p className="text-red-400 text-sm">{error}</p>
-            <button onClick={loadData} className="text-[#D4AF37] text-sm hover:underline">Riprova</button>
-          </div>
-        )}
-
-        {!loading && !error && (
-          <motion.div
-            key={activeZone}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
-          >
-            {filteredTables.map(table => (
-              <TableCard
-                key={table.id}
-                table={table}
-                editMode={editMode}
-                canEdit={canEdit}
-                onNavigate={handleNavigate}
-                onDelete={deletingId === table.id ? () => {} : handleDeleteTable}
-                onStatusChange={handleStatusChange}
-              />
-            ))}
-
-            {/* Add table card — only in edit mode */}
-            {editMode && canEdit && (
-              <AddTableCard zoneId={activeZone} onAdded={handleTableAdded} />
-            )}
-          </motion.div>
+        ) : (
+          <FloorPlanInteractive
+            tables={tables}
+            zones={zones}
+            onTableClick={handleNavigate}
+            canEdit={canEdit}
+            onRefresh={loadData}
+          />
         )}
       </div>
 
