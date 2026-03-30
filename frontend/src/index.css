@@ -24,6 +24,19 @@ body {
   color: var(--color-cream);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* Safe area per iPhone notch/home indicator */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Fix altezza su mobile (100vh include la barra browser) */
+html, body, #root { height: 100%; }
+@supports (height: 100dvh) {
+  html, body, #root { height: 100dvh; }
 }
 
 /* Scrollbar */

@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import { tablesAPI, zonesAPI, assignmentsAPI } from '../lib/api'
 import FloorPlanInteractive from '../components/FloorPlanInteractive'
+import MobileTableList from '../components/MobileTableList'
 
 const STATUS_CONFIG = {
   free:     { label: 'Libero',    color: 'bg-emerald-900/30 border-emerald-500/40 hover:border-emerald-400', dot: 'bg-emerald-400', text: 'text-emerald-400' },
@@ -289,10 +290,10 @@ export default function TableMapPage() {
   }
 
   return (
-    <div className="h-screen bg-[#1A1A1A] flex flex-col overflow-hidden">
+    <div className="h-[100dvh] bg-[#1A1A1A] flex flex-col overflow-hidden">
 
       {/* Header */}
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-2 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3 shrink-0">
+      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-2 sm:px-4 py-2 sm:py-3 hidden md:flex items-center gap-2 sm:gap-3 shrink-0">
         <div className="flex items-center gap-2 shrink-0">
           <div className="w-7 h-7 rounded-full bg-[#8B0000] flex items-center justify-center">
             <span className="text-[#D4AF37] font-bold text-xs">G</span>
@@ -394,20 +395,33 @@ export default function TableMapPage() {
         </div>
       </header>
 
-      {/* Pianta ristorante interattiva */}
+      {/* Desktop: pianta ristorante | Mobile: lista tavoli */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <RefreshCw size={16} className="animate-spin text-[#888]" />
           </div>
         ) : (
-          <FloorPlanInteractive
-            tables={tables}
-            zones={zones}
-            onTableClick={handleNavigate}
-            canEdit={canEdit}
-            onRefresh={loadData}
-          />
+          <>
+            {/* Mobile: lista card grandi */}
+            <div className="md:hidden h-full flex flex-col">
+              <MobileTableList
+                tables={tables}
+                zones={zones}
+                onTableClick={handleNavigate}
+              />
+            </div>
+            {/* Desktop: pianta SVG */}
+            <div className="hidden md:block h-full">
+              <FloorPlanInteractive
+                tables={tables}
+                zones={zones}
+                onTableClick={handleNavigate}
+                canEdit={canEdit}
+                onRefresh={loadData}
+              />
+            </div>
+          </>
         )}
       </div>
 

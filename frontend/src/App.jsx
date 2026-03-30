@@ -24,6 +24,7 @@ import StaffPerformancePage from './pages/StaffPerformancePage'
 import FloorPlanPage from './pages/FloorPlanPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ServiceAlertBanner from './components/ServiceAlertBanner'
+import MobileBottomNav from './components/MobileBottomNav'
 
 function ProtectedRoute() {
   const { isAuthenticated } = useAuth()
@@ -31,7 +32,10 @@ function ProtectedRoute() {
   return (
     <>
       <ServiceAlertBanner />
-      <Outlet />
+      <div className="pb-14 md:pb-0">
+        <Outlet />
+      </div>
+      <MobileBottomNav />
     </>
   )
 }
