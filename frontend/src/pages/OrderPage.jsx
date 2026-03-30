@@ -164,8 +164,9 @@ export default function OrderPage() {
   const [sent, setSent]               = useState(false)
   const [comboModal, setComboModal]   = useState(null)
   const [covers, setCovers]           = useState(initialCovers)
-  const [weightModal, setWeightModal] = useState(null) // menu item per peso
+  const [weightModal, setWeightModal] = useState(null)
   const [weightInput, setWeightInput] = useState('')
+  const [showMobileCart, setShowMobileCart] = useState(false)
 
   // Load table + categories + combos on mount
   useEffect(() => {
@@ -307,17 +308,17 @@ export default function OrderPage() {
         )}
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
 
-        {/* LEFT: Menu */}
+        {/* Menu (piena larghezza su mobile) */}
         <div className="flex-1 flex flex-col overflow-hidden">
 
-          {/* Category tabs */}
-          <div className="bg-[#222] border-b border-[#3A3A3A] px-4 overflow-x-auto">
+          {/* Category tabs — scrollabili orizzontalmente */}
+          <div className="bg-[#222] border-b border-[#3A3A3A] px-2 sm:px-4 overflow-x-auto shrink-0">
             <div className="flex gap-0 min-w-max">
               {categories.map(cat => (
                 <button key={cat.id} onClick={() => handleSelectCategory(cat.id)}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap ${
+                  className={`px-3 sm:px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap ${
                     activeCategory === cat.id
                       ? 'border-[#D4AF37] text-[#D4AF37]'
                       : 'border-transparent text-[#888] hover:text-[#F5F5DC]'
@@ -327,7 +328,7 @@ export default function OrderPage() {
               ))}
               {combos.length > 0 && (
                 <button onClick={() => handleSelectCategory(COMBO_TAB_ID)}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-3 sm:px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
                     activeCategory === COMBO_TAB_ID
                       ? 'border-[#D4AF37] text-[#D4AF37]'
                       : 'border-transparent text-[#888] hover:text-[#F5F5DC]'
@@ -338,18 +339,17 @@ export default function OrderPage() {
             </div>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto p-4">
+          {/* Piatti — lista verticale su mobile, griglia su desktop */}
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4">
             {loadingMenu || loadingItems ? (
               <div className="flex items-center justify-center h-40">
                 <RefreshCw size={18} className="animate-spin text-[#888]" />
               </div>
             ) : activeCategory === COMBO_TAB_ID ? (
-              /* Combos grid */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {combos.map(combo => (
                   <motion.button key={combo.id} onClick={() => setComboModal(combo)}
-                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                    whileTap={{ scale: 0.97 }}
                     className="bg-[#2A2A2A] border border-[#3A3A3A] hover:border-[#D4AF37]/50 rounded-xl p-4 text-left transition flex flex-col gap-2">
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-[#F5F5DC] font-semibold text-sm leading-tight">{combo.name}</span>
@@ -358,13 +358,6 @@ export default function OrderPage() {
                     {combo.description && (
                       <span className="text-[#555] text-xs leading-tight line-clamp-2">{combo.description}</span>
                     )}
-                    <div className="flex flex-wrap gap-1 mt-0.5">
-                      {combo.courses.map(course => (
-                        <span key={course.id} className="text-[10px] bg-[#333] text-[#888] px-2 py-0.5 rounded-full">
-                          {course.name}
-                        </span>
-                      ))}
-                    </div>
                     <div className="flex items-center justify-between mt-auto pt-1">
                       <span className="text-[#D4AF37] font-bold text-sm">{formatPrice(combo.price)}</span>
                       <ChevronRight size={14} className="text-[#555]" />
@@ -373,8 +366,8 @@ export default function OrderPage() {
                 ))}
               </div>
             ) : (
-              /* Regular items grid */
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              /* Piatti: lista su mobile, griglia su desktop */
+              <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-3">
                 {menuItems.map(item => (
                   <motion.button key={item.id}
                     onClick={() => {
@@ -385,19 +378,26 @@ export default function OrderPage() {
                         addItem(item, 1, [], null)
                       }
                     }}
-                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                    className="bg-[#2A2A2A] border border-[#3A3A3A] hover:border-[#D4AF37]/50 rounded-xl p-4 text-left transition flex flex-col gap-2">
-                    <span className="text-[#F5F5DC] text-sm font-medium leading-tight">{item.name}</span>
-                    {item.description && (
-                      <span className="text-[#555] text-xs leading-tight line-clamp-2">{item.description}</span>
-                    )}
-                    <div className="flex items-center justify-between mt-auto pt-1">
-                      <span className="text-[#D4AF37] font-semibold text-sm">
+                    whileTap={{ scale: 0.97 }}
+                    className="bg-[#2A2A2A] border border-[#3A3A3A] active:border-[#D4AF37]/50 rounded-xl p-3 sm:p-4 text-left transition flex items-center gap-3 sm:flex-col sm:items-start sm:gap-2">
+                    {/* Mobile: riga orizzontale | Desktop: card verticale */}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[#F5F5DC] text-sm sm:text-sm font-semibold leading-tight block truncate sm:whitespace-normal">
+                        {item.name}
+                      </span>
+                      {item.description && (
+                        <span className="text-[#555] text-xs leading-tight line-clamp-1 sm:line-clamp-2 block mt-0.5">{item.description}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 sm:w-full sm:justify-between sm:mt-auto sm:pt-1">
+                      <span className="text-[#D4AF37] font-bold text-sm">
                         {formatPrice(item.base_price)}{item.pricing_type === 'per_kg' ? '/kg' : ''}
                       </span>
                       {item.pricing_type === 'per_kg'
-                        ? <span className="text-[9px] text-amber-400 font-medium bg-amber-900/20 px-1.5 py-0.5 rounded">A PESO</span>
-                        : <Plus size={14} className="text-[#888]" />
+                        ? <span className="text-[9px] text-amber-400 font-medium bg-amber-900/20 px-1.5 py-0.5 rounded">PESO</span>
+                        : <div className="w-8 h-8 sm:w-auto sm:h-auto rounded-lg bg-[#D4AF37]/10 flex items-center justify-center sm:bg-transparent">
+                            <Plus size={16} className="text-[#D4AF37] sm:text-[#888]" />
+                          </div>
                       }
                     </div>
                   </motion.button>
@@ -407,8 +407,8 @@ export default function OrderPage() {
           </div>
         </div>
 
-        {/* RIGHT: Cart */}
-        <div className="w-72 bg-[#222] border-l border-[#3A3A3A] flex flex-col">
+        {/* Carrello: pannello laterale su desktop, barra fissa in basso su mobile */}
+        <div className="hidden md:flex w-72 bg-[#222] border-l border-[#3A3A3A] flex-col">
           <div className="px-4 py-3 border-b border-[#3A3A3A]">
             <h3 className="text-[#F5F5DC] font-semibold text-sm">Ordine</h3>
           </div>
@@ -496,6 +496,53 @@ export default function OrderPage() {
           </div>
         </div>
       </div>
+
+      {/* Carrello mobile — barra fissa in basso */}
+      {itemCount > 0 && (
+        <div className="md:hidden fixed bottom-14 left-0 right-0 z-[80] bg-[#222] border-t border-[#3A3A3A] safe-area-bottom">
+          {showMobileCart ? (
+            <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} className="max-h-[50vh] overflow-y-auto px-4 py-3 space-y-2">
+              {cartItems.map(ci => (
+                <div key={ci._key} className="flex items-center justify-between py-1.5 border-b border-[#2A2A2A] last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[#F5F5DC] text-sm block truncate">
+                      {ci.quantity > 1 && <span className="text-[#D4AF37]">{ci.quantity}× </span>}
+                      {ci.item.name}
+                      {ci.weight_g && <span className="text-[#888] text-xs ml-1">{ci.weight_g}g</span>}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-[#D4AF37] text-sm font-medium">
+                      {formatPrice((ci.item.computed_price ?? ci.item.base_price) * ci.quantity)}
+                    </span>
+                    <button onClick={() => removeItem(ci._key)} className="text-[#555] active:text-red-400 p-1">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+          ) : null}
+          <div className="flex items-center gap-3 px-4 py-3">
+            <button onClick={() => setShowMobileCart(v => !v)}
+              className="flex items-center gap-2 flex-1">
+              <div className="relative">
+                <ShoppingCart size={20} className="text-[#D4AF37]" />
+                <span className="absolute -top-1.5 -right-2 w-4 h-4 bg-[#D4AF37] rounded-full text-[#1A1A1A] text-[8px] font-bold flex items-center justify-center">
+                  {itemCount}
+                </span>
+              </div>
+              <span className="text-[#F5F5DC] font-bold text-lg">{formatPrice(total)}</span>
+              <ChevronRight size={16} className={`text-[#888] transition ${showMobileCart ? 'rotate-90' : '-rotate-90'}`} />
+            </button>
+            <motion.button onClick={handleSend} disabled={sending}
+              whileTap={{ scale: 0.95 }}
+              className="px-6 py-3 rounded-xl bg-[#D4AF37] text-[#1A1A1A] font-bold text-sm flex items-center gap-2 disabled:opacity-40">
+              {sending ? <RefreshCw size={14} className="animate-spin" /> : <><Send size={14} /> Invia</>}
+            </motion.button>
+          </div>
+        </div>
+      )}
 
       {/* Combo Modal */}
       <AnimatePresence>
