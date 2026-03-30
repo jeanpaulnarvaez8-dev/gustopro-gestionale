@@ -231,7 +231,7 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
   const occupied = tables.filter(t => t.status === 'occupied').length
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Mini toolbar */}
       <div className="flex items-center gap-3 px-4 py-1.5 bg-[#1A1A1A] border-b border-[#2A2A2A]">
         <div className="flex items-center gap-3 text-[10px]">

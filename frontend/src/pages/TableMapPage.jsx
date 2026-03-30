@@ -289,7 +289,7 @@ export default function TableMapPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A] flex flex-col">
+    <div className="h-screen bg-[#1A1A1A] flex flex-col overflow-hidden">
 
       {/* Header */}
       <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-4 py-3 flex items-center gap-3">
@@ -395,7 +395,7 @@ export default function TableMapPage() {
       </header>
 
       {/* Pianta ristorante interattiva */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <RefreshCw size={16} className="animate-spin text-[#888]" />
