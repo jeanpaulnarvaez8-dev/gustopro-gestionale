@@ -313,25 +313,25 @@ export default function OrderPage() {
         {/* Menu (piena larghezza su mobile) */}
         <div className="flex-1 flex flex-col overflow-hidden">
 
-          {/* Category tabs — scrollabili orizzontalmente */}
-          <div className="bg-[#222] border-b border-[#3A3A3A] px-2 sm:px-4 overflow-x-auto shrink-0">
-            <div className="flex gap-0 min-w-max">
+          {/* Categorie — bottoni pill grandi su mobile, tab su desktop */}
+          <div className="bg-[#222] border-b border-[#3A3A3A] px-3 py-2 md:py-0 overflow-x-auto shrink-0">
+            <div className="flex gap-2 md:gap-0 min-w-max">
               {categories.map(cat => (
                 <button key={cat.id} onClick={() => handleSelectCategory(cat.id)}
-                  className={`px-3 sm:px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap ${
+                  className={`px-4 py-2 md:py-3 rounded-full md:rounded-none text-sm font-semibold md:font-medium md:border-b-2 transition whitespace-nowrap ${
                     activeCategory === cat.id
-                      ? 'border-[#D4AF37] text-[#D4AF37]'
-                      : 'border-transparent text-[#888] hover:text-[#F5F5DC]'
+                      ? 'bg-[#D4AF37] text-[#1A1A1A] md:bg-transparent md:text-[#D4AF37] md:border-[#D4AF37]'
+                      : 'bg-[#2A2A2A] text-[#999] md:bg-transparent md:border-transparent md:text-[#888] hover:text-[#F5F5DC]'
                   }`}>
                   {cat.name}
                 </button>
               ))}
               {combos.length > 0 && (
                 <button onClick={() => handleSelectCategory(COMBO_TAB_ID)}
-                  className={`px-3 sm:px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-4 py-2 md:py-3 rounded-full md:rounded-none text-sm font-semibold md:font-medium md:border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
                     activeCategory === COMBO_TAB_ID
-                      ? 'border-[#D4AF37] text-[#D4AF37]'
-                      : 'border-transparent text-[#888] hover:text-[#F5F5DC]'
+                      ? 'bg-[#D4AF37] text-[#1A1A1A] md:bg-transparent md:text-[#D4AF37] md:border-[#D4AF37]'
+                      : 'bg-[#2A2A2A] text-[#999] md:bg-transparent md:border-transparent md:text-[#888] hover:text-[#F5F5DC]'
                   }`}>
                   <BookOpen size={13} /> Menù Fissi
                 </button>
@@ -366,8 +366,8 @@ export default function OrderPage() {
                 ))}
               </div>
             ) : (
-              /* Piatti: lista su mobile, griglia su desktop */
-              <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-3">
+              {/* Piatti: lista full-width su mobile, griglia su desktop */}
+              <div className="flex flex-col gap-1.5 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
                 {menuItems.map(item => (
                   <motion.button key={item.id}
                     onClick={() => {
@@ -378,25 +378,24 @@ export default function OrderPage() {
                         addItem(item, 1, [], null)
                       }
                     }}
-                    whileTap={{ scale: 0.97 }}
-                    className="bg-[#2A2A2A] border border-[#3A3A3A] active:border-[#D4AF37]/50 rounded-xl p-3 sm:p-4 text-left transition flex items-center gap-3 sm:flex-col sm:items-start sm:gap-2">
-                    {/* Mobile: riga orizzontale | Desktop: card verticale */}
+                    whileTap={{ scale: 0.96 }}
+                    className="bg-[#2A2A2A] border border-[#3A3A3A] active:border-[#D4AF37] active:bg-[#D4AF37]/5 rounded-xl px-4 py-3.5 md:p-4 text-left transition flex items-center gap-3 md:flex-col md:items-start md:gap-2">
                     <div className="flex-1 min-w-0">
-                      <span className="text-[#F5F5DC] text-sm sm:text-sm font-semibold leading-tight block truncate sm:whitespace-normal">
+                      <span className="text-[#F5F5DC] text-base md:text-sm font-semibold leading-snug block">
                         {item.name}
                       </span>
                       {item.description && (
-                        <span className="text-[#555] text-xs leading-tight line-clamp-1 sm:line-clamp-2 block mt-0.5">{item.description}</span>
+                        <span className="text-[#666] text-xs leading-tight line-clamp-1 md:line-clamp-2 block mt-0.5">{item.description}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0 sm:w-full sm:justify-between sm:mt-auto sm:pt-1">
-                      <span className="text-[#D4AF37] font-bold text-sm">
+                    <div className="flex items-center gap-2.5 shrink-0 md:w-full md:justify-between md:mt-auto md:pt-1">
+                      <span className="text-[#D4AF37] font-bold text-base md:text-sm">
                         {formatPrice(item.base_price)}{item.pricing_type === 'per_kg' ? '/kg' : ''}
                       </span>
                       {item.pricing_type === 'per_kg'
-                        ? <span className="text-[9px] text-amber-400 font-medium bg-amber-900/20 px-1.5 py-0.5 rounded">PESO</span>
-                        : <div className="w-8 h-8 sm:w-auto sm:h-auto rounded-lg bg-[#D4AF37]/10 flex items-center justify-center sm:bg-transparent">
-                            <Plus size={16} className="text-[#D4AF37] sm:text-[#888]" />
+                        ? <span className="text-[10px] text-amber-400 font-bold bg-amber-900/20 px-2 py-1 rounded">PESO</span>
+                        : <div className="w-10 h-10 md:w-auto md:h-auto rounded-xl bg-[#D4AF37]/15 flex items-center justify-center md:bg-transparent">
+                            <Plus size={20} className="text-[#D4AF37] md:text-[#888]" strokeWidth={2.5} />
                           </div>
                       }
                     </div>
