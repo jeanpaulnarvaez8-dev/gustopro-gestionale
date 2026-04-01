@@ -18,6 +18,7 @@ async function getPendingOrders(req, res, next) {
          oi.quantity,
          oi.status         AS item_status,
          oi.display_status AS display_status,
+         oi.workflow_status AS workflow_status,
          oi.notes          AS item_notes,
          oi.sent_at,
          oi.combo_menu_name,
@@ -39,9 +40,10 @@ async function getPendingOrders(req, res, next) {
        LEFT JOIN modifiers m ON m.id = oim.modifier_id
        WHERE o.status = 'open'
          AND oi.status NOT IN ('served','cancelled')
+         AND oi.workflow_status = 'production'
        GROUP BY o.id, o.created_at, o.order_type, o.customer_name, o.pickup_time,
                 t.table_number, z.name,
-                oi.id, oi.quantity, oi.status, oi.display_status, oi.notes, oi.sent_at,
+                oi.id, oi.quantity, oi.status, oi.display_status, oi.workflow_status, oi.notes, oi.sent_at,
                 oi.combo_menu_name, oi.combo_selections,
                 mi.name, mi.prep_time_mins, c.course_type
        ORDER BY
@@ -70,6 +72,7 @@ async function getPendingOrders(req, res, next) {
         quantity:         row.quantity,
         status:           row.item_status,
         display_status:   row.display_status,
+        workflow_status:  row.workflow_status,
         course_type:      row.course_type,
         notes:            row.item_notes,
         sent_at:          row.sent_at,

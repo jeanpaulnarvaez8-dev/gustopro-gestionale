@@ -5,7 +5,7 @@ import { ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock, Layo
 import { useSocket } from '../context/SocketContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
-import { kdsAPI } from '../lib/api'
+import { kdsAPI, workflowAPI } from '../lib/api'
 import { formatElapsed, elapsedMinutes } from '../lib/utils'
 
 const ITEM_STATUS = {
@@ -40,6 +40,7 @@ export default function KDSPage() {
   const { toast } = useToast()
   const { user, logout } = useAuth()
   const [orders, setOrders] = useState([])
+  const [crossmatches, setCrossmatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState({}) // itemId → true
   const loadedRef = useRef(false)
@@ -47,8 +48,12 @@ export default function KDSPage() {
 
   const loadOrders = useCallback(async () => {
     try {
-      const res = await kdsAPI.pending()
-      setOrders(res.data)
+      const [ordersRes, crossRes] = await Promise.all([
+        kdsAPI.pending(),
+        workflowAPI.getCrossmatches().catch(() => ({ data: [] })),
+      ])
+      setOrders(ordersRes.data)
+      setCrossmatches(crossRes.data)
     } catch {
       // keep existing data on error
     } finally {
@@ -83,9 +88,13 @@ export default function KDSPage() {
       })
     }
 
+    const onWorkflowChanged = () => loadOrders()
+
     socket.on('new-order', onNewOrder)
     socket.on('order-item-added', onItemAdded)
     socket.on('item-status-updated', onItemUpdated)
+    socket.on('workflow-status-changed', onWorkflowChanged)
+    socket.on('item-released-to-production', onWorkflowChanged)
 
     // Ricarica quando il socket si riconnette (dopo disconnessione mobile)
     const onReconnect = () => loadOrders()
@@ -95,6 +104,8 @@ export default function KDSPage() {
       socket.off('new-order', onNewOrder)
       socket.off('order-item-added', onItemAdded)
       socket.off('item-status-updated', onItemUpdated)
+      socket.off('workflow-status-changed', onWorkflowChanged)
+      socket.off('item-released-to-production', onWorkflowChanged)
       socket.off('connect', onReconnect)
     }
   }, [socket, loadOrders])
@@ -158,6 +169,10 @@ export default function KDSPage() {
         </div>
 
         <div className="ml-auto flex items-center gap-4">
+          <button onClick={() => navigate('/waiting-monitor')}
+            className="flex items-center gap-1.5 text-[#555] hover:text-amber-400 transition text-xs">
+            <Clock size={13} /> Attese
+          </button>
           {['admin', 'manager'].includes(user?.role) && (
             <button onClick={() => navigate('/dashboard')}
               className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
@@ -198,6 +213,28 @@ export default function KDSPage() {
           <div className="flex flex-col items-center justify-center h-64 gap-3">
             <CheckCircle2 size={48} className="text-emerald-500/40" />
             <p className="text-[#555] text-sm">Nessun ordine in coda</p>
+          </div>
+        )}
+
+        {/* Incroci: piatti uguali su piu' tavoli */}
+        {!loading && crossmatches.length > 0 && (
+          <div className="mb-4 bg-[#1A1A1A] border border-purple-500/30 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-purple-400 font-bold text-sm">INCROCI</span>
+              <span className="text-[#555] text-xs">Piatti uguali su piu' tavoli - ottimizza la produzione</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {crossmatches.map(cm => (
+                <div key={cm.menu_item_id}
+                  className="bg-purple-900/20 border border-purple-500/30 rounded-lg px-3 py-2 flex items-center gap-2">
+                  <span className="text-[#F5F5DC] text-sm font-semibold">{cm.item_name}</span>
+                  <span className="text-purple-400 text-xs font-bold">{cm.total_quantity}x</span>
+                  <span className="text-[#555] text-[10px]">
+                    ({cm.orders.map(o => o.table_number).join(', ')})
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

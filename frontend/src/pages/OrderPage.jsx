@@ -6,6 +6,7 @@ import {
   CheckCircle2, BookOpen, X, ChevronRight,
 } from 'lucide-react'
 import { useCart } from '../context/CartContext'
+import { Clock, Zap, PackageCheck } from 'lucide-react'
 import { useToast } from '../context/ToastContext'
 import { menuAPI, ordersAPI, tablesAPI, comboAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
@@ -146,7 +147,7 @@ const COMBO_TAB_ID = '__combos__'
 export default function OrderPage() {
   const { tableId } = useParams()
   const navigate = useNavigate()
-  const { items: cartItems, total, itemCount, setTable, addItem, addCombo, removeItem, updateQuantity, clearCart } = useCart()
+  const { items: cartItems, total, itemCount, setTable, addItem, addCombo, removeItem, updateQuantity, setWorkflowStatus, clearCart } = useCart()
   const { toast } = useToast()
 
   // Coperti dalla URL (?covers=N)
@@ -234,6 +235,7 @@ export default function OrderPage() {
           quantity: ci.quantity,
           notes: ci.notes || null,
           modifiers: ci.modifiers.map(m => ({ modifier_id: m.id })),
+          workflow_status: ci.workflow_status || 'production',
           ...(ci.weight_g ? { weight_g: ci.weight_g } : {}),
         }))
 
@@ -243,6 +245,7 @@ export default function OrderPage() {
           combo_menu_id: ci.combo_id,
           quantity: ci.quantity,
           combo_selections: ci.combo_selections,
+          workflow_status: ci.workflow_status || 'production',
         }))
 
       const items = [...regularItems, ...comboItems]
@@ -512,7 +515,29 @@ export default function OrderPage() {
                         <Trash2 size={12} />
                       </button>
                     </div>
-                    <div className="flex items-center justify-between mt-1.5">
+                    {/* Workflow status selector A/P/C */}
+                    <div className="flex items-center gap-1 mt-1.5">
+                      {[
+                        { key: 'production', label: 'P', icon: Zap, color: 'text-orange-400 border-orange-500/50 bg-orange-900/30', title: 'Produzione' },
+                        { key: 'waiting', label: 'A', icon: Clock, color: 'text-amber-400 border-amber-500/50 bg-amber-900/30', title: 'Attesa' },
+                        { key: 'delivered', label: 'C', icon: PackageCheck, color: 'text-emerald-400 border-emerald-500/50 bg-emerald-900/30', title: 'Consegnato' },
+                      ].map(ws => {
+                        const active = (ci.workflow_status || 'production') === ws.key
+                        return (
+                          <button key={ws.key}
+                            onClick={() => setWorkflowStatus(ci._key, ws.key)}
+                            title={ws.title}
+                            className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold border transition ${
+                              active ? ws.color : 'text-[#555] border-[#333] bg-transparent hover:border-[#555]'
+                            }`}>
+                            <ws.icon size={8} />
+                            {ws.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <div className="flex items-center justify-between mt-1">
                       {!ci.item.is_combo ? (
                         <div className="flex items-center gap-2">
                           <button onClick={() => updateQuantity(ci._key, ci.quantity - 1)}

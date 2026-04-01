@@ -23,16 +23,23 @@ import WaiterDashboardPage from './pages/WaiterDashboardPage'
 import StaffPerformancePage from './pages/StaffPerformancePage'
 import FloorPlanPage from './pages/FloorPlanPage'
 import AdminHomePage from './pages/AdminHomePage'
+import WaitingMonitorPage from './pages/WaitingMonitorPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ServiceAlertBanner from './components/ServiceAlertBanner'
 import MobileBottomNav from './components/MobileBottomNav'
+import MandatoryAlertModal from './components/MandatoryAlertModal'
+import DirectDeliveredAlerts from './components/DirectDeliveredAlerts'
 
 function ProtectedRoute() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   if (!isAuthenticated) return <Navigate to="/login" replace />
   return (
     <>
       <ServiceAlertBanner />
+      {/* Alert obbligatorio per camerieri: scelta libera/rinvia */}
+      {user?.role === 'waiter' && <MandatoryAlertModal />}
+      {/* Alert admin per voci consegnate senza passare da cucina */}
+      {['admin', 'manager'].includes(user?.role) && <DirectDeliveredAlerts />}
       <div className="pb-14 md:pb-0">
         <Outlet />
       </div>
@@ -145,6 +152,11 @@ export default function App() {
         <Route path="/performance" element={
           <RoleRoute roles={['admin', 'manager']}>
             <StaffPerformancePage />
+          </RoleRoute>
+        } />
+        <Route path="/waiting-monitor" element={
+          <RoleRoute roles={['kitchen', 'admin', 'manager']}>
+            <WaitingMonitorPage />
           </RoleRoute>
         } />
         <Route path="/staff" element={<Navigate to="/users" replace />} />

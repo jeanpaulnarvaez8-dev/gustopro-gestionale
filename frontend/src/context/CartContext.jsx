@@ -14,7 +14,7 @@ function cartReducer(state, action) {
       return { ...state, tableId: action.tableId, tableNumber: action.tableNumber };
 
     case 'ADD_ITEM': {
-      const { item, quantity = 1, modifiers = [], notes, weight_g } = action;
+      const { item, quantity = 1, modifiers = [], notes, weight_g, workflow_status = 'production' } = action;
       // Piatti a peso: ogni aggiunta è unica (peso diverso)
       const key = weight_g
         ? `${item.id}-w${weight_g}-${Date.now()}`
@@ -37,13 +37,13 @@ function cartReducer(state, action) {
         ...state,
         items: [...state.items, {
           _key: key, item: { ...item, computed_price: computedPrice },
-          quantity, modifiers, notes, weight_g,
+          quantity, modifiers, notes, weight_g, workflow_status,
         }],
       };
     }
 
     case 'ADD_COMBO': {
-      const { combo, selections } = action;
+      const { combo, selections, workflow_status = 'production' } = action;
       const key = `combo-${combo.id}-${Date.now()}`;
       return {
         ...state,
@@ -55,6 +55,7 @@ function cartReducer(state, action) {
           quantity: 1,
           modifiers: [],
           notes: null,
+          workflow_status,
         }],
       };
     }
@@ -67,6 +68,14 @@ function cartReducer(state, action) {
         ...state,
         items: state.items.map(i =>
           i._key === action.key ? { ...i, quantity: Math.max(1, action.quantity) } : i
+        ),
+      };
+
+    case 'SET_WORKFLOW':
+      return {
+        ...state,
+        items: state.items.map(i =>
+          i._key === action.key ? { ...i, workflow_status: action.workflow_status } : i
         ),
       };
 
@@ -85,12 +94,12 @@ export function CartProvider({ children }) {
     dispatch({ type: 'SET_TABLE', tableId, tableNumber });
   }, []);
 
-  const addItem = useCallback((item, quantity, modifiers, notes, weight_g) => {
-    dispatch({ type: 'ADD_ITEM', item, quantity, modifiers, notes, weight_g });
+  const addItem = useCallback((item, quantity, modifiers, notes, weight_g, workflow_status) => {
+    dispatch({ type: 'ADD_ITEM', item, quantity, modifiers, notes, weight_g, workflow_status });
   }, []);
 
-  const addCombo = useCallback((combo, selections) => {
-    dispatch({ type: 'ADD_COMBO', combo, selections });
+  const addCombo = useCallback((combo, selections, workflow_status) => {
+    dispatch({ type: 'ADD_COMBO', combo, selections, workflow_status });
   }, []);
 
   const removeItem = useCallback((key) => {
@@ -99,6 +108,10 @@ export function CartProvider({ children }) {
 
   const updateQuantity = useCallback((key, quantity) => {
     dispatch({ type: 'UPDATE_QUANTITY', key, quantity });
+  }, []);
+
+  const setWorkflowStatus = useCallback((key, workflow_status) => {
+    dispatch({ type: 'SET_WORKFLOW', key, workflow_status });
   }, []);
 
   const clearCart = useCallback(() => {
@@ -116,7 +129,7 @@ export function CartProvider({ children }) {
   return (
     <CartContext.Provider value={{
       ...state, total, itemCount,
-      setTable, addItem, addCombo, removeItem, updateQuantity, clearCart,
+      setTable, addItem, addCombo, removeItem, updateQuantity, setWorkflowStatus, clearCart,
     }}>
       {children}
     </CartContext.Provider>

@@ -1,10 +1,11 @@
 const pool = require('../config/db');
 const { getIO } = require('../socket');
+const { auditLog } = require('./workflow.controller');
 
 // ── Helpers ──────────────────────────────────────────────────
 
-async function insertRegularItem(client, order_id, item) {
-  const { menu_item_id, quantity = 1, notes: itemNotes, modifiers = [], weight_g } = item;
+async function insertRegularItem(client, order_id, item, userId) {
+  const { menu_item_id, quantity = 1, notes: itemNotes, modifiers = [], weight_g, workflow_status = 'production' } = item;
 
   const { rows: [menuItem] } = await client.query(
     'SELECT base_price, pricing_type, name FROM menu_items WHERE id=$1 AND is_available=true',
@@ -31,11 +32,20 @@ async function insertRegularItem(client, order_id, item) {
     subtotal = (unitPrice + modifierTotal) * quantity;
   }
 
+  // Valida workflow_status
+  const wfStatus = ['waiting', 'production', 'delivered'].includes(workflow_status) ? workflow_status : 'production';
+  // Se consegnato diretto: status = 'served', altrimenti 'pending'
+  const itemStatus = wfStatus === 'delivered' ? 'served' : 'pending';
+
+  const servedAt = wfStatus === 'delivered' ? new Date() : null;
+
   const { rows: [orderItem] } = await client.query(
     `INSERT INTO order_items
-       (order_id, menu_item_id, quantity, unit_price, modifier_total, subtotal, notes, weight_g)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [order_id, menu_item_id, quantity, unitPrice, modifierTotal, subtotal, itemNotes || null, weight_g || null]
+       (order_id, menu_item_id, quantity, unit_price, modifier_total, subtotal, notes, weight_g,
+        workflow_status, status, inserted_by, served_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+    [order_id, menu_item_id, quantity, unitPrice, modifierTotal, subtotal, itemNotes || null, weight_g || null,
+     wfStatus, itemStatus, userId, servedAt]
   );
 
   for (const mod of modifiers) {
@@ -52,8 +62,8 @@ async function insertRegularItem(client, order_id, item) {
   return orderItem;
 }
 
-async function insertComboItem(client, order_id, item) {
-  const { combo_menu_id, quantity = 1, selections = [], notes: itemNotes } = item;
+async function insertComboItem(client, order_id, item, userId) {
+  const { combo_menu_id, quantity = 1, selections = [], notes: itemNotes, workflow_status = 'production' } = item;
 
   const { rows: [combo] } = await client.query(
     'SELECT id, name, price FROM combo_menus WHERE id=$1 AND is_active=true',
@@ -64,13 +74,20 @@ async function insertComboItem(client, order_id, item) {
   const unitPrice = parseFloat(combo.price);
   const subtotal  = unitPrice * quantity;
 
+  const wfStatus = ['waiting', 'production', 'delivered'].includes(workflow_status) ? workflow_status : 'production';
+  const itemStatus = wfStatus === 'delivered' ? 'served' : 'pending';
+
+  const servedAt = wfStatus === 'delivered' ? new Date() : null;
+
   const { rows: [orderItem] } = await client.query(
     `INSERT INTO order_items
        (order_id, menu_item_id, combo_menu_id, combo_menu_name, combo_selections,
-        quantity, unit_price, modifier_total, subtotal, notes)
-     VALUES ($1,NULL,$2,$3,$4,$5,$6,0,$7,$8) RETURNING *`,
+        quantity, unit_price, modifier_total, subtotal, notes,
+        workflow_status, status, inserted_by, served_at)
+     VALUES ($1,NULL,$2,$3,$4,$5,$6,0,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [order_id, combo.id, combo.name, JSON.stringify(selections),
-     quantity, unitPrice, subtotal, itemNotes || null]
+     quantity, unitPrice, subtotal, itemNotes || null,
+     wfStatus, itemStatus, userId, servedAt]
   );
   return orderItem;
 }
@@ -108,9 +125,21 @@ async function createOrder(req, res, next) {
     for (const item of items) {
       try {
         const oi = item.type === 'combo'
-          ? await insertComboItem(client, order.id, item)
-          : await insertRegularItem(client, order.id, item);
+          ? await insertComboItem(client, order.id, item, req.user.id)
+          : await insertRegularItem(client, order.id, item, req.user.id);
         orderItems.push(oi);
+
+        // Audit log per ogni item inserito
+        const action = oi.workflow_status === 'delivered' ? 'direct_delivered' : 'item_insert';
+        await auditLog(client, {
+          order_id: order.id,
+          item_id: oi.id,
+          action,
+          to_value: oi.workflow_status,
+          user_id: req.user.id,
+          user_name: req.user.name,
+          metadata: { item_name: item.type === 'combo' ? oi.combo_menu_name : undefined, quantity: oi.quantity },
+        });
       } catch (e) {
         await client.query('ROLLBACK');
         return res.status(e.status || 400).json({ error: e.message || 'Errore item' });
@@ -121,6 +150,42 @@ async function createOrder(req, res, next) {
 
     // Re-fetch order so trigger-recalculated totals are included
     const { rows: [updatedOrder] } = await pool.query('SELECT * FROM orders WHERE id=$1', [order.id]);
+
+    // Alert admin per voci inserite come Consegnato diretto (senza passare da cucina)
+    const directDelivered = orderItems.filter(oi => oi.workflow_status === 'delivered');
+    if (directDelivered.length > 0) {
+      const tableInfo2 = table_id
+        ? await pool.query('SELECT table_number FROM tables WHERE id=$1', [table_id])
+        : null;
+      const tNum = tableInfo2?.rows[0]?.table_number || 'ASPORTO';
+
+      for (const dd of directDelivered) {
+        // Crea alert admin
+        const itemNameQ = await pool.query(
+          "SELECT COALESCE(mi.name, $2) AS name FROM menu_items mi WHERE mi.id = $1",
+          [dd.menu_item_id, dd.combo_menu_name || 'Item']
+        );
+        const iName = itemNameQ.rows[0]?.name || 'Item';
+
+        await pool.query(
+          `INSERT INTO service_alerts (order_item_id, alert_type, is_mandatory, table_number, waiter_name, item_name)
+           VALUES ($1, 'direct_delivered', true, $2, $3, $4)
+           ON CONFLICT (order_item_id, alert_type) DO NOTHING`,
+          [dd.id, tNum, req.user.name, iName]
+        );
+
+        // Notifica admin/manager in tempo reale
+        getIO()?.to('role:admin').to('role:manager').emit('direct-delivered-alert', {
+          orderId: order.id,
+          itemId: dd.id,
+          itemName: iName,
+          quantity: dd.quantity,
+          tableNumber: tNum,
+          waiterName: req.user.name,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
 
     // Emit events
     if (table_id) {
@@ -197,9 +262,20 @@ async function addItems(req, res, next) {
     for (const item of items) {
       try {
         const oi = item.type === 'combo'
-          ? await insertComboItem(client, order_id, item)
-          : await insertRegularItem(client, order_id, item);
+          ? await insertComboItem(client, order_id, item, req.user.id)
+          : await insertRegularItem(client, order_id, item, req.user.id);
         addedItems.push(oi);
+
+        const action = oi.workflow_status === 'delivered' ? 'direct_delivered' : 'item_insert';
+        await auditLog(client, {
+          order_id,
+          item_id: oi.id,
+          action,
+          to_value: oi.workflow_status,
+          user_id: req.user.id,
+          user_name: req.user.name,
+          metadata: { quantity: oi.quantity },
+        });
       } catch (e) {
         await client.query('ROLLBACK');
         return res.status(e.status || 400).json({ error: e.message || 'Errore item' });
@@ -207,6 +283,40 @@ async function addItems(req, res, next) {
     }
 
     await client.query('COMMIT');
+
+    // Alert admin per consegnato diretto
+    const directDelivered = addedItems.filter(oi => oi.workflow_status === 'delivered');
+    if (directDelivered.length > 0) {
+      const tableInfo = order.table_id
+        ? await pool.query('SELECT table_number FROM tables WHERE id=$1', [order.table_id])
+        : null;
+      const tNum = tableInfo?.rows[0]?.table_number || 'ASPORTO';
+
+      for (const dd of directDelivered) {
+        const itemNameQ = await pool.query(
+          "SELECT COALESCE(mi.name, $2) AS name FROM menu_items mi WHERE mi.id = $1",
+          [dd.menu_item_id, dd.combo_menu_name || 'Item']
+        );
+        const iName = itemNameQ.rows[0]?.name || 'Item';
+
+        await pool.query(
+          `INSERT INTO service_alerts (order_item_id, alert_type, is_mandatory, table_number, waiter_name, item_name)
+           VALUES ($1, 'direct_delivered', true, $2, $3, $4)
+           ON CONFLICT (order_item_id, alert_type) DO NOTHING`,
+          [dd.id, tNum, req.user.name, iName]
+        );
+
+        getIO()?.to('role:admin').to('role:manager').emit('direct-delivered-alert', {
+          orderId: order_id,
+          itemId: dd.id,
+          itemName: iName,
+          quantity: dd.quantity,
+          tableNumber: tNum,
+          waiterName: req.user.name,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
 
     getIO()?.emit('order-item-added', { orderId: order_id, items: addedItems });
     res.status(201).json(addedItems);
@@ -223,11 +333,30 @@ async function addItems(req, res, next) {
 async function cancelItem(req, res, next) {
   try {
     const { id: order_id, itemId } = req.params;
+
+    // Solo admin/manager possono cancellare voci
+    if (!['admin', 'manager'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Solo admin o responsabili possono cancellare voci. Contatta un responsabile.' });
+    }
+
     const { rows: [item] } = await pool.query(
       `UPDATE order_items SET status='cancelled' WHERE id=$1 AND order_id=$2 RETURNING *`,
       [itemId, order_id]
     );
     if (!item) return res.status(404).json({ error: 'Item non trovato' });
+
+    // Audit log della cancellazione
+    const itemNameQ = await pool.query(
+      "SELECT COALESCE(mi.name, oi.combo_menu_name, 'Item') AS name FROM order_items oi LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id WHERE oi.id = $1",
+      [itemId]
+    );
+    await pool.query(
+      `INSERT INTO order_audit_log (order_id, item_id, action, from_value, to_value, user_id, user_name, metadata)
+       VALUES ($1,$2,'item_delete',$3,'cancelled',$4,$5,$6)`,
+      [order_id, itemId, item.status, req.user.id, req.user.name,
+       JSON.stringify({ item_name: itemNameQ.rows[0]?.name, quantity: item.quantity })]
+    );
+
     res.json(item);
   } catch (err) { next(err); }
 }

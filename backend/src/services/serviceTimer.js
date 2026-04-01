@@ -147,6 +147,110 @@ async function maybeResendAlert(io, row, alertType, elapsedMin) {
 }
 
 /**
+ * Controlla alert obbligatori per voci in attesa.
+ * Dopo la consegna di un piatto, genera alert OBBLIGATORIO al cameriere
+ * per la portata successiva. Il cameriere DEVE scegliere: libera o rinvia.
+ */
+async function checkMandatoryAlerts() {
+  try {
+    // Trova voci in attesa (workflow_status='waiting') che hanno
+    // portate precedenti gia' consegnate (served)
+    const { rows } = await pool.query(`
+      SELECT
+        oi.id AS item_id, oi.order_id, oi.quantity, oi.inserted_at,
+        COALESCE(mi.name, oi.combo_menu_name, 'Piatto') AS item_name,
+        COALESCE(c.course_type, 'altro') AS course_type,
+        COALESCE(c.is_beverage, false) AS is_beverage,
+        o.waiter_id,
+        COALESCE(t.table_number, 'ASPORTO') AS table_number,
+        COALESCE(z.name, '') AS zone_name,
+        u.name AS waiter_name,
+        -- Controlla se esiste almeno un piatto servito nello stesso ordine
+        EXISTS (
+          SELECT 1 FROM order_items oi2
+          WHERE oi2.order_id = oi.order_id
+            AND oi2.status = 'served'
+            AND oi2.id != oi.id
+        ) AS has_served_items
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      LEFT JOIN tables t ON t.id = o.table_id
+      LEFT JOIN zones z ON z.id = t.zone_id
+      LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+      LEFT JOIN categories c ON c.id = mi.category_id
+      LEFT JOIN users u ON u.id = o.waiter_id
+      WHERE oi.workflow_status = 'waiting'
+        AND oi.status NOT IN ('served', 'cancelled')
+        AND o.status = 'open'
+    `);
+
+    const io = getIO();
+    if (!io || rows.length === 0) return;
+
+    for (const row of rows) {
+      // Genera alert solo se ci sono piatti gia' serviti (portata precedente consegnata)
+      if (!row.has_served_items) continue;
+
+      const inserted = await tryInsertAlert(row.item_id, 'course_next', row.waiter_id);
+
+      if (inserted) {
+        // Aggiorna alert con info extra
+        await pool.query(
+          'UPDATE service_alerts SET table_number=$1, waiter_name=$2, item_name=$3, is_mandatory=true WHERE id=$4',
+          [row.table_number, row.waiter_name, row.item_name, inserted.id]
+        );
+
+        io.to(`user:${row.waiter_id}`).emit('mandatory-course-alert', {
+          alertId: inserted.id,
+          orderId: row.order_id,
+          itemId: row.item_id,
+          itemName: row.item_name,
+          quantity: row.quantity,
+          tableNumber: row.table_number,
+          zoneName: row.zone_name,
+          courseType: row.course_type,
+          isMandatory: true,
+        });
+      } else {
+        // Alert esiste: controlla se postpone scaduto e reinvia
+        await maybeResendMandatoryAlert(io, row);
+      }
+    }
+  } catch (err) {
+    console.error('[MandatoryAlerts] Errore:', err.message);
+  }
+}
+
+async function maybeResendMandatoryAlert(io, row) {
+  const { rows } = await pool.query(
+    `SELECT id, postponed_until, acknowledged
+     FROM service_alerts
+     WHERE order_item_id = $1 AND alert_type = 'course_next'`,
+    [row.item_id]
+  );
+  const alert = rows[0];
+  if (!alert || alert.acknowledged) return;
+
+  if (alert.postponed_until && new Date(alert.postponed_until) <= new Date()) {
+    await pool.query(
+      'UPDATE service_alerts SET postponed_until = NULL WHERE id = $1',
+      [alert.id]
+    );
+    io.to(`user:${row.waiter_id}`).emit('mandatory-course-alert', {
+      alertId: alert.id,
+      orderId: row.order_id,
+      itemId: row.item_id,
+      itemName: row.item_name,
+      quantity: row.quantity,
+      tableNumber: row.table_number,
+      zoneName: row.zone_name,
+      courseType: row.course_type,
+      isMandatory: true,
+    });
+  }
+}
+
+/**
  * Controlla i timer a cascata tra portate.
  * Quando una portata è stata servita, calcola quando deve partire la successiva.
  */
@@ -172,7 +276,7 @@ async function checkCascadeTimers() {
           JOIN categories c ON c.id = mi.category_id
           WHERE oi.order_id = csl.order_id
             AND c.course_type = ctc.to_course
-            AND oi.display_status = 'waiting'
+            AND oi.workflow_status = 'waiting'
         )
     `);
 
@@ -241,8 +345,9 @@ function startServiceTimer() {
   timer = setInterval(() => {
     checkReadyItems();
     checkCascadeTimers();
+    checkMandatoryAlerts();
   }, INTERVAL_MS);
-  setTimeout(() => { checkReadyItems(); checkCascadeTimers(); }, 5000);
+  setTimeout(() => { checkReadyItems(); checkCascadeTimers(); checkMandatoryAlerts(); }, 5000);
 }
 
 function stopServiceTimer() {

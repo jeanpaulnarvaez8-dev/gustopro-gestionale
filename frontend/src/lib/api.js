@@ -207,4 +207,16 @@ export const coursesAPI = {
   orderStatus:      (orderId)   => api.get(`/courses/order/${orderId}/status`),
 };
 
+// Workflow (sistema comande A/P/C)
+export const workflowAPI = {
+  changeStatus:          (itemId, workflow_status) => api.patch(`/workflow/items/${itemId}/status`, { workflow_status }),
+  getWaiting:            ()       => api.get('/workflow/waiting'),
+  getCrossmatches:       ()       => api.get('/workflow/crossmatches'),
+  getPendingAlerts:      ()       => api.get('/workflow/alerts/pending'),
+  respondToAlert:        (alertId, action, defer_minutes) => api.post(`/workflow/alerts/${alertId}/respond`, { action, defer_minutes }),
+  getDirectDelivered:    ()       => api.get('/workflow/alerts/direct-delivered'),
+  deleteItem:            (itemId) => api.delete(`/workflow/items/${itemId}`),
+  getAuditLog:           (orderId) => api.get(`/workflow/audit/${orderId}`),
+};
+
 export default api;
