@@ -88,35 +88,30 @@ function TableSVG({ table, zone, selected, onSelect, onDrag, editing }) {
   )
 }
 
-// Disegna la struttura del ristorante (muri, bar, mare)
+// Disegna la struttura del ristorante (muri, bar, mare, pergola botti)
 function RestaurantStructure({ zones }) {
   const bar = zones.find(z => z.name === 'BAR')
   const botti = zones.find(z => z.name === 'Botti in Legno')
-  const terrazza = zones.find(z => z.name === 'Terrazza VIP')
-  const nettuno = zones.find(z => z.name === 'Sala Nettuno')
 
   return (
     <g>
       {/* Mare (sfondo azzurro a destra) */}
-      <rect x={920} y={0} width={300} height={900} fill="#0c2d48" />
-      <text x={1020} y={450} textAnchor="middle" fill="#1a5a8a" fontSize="24" fontWeight="700"
-        fontFamily="system-ui" transform="rotate(90,1020,450)">MARE</text>
-      {/* Onde decorative */}
-      {[100,250,400,550,700].map(y => (
-        <path key={y} d={`M 920 ${y} Q 950 ${y-15} 980 ${y} Q 1010 ${y+15} 1040 ${y}`}
+      <rect x={1140} y={0} width={260} height={950} fill="#0c2d48" />
+      <text x={1260} y={480} textAnchor="middle" fill="#1a5a8a" fontSize="24" fontWeight="700"
+        fontFamily="system-ui" transform="rotate(90,1260,480)">MARE</text>
+      {[100,250,400,550,700,850].map(y => (
+        <path key={y} d={`M 1140 ${y} Q 1170 ${y-15} 1200 ${y} Q 1230 ${y+15} 1260 ${y}`}
           stroke="#1a5a8a" strokeWidth="2" fill="none" opacity="0.5" />
       ))}
 
-      {/* Zone come aree con muri */}
+      {/* Zone come aree con bordi */}
       {zones.map(z => {
         const x = z.floor_x || 0, y = z.floor_y || 0
         const w = z.floor_w || 400, h = z.floor_h || 300
         return (
           <g key={z.id}>
-            {/* Pavimento zona */}
             <rect x={x} y={y} width={w} height={h}
               fill={`${z.color}08`} stroke={z.color} strokeWidth="3" rx="4" />
-            {/* Etichetta zona */}
             <rect x={x + 8} y={y + 6} width={z.name.length * 8 + 16} height={20} rx="4"
               fill={z.color} opacity="0.2" />
             <text x={x + 16} y={y + 19} fill={z.color} fontSize="11" fontWeight="700"
@@ -127,26 +122,60 @@ function RestaurantStructure({ zones }) {
         )
       })}
 
-      {/* Bancone BAR (rettangolo pieno) */}
+      {/* Bancone BAR con sgabelli */}
       {bar && (
         <g>
-          <rect x={bar.floor_x + 60} y={bar.floor_y + 30} width={160} height={70}
+          <rect x={bar.floor_x + 50} y={bar.floor_y + 30} width={180} height={80}
             fill="#4a2020" stroke="#8B4513" strokeWidth="2" rx="6" />
-          <text x={bar.floor_x + 140} y={bar.floor_y + 70} textAnchor="middle"
+          <text x={bar.floor_x + 140} y={bar.floor_y + 75} textAnchor="middle"
             fill="#D4AF37" fontSize="12" fontWeight="600" fontFamily="system-ui">BAR</text>
+          {[0,1,2,3,4].map(i => (
+            <circle key={`bs${i}`} cx={bar.floor_x + 75 + i * 40} cy={bar.floor_y + 130}
+              r={8} fill="#333" stroke="#555" strokeWidth="1" />
+          ))}
+          {[0,1].map(i => (
+            <circle key={`bl${i}`} cx={bar.floor_x + 35} cy={bar.floor_y + 55 + i * 35}
+              r={8} fill="#333" stroke="#555" strokeWidth="1" />
+          ))}
+          {[0,1].map(i => (
+            <circle key={`br${i}`} cx={bar.floor_x + 245} cy={bar.floor_y + 55 + i * 35}
+              r={8} fill="#333" stroke="#555" strokeWidth="1" />
+          ))}
         </g>
       )}
 
+      {/* Pergola Botti (linee dal centro) */}
+      {botti && (() => {
+        const cx = botti.floor_x + botti.floor_w / 2
+        const cy = botti.floor_y + 20
+        const pts = [[450,130],[490,185],[545,220],[610,235],[675,220],[730,185],[770,130]]
+        return (
+          <g>
+            {pts.map(([tx,ty], i) => (
+              <line key={i} x1={cx} y1={cy} x2={tx+32} y2={ty+32}
+                stroke="#5a3a20" strokeWidth="2" opacity="0.3" />
+            ))}
+            <circle cx={cx} cy={cy} r={6} fill="#3a2510" stroke="#6b3a20" strokeWidth="1.5" />
+          </g>
+        )
+      })()}
+
       {/* Cassa */}
-      <rect x={10} y={10} width={50} height={30} fill="#2a2a2a" stroke="#555" strokeWidth="1" rx="3" />
-      <text x={35} y={28} textAnchor="middle" fill="#888" fontSize="8" fontFamily="system-ui">CASSA</text>
+      <rect x={15} y={15} width={55} height={28} fill="#2a2a2a" stroke="#555" strokeWidth="1" rx="3" />
+      <text x={42} y={32} textAnchor="middle" fill="#888" fontSize="8" fontFamily="system-ui">CASSA</text>
 
       {/* Frigo Pesce */}
-      <rect x={10} y={50} width={50} height={25} fill="#1a2a3a" stroke="#3B82F6" strokeWidth="1" rx="3" />
-      <text x={35} y={66} textAnchor="middle" fill="#5588bb" fontSize="7" fontFamily="system-ui">FRIGO</text>
+      <rect x={15} y={50} width={55} height={25} fill="#1a2a3a" stroke="#3B82F6" strokeWidth="1" rx="3" />
+      <text x={42} y={66} textAnchor="middle" fill="#5588bb" fontSize="7" fontFamily="system-ui">FRIGO</text>
 
-      {/* Muro divisorio (linea rossa tra sala e terrazza) */}
-      <line x1={490} y1={200} x2={490} y2={780} stroke="#8B0000" strokeWidth="4" strokeDasharray="none" />
+      {/* Muro divisorio rosso (tra Sala Nettuno e Terrazza VIP) */}
+      <line x1={680} y1={310} x2={680} y2={930} stroke="#8B0000" strokeWidth="4" />
+
+      {/* WC in basso a sinistra */}
+      <rect x={50} y={870} width={40} height={28} fill="#1a1a1a" stroke="#444" strokeWidth="1" rx="3" />
+      <text x={70} y={888} textAnchor="middle" fill="#666" fontSize="7" fontFamily="system-ui">WC</text>
+      <rect x={100} y={870} width={40} height={28} fill="#1a1a1a" stroke="#444" strokeWidth="1" rx="3" />
+      <text x={120} y={888} textAnchor="middle" fill="#666" fontSize="7" fontFamily="system-ui">WC</text>
     </g>
   )
 }
@@ -283,7 +312,7 @@ export default function FloorPlanEditor({ tables, zones, onTableUpdate, onTableD
                 <path d={`M ${GRID} 0 L 0 0 0 ${GRID}`} fill="none" stroke="#181818" strokeWidth="0.5"/>
               </pattern>
             </defs>
-            <rect className="bg-layer" width="1200" height="900" fill="url(#grid)"/>
+            <rect className="bg-layer" width="1400" height="950" fill="url(#grid)"/>
 
             {/* Struttura ristorante */}
             <RestaurantStructure zones={zones} />

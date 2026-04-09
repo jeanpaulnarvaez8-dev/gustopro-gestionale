@@ -89,12 +89,15 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing }) {
 }
 
 function Restaurant({ zones }) {
+  const bar = zones.find(z => z.name === 'BAR')
+  const botti = zones.find(z => z.name === 'Botti in Legno')
+
   return (
     <g>
       {/* Mare */}
-      <rect x={1140} y={0} width={300} height={950} fill="#071a2c" />
-      <text x={1230} y={480} textAnchor="middle" fill="#0d3a5c" fontSize="28" fontWeight="800"
-        fontFamily="system-ui" transform="rotate(90,1230,480)" letterSpacing="8">MARE</text>
+      <rect x={1140} y={0} width={260} height={950} fill="#071a2c" />
+      <text x={1260} y={480} textAnchor="middle" fill="#0d3a5c" fontSize="28" fontWeight="800"
+        fontFamily="system-ui" transform="rotate(90,1260,480)" letterSpacing="8">MARE</text>
       {[100,220,340,460,580,700,820].map(y => (
         <path key={y} d={`M 1140 ${y} Q 1175 ${y-12} 1210 ${y} Q 1245 ${y+12} 1280 ${y}`}
           stroke="#0d3a5c" strokeWidth="1.5" fill="none" />
@@ -112,27 +115,58 @@ function Restaurant({ zones }) {
         </g>
       ))}
 
-      {/* Bancone BAR */}
-      {zones.some(z => z.name === 'BAR') && (() => {
-        const bar = zones.find(z => z.name === 'BAR')
+      {/* Bancone BAR con sgabelli */}
+      {bar && (
+        <g>
+          <rect x={bar.floor_x + 50} y={bar.floor_y + 30} width={180} height={80}
+            fill="#2a1810" stroke="#6b3a20" strokeWidth="2" rx="8" />
+          <text x={bar.floor_x + 140} y={bar.floor_y + 75} textAnchor="middle"
+            fill="#D4AF37" fontSize="13" fontWeight="700" fontFamily="system-ui">BAR</text>
+          {[0,1,2,3,4].map(i => (
+            <circle key={`bs${i}`} cx={bar.floor_x + 75 + i * 40} cy={bar.floor_y + 130}
+              r={7} fill="#222" stroke="#444" strokeWidth="0.8" />
+          ))}
+          {[0,1].map(i => (
+            <circle key={`bl${i}`} cx={bar.floor_x + 35} cy={bar.floor_y + 55 + i * 35}
+              r={7} fill="#222" stroke="#444" strokeWidth="0.8" />
+          ))}
+          {[0,1].map(i => (
+            <circle key={`br${i}`} cx={bar.floor_x + 245} cy={bar.floor_y + 55 + i * 35}
+              r={7} fill="#222" stroke="#444" strokeWidth="0.8" />
+          ))}
+        </g>
+      )}
+
+      {/* Pergola Botti (linee dal centro) */}
+      {botti && (() => {
+        const cx = botti.floor_x + botti.floor_w / 2
+        const cy = botti.floor_y + 20
+        const pts = [[450,130],[490,185],[545,220],[610,235],[675,220],[730,185],[770,130]]
         return (
           <g>
-            <rect x={(bar.floor_x||70)+40} y={(bar.floor_y||20)+20} width={170} height={65}
-              fill="#2a1810" stroke="#6b3a20" strokeWidth="2" rx="8" />
-            <text x={(bar.floor_x||70)+125} y={(bar.floor_y||20)+58} textAnchor="middle"
-              fill="#D4AF37" fontSize="13" fontWeight="700" fontFamily="system-ui">BAR</text>
+            {pts.map(([tx,ty], i) => (
+              <line key={i} x1={cx} y1={cy} x2={tx+32} y2={ty+32}
+                stroke="#5a3a20" strokeWidth="1.5" opacity="0.25" />
+            ))}
+            <circle cx={cx} cy={cy} r={5} fill="#3a2510" stroke="#6b3a20" strokeWidth="1" />
           </g>
         )
       })()}
 
       {/* Cassa & Frigo */}
-      <rect x={8} y={8} width={55} height={28} fill="#1a1a1a" stroke="#444" strokeWidth="1" rx="4" />
-      <text x={35} y={26} textAnchor="middle" fill="#888" fontSize="8" fontWeight="600" fontFamily="system-ui">CASSA</text>
-      <rect x={8} y={42} width={55} height={22} fill="#0a1520" stroke="#2563EB" strokeWidth="1" rx="4" />
-      <text x={35} y={56} textAnchor="middle" fill="#4488bb" fontSize="7" fontWeight="600" fontFamily="system-ui">FRIGO PESCE</text>
+      <rect x={15} y={15} width={55} height={28} fill="#1a1a1a" stroke="#444" strokeWidth="1" rx="4" />
+      <text x={42} y={32} textAnchor="middle" fill="#888" fontSize="8" fontWeight="600" fontFamily="system-ui">CASSA</text>
+      <rect x={15} y={50} width={55} height={22} fill="#0a1520" stroke="#2563EB" strokeWidth="1" rx="4" />
+      <text x={42} y={64} textAnchor="middle" fill="#4488bb" fontSize="7" fontWeight="600" fontFamily="system-ui">FRIGO PESCE</text>
 
-      {/* Muro divisorio */}
-      <line x1={640} y1={340} x2={640} y2={910} stroke="#5a1515" strokeWidth="4" />
+      {/* Muro divisorio rosso */}
+      <line x1={680} y1={310} x2={680} y2={930} stroke="#5a1515" strokeWidth="4" />
+
+      {/* WC */}
+      <rect x={50} y={870} width={40} height={28} fill="#111" stroke="#333" strokeWidth="1" rx="3" />
+      <text x={70} y={888} textAnchor="middle" fill="#555" fontSize="7" fontFamily="system-ui">WC</text>
+      <rect x={100} y={870} width={40} height={28} fill="#111" stroke="#333" strokeWidth="1" rx="3" />
+      <text x={120} y={888} textAnchor="middle" fill="#555" fontSize="7" fontFamily="system-ui">WC</text>
     </g>
   )
 }
