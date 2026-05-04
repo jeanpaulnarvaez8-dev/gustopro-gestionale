@@ -1,13 +1,17 @@
 const { Router } = require('express');
 const { verifyToken } = require('../middleware/auth');
+const { resolveTenant } = require('../middleware/tenant');
 
 const router = Router();
 
-// Public
-router.use('/auth', require('./auth.routes'));
+// Public — tenant resolved from X-Tenant-Slug header or default fallback.
+router.use('/auth', resolveTenant, require('./auth.routes'));
 
-// Protected (all routes below require JWT)
+// Protected (all routes below require JWT). Tenant is resolved from the
+// JWT claim set at login; falls back to header / default if missing
+// (covers tokens issued before the tenant_id claim was added).
 router.use(verifyToken);
+router.use(resolveTenant);
 router.use('/users',        require('./users.routes'));
 router.use('/zones',        require('./zones.routes'));
 router.use('/tables',       require('./tables.routes'));
