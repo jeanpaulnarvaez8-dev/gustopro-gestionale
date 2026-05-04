@@ -4,6 +4,10 @@ const { resolveTenant } = require('../middleware/tenant');
 
 const router = Router();
 
+// Super-admin (server-to-server) — protected by static API key in header.
+// Mounted BEFORE verifyToken because tenant onboarding does not require a JWT.
+router.use('/superadmin', require('./superadmin.routes'));
+
 // Public — tenant resolved from X-Tenant-Slug header or default fallback.
 router.use('/auth', resolveTenant, require('./auth.routes'));
 
