@@ -154,6 +154,7 @@ async function createOrder(req, res, next) {
 
         const action = oi.workflow_status === 'delivered' ? 'direct_delivered' : 'item_insert';
         await auditLog(client, {
+          tenant_id: tenantId,
           order_id: order.id,
           item_id: oi.id,
           action,
@@ -299,6 +300,7 @@ async function addItems(req, res, next) {
 
         const action = oi.workflow_status === 'delivered' ? 'direct_delivered' : 'item_insert';
         await auditLog(client, {
+          tenant_id: tenantId,
           order_id,
           item_id: oi.id,
           action,

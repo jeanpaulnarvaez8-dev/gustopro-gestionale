@@ -1,11 +1,15 @@
 const pool = require('../config/db');
 const { getIO } = require('../socket');
 
+// Tenant isolation: tutti gli inventory ops scoped al tenant.
+const TENANT = (req) => req.tenant.id;
+
 // ── SUPPLIERS ────────────────────────────────────────────────
 async function listSuppliers(req, res, next) {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM suppliers WHERE is_active=true ORDER BY name'
+      'SELECT * FROM suppliers WHERE is_active=true AND tenant_id=$1 ORDER BY name',
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -16,8 +20,8 @@ async function createSupplier(req, res, next) {
     const { name, contact, email, notes } = req.body;
     if (!name) return res.status(400).json({ error: 'name obbligatorio' });
     const { rows } = await pool.query(
-      'INSERT INTO suppliers (name,contact,email,notes) VALUES ($1,$2,$3,$4) RETURNING *',
-      [name, contact || null, email || null, notes || null]
+      'INSERT INTO suppliers (tenant_id, name, contact, email, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [TENANT(req), name, contact || null, email || null, notes || null]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -32,8 +36,10 @@ async function listPOs(req, res, next) {
        FROM purchase_orders po
        LEFT JOIN users u ON u.id = po.created_by
        LEFT JOIN po_items pi ON pi.po_id = po.id
+       WHERE po.tenant_id = $1
        GROUP BY po.id, u.name
-       ORDER BY po.created_at DESC LIMIT 50`
+       ORDER BY po.created_at DESC LIMIT 50`,
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -41,6 +47,7 @@ async function listPOs(req, res, next) {
 
 async function createPO(req, res, next) {
   const client = await pool.connect();
+  const tenantId = TENANT(req);
   try {
     const { supplier_id, supplier_name, expected_date, notes, items } = req.body;
     if (!supplier_name || !Array.isArray(items) || items.length === 0) {
@@ -48,15 +55,15 @@ async function createPO(req, res, next) {
     }
     await client.query('BEGIN');
     const { rows: [po] } = await client.query(
-      `INSERT INTO purchase_orders (supplier_id, supplier_name, created_by, expected_date, notes)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [supplier_id || null, supplier_name, req.user.id, expected_date || null, notes || null]
+      `INSERT INTO purchase_orders (tenant_id, supplier_id, supplier_name, created_by, expected_date, notes)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [tenantId, supplier_id || null, supplier_name, req.user.id, expected_date || null, notes || null]
     );
     for (const item of items) {
       await client.query(
-        `INSERT INTO po_items (po_id, item_name, barcode, qty_ordered, unit, unit_cost, notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [po.id, item.item_name, item.barcode || null, item.qty_ordered,
+        `INSERT INTO po_items (tenant_id, po_id, item_name, barcode, qty_ordered, unit, unit_cost, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [tenantId, po.id, item.item_name, item.barcode || null, item.qty_ordered,
          item.unit || 'kg', item.unit_cost || 0, item.notes || null]
       );
     }
@@ -71,12 +78,15 @@ async function createPO(req, res, next) {
 async function getPO(req, res, next) {
   try {
     const { id } = req.params;
+    const tenantId = TENANT(req);
     const { rows: [po] } = await pool.query(
-      'SELECT * FROM purchase_orders WHERE id=$1', [id]
+      'SELECT * FROM purchase_orders WHERE id=$1 AND tenant_id=$2',
+      [id, tenantId]
     );
     if (!po) return res.status(404).json({ error: 'PO non trovato' });
     const { rows: items } = await pool.query(
-      'SELECT * FROM po_items WHERE po_id=$1 ORDER BY item_name', [id]
+      'SELECT * FROM po_items WHERE po_id=$1 AND tenant_id=$2 ORDER BY item_name',
+      [id, tenantId]
     );
     res.json({ ...po, items });
   } catch (err) { next(err); }
@@ -97,8 +107,10 @@ async function listReceipts(req, res, next) {
        LEFT JOIN users u ON u.id = gr.received_by
        LEFT JOIN purchase_orders po ON po.id = gr.po_id
        LEFT JOIN receipt_items ri ON ri.receipt_id = gr.id
+       WHERE gr.tenant_id = $1
        GROUP BY gr.id, u.name, po.supplier_name
-       ORDER BY gr.received_at DESC LIMIT 100`
+       ORDER BY gr.received_at DESC LIMIT 100`,
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -107,12 +119,14 @@ async function listReceipts(req, res, next) {
 async function getReceipt(req, res, next) {
   try {
     const { id } = req.params;
+    const tenantId = TENANT(req);
     const { rows: [receipt] } = await pool.query(
       `SELECT gr.*, u.name AS received_by_name, po.supplier_name
        FROM goods_receipts gr
        LEFT JOIN users u ON u.id = gr.received_by
        LEFT JOIN purchase_orders po ON po.id = gr.po_id
-       WHERE gr.id=$1`, [id]
+       WHERE gr.id=$1 AND gr.tenant_id=$2`,
+      [id, tenantId]
     );
     if (!receipt) return res.status(404).json({ error: 'Ricevimento non trovato' });
     const { rows: items } = await pool.query(
@@ -121,8 +135,9 @@ async function getReceipt(req, res, next) {
        FROM receipt_items ri
        JOIN receipt_items_with_discrepancy riwd ON riwd.id = ri.id
        LEFT JOIN users u ON u.id = ri.confirmed_by
-       WHERE ri.receipt_id=$1
-       ORDER BY ri.item_name`, [id]
+       WHERE ri.receipt_id=$1 AND ri.tenant_id=$2
+       ORDER BY ri.item_name`,
+      [id, tenantId]
     );
     res.json({ ...receipt, items });
   } catch (err) { next(err); }
@@ -130,6 +145,7 @@ async function getReceipt(req, res, next) {
 
 async function createReceipt(req, res, next) {
   const client = await pool.connect();
+  const tenantId = TENANT(req);
   try {
     const { po_id, notes, items } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
@@ -137,23 +153,22 @@ async function createReceipt(req, res, next) {
     }
     await client.query('BEGIN');
     const { rows: [receipt] } = await client.query(
-      'INSERT INTO goods_receipts (po_id, received_by, notes) VALUES ($1,$2,$3) RETURNING *',
-      [po_id || null, req.user.id, notes || null]
+      'INSERT INTO goods_receipts (tenant_id, po_id, received_by, notes) VALUES ($1,$2,$3,$4) RETURNING *',
+      [tenantId, po_id || null, req.user.id, notes || null]
     );
 
     const alerts = [];
     for (const item of items) {
-      const { rows: [ri] } = await client.query(
+      await client.query(
         `INSERT INTO receipt_items
-           (receipt_id, po_item_id, item_name, barcode, qty_ordered, qty_received, unit, unit_cost, batch_no, expiry_date, notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-        [receipt.id, item.po_item_id || null, item.item_name, item.barcode || null,
+           (tenant_id, receipt_id, po_item_id, item_name, barcode, qty_ordered, qty_received, unit, unit_cost, batch_no, expiry_date, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+        [tenantId, receipt.id, item.po_item_id || null, item.item_name, item.barcode || null,
          item.qty_ordered || 0, item.qty_received, item.unit || 'kg',
          item.unit_cost || 0, item.batch_no || null,
          item.expiry_date || null, item.notes || null]
       );
 
-      // Check discrepancy
       if (item.qty_ordered > 0) {
         const pct = ((item.qty_received - item.qty_ordered) / item.qty_ordered) * 100;
         if (pct < -5) {
@@ -169,13 +184,13 @@ async function createReceipt(req, res, next) {
 
     if (po_id) {
       await client.query(
-        "UPDATE purchase_orders SET status='received' WHERE id=$1", [po_id]
+        "UPDATE purchase_orders SET status='received' WHERE id=$1 AND tenant_id=$2",
+        [po_id, tenantId]
       );
     }
 
     await client.query('COMMIT');
 
-    // Real-time alert if discrepancies
     if (alerts.length > 0) {
       getIO()?.emit('inventory:discrepancy', {
         receiptId: receipt.id,
@@ -197,8 +212,8 @@ async function confirmReceiptItem(req, res, next) {
     const { rows: [item] } = await pool.query(
       `UPDATE receipt_items
        SET confirmed_by=$1, confirmed_at=NOW()
-       WHERE id=$2 RETURNING *`,
-      [req.user.id, itemId]
+       WHERE id=$2 AND tenant_id=$3 RETURNING *`,
+      [req.user.id, itemId, TENANT(req)]
     );
     if (!item) return res.status(404).json({ error: 'Item non trovato' });
     getIO()?.emit('inventory:confirmed', { itemId, confirmedBy: req.user.name });
@@ -215,7 +230,9 @@ async function listSpoilage(req, res, next) {
        FROM spoilage_log sl
        LEFT JOIN users u ON u.id = sl.logged_by
        LEFT JOIN users cu ON cu.id = sl.confirmed_by
-       ORDER BY sl.logged_at DESC LIMIT 100`
+       WHERE sl.tenant_id = $1
+       ORDER BY sl.logged_at DESC LIMIT 100`,
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -226,9 +243,9 @@ async function createSpoilage(req, res, next) {
     const { item_name, qty, unit, unit_cost, reason } = req.body;
     if (!item_name || !qty) return res.status(400).json({ error: 'item_name e qty obbligatori' });
     const { rows } = await pool.query(
-      `INSERT INTO spoilage_log (item_name, qty, unit, unit_cost, reason, logged_by)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [item_name, qty, unit || 'kg', unit_cost || 0, reason || null, req.user.id]
+      `INSERT INTO spoilage_log (tenant_id, item_name, qty, unit, unit_cost, reason, logged_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [TENANT(req), item_name, qty, unit || 'kg', unit_cost || 0, reason || null, req.user.id]
     );
     const totalValue = rows[0].qty * rows[0].unit_cost;
     if (totalValue > 200) {
@@ -243,7 +260,8 @@ async function createSpoilage(req, res, next) {
 // ── INVENTORY KPIs ───────────────────────────────────────────
 async function getInventoryKPIs(req, res, next) {
   try {
-    // % discrepancy this week
+    const tenantId = TENANT(req);
+
     const { rows: [discRow] } = await pool.query(`
       SELECT
         COALESCE(AVG(ABS(
@@ -259,17 +277,17 @@ async function getInventoryKPIs(req, res, next) {
       FROM receipt_items ri
       JOIN goods_receipts gr ON gr.id = ri.receipt_id
       WHERE gr.received_at >= NOW() - INTERVAL '7 days'
-    `);
+        AND gr.tenant_id = $1
+    `, [tenantId]);
 
-    // Spoilage today + this week
     const { rows: [spoilRow] } = await pool.query(`
       SELECT
         COALESCE(SUM(qty * unit_cost) FILTER (WHERE logged_at >= CURRENT_DATE), 0) AS spoilage_today,
         COALESCE(SUM(qty * unit_cost) FILTER (WHERE logged_at >= NOW() - INTERVAL '7 days'), 0) AS spoilage_week
       FROM spoilage_log
-    `);
+      WHERE tenant_id = $1
+    `, [tenantId]);
 
-    // Top 5 loss items this month
     const { rows: topLoss } = await pool.query(`
       SELECT item_name,
              ROUND(SUM((qty_ordered - qty_received) * unit_cost)::NUMERIC, 2) AS total_loss,
@@ -278,12 +296,12 @@ async function getInventoryKPIs(req, res, next) {
       JOIN goods_receipts gr ON gr.id = ri.receipt_id
       WHERE gr.received_at >= NOW() - INTERVAL '30 days'
         AND qty_ordered > qty_received
+        AND gr.tenant_id = $1
       GROUP BY item_name
       ORDER BY total_loss DESC
       LIMIT 5
-    `);
+    `, [tenantId]);
 
-    // Recent discrepancies (>5%)
     const { rows: recentAlerts } = await pool.query(`
       SELECT ri.item_name, ri.qty_ordered, ri.qty_received, ri.unit,
              ri.unit_cost, ri.batch_no, ri.expiry_date,
@@ -296,9 +314,10 @@ async function getInventoryKPIs(req, res, next) {
       WHERE ri.qty_ordered > 0
         AND ABS((ri.qty_received - ri.qty_ordered) / ri.qty_ordered) > 0.05
         AND gr.received_at >= NOW() - INTERVAL '30 days'
+        AND gr.tenant_id = $1
       ORDER BY gr.received_at DESC
       LIMIT 20
-    `);
+    `, [tenantId]);
 
     res.json({
       avg_discrepancy_pct: parseFloat(discRow.avg_discrepancy_pct),
@@ -316,22 +335,22 @@ async function lookupBarcode(req, res, next) {
   try {
     const { barcode } = req.params;
 
-    // 1. Check internal DB (past PO items — most accurate pricing/units)
+    // 1. Internal DB scoped to tenant (past PO items)
     const { rows } = await pool.query(
       `SELECT pi.item_name, pi.unit, pi.unit_cost, pi.barcode,
               po.supplier_name
        FROM po_items pi
        JOIN purchase_orders po ON po.id = pi.po_id
-       WHERE pi.barcode = $1
+       WHERE pi.barcode = $1 AND pi.tenant_id = $2
        ORDER BY po.created_at DESC LIMIT 1`,
-      [barcode]
+      [barcode, TENANT(req)]
     );
 
     if (rows.length > 0) {
       return res.json({ source: 'internal', ...rows[0] });
     }
 
-    // 2. Fallback: Open Food Facts (free, covers Italian GS1 barcodes)
+    // 2. Fallback: Open Food Facts (cross-tenant safe — pubblico)
     const offRes = await fetch(
       `https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`,
       { signal: AbortSignal.timeout(5000) }
@@ -355,7 +374,6 @@ async function lookupBarcode(req, res, next) {
       }
     }
 
-    // 3. Not found anywhere
     res.json(null);
   } catch (err) { next(err); }
 }

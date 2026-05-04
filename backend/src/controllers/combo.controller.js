@@ -1,13 +1,17 @@
 const pool = require('../config/db');
 
+// Tenant isolation: combo menus, courses, course-items scoped al tenant.
+const TENANT = (req) => req.tenant.id;
+
 // ── READ ─────────────────────────────────────────────────────
 
 async function listCombos(req, res, next) {
   try {
+    const tenantId = TENANT(req);
     const { rows: combos } = await pool.query(
-      `SELECT * FROM combo_menus ORDER BY sort_order, name`
+      `SELECT * FROM combo_menus WHERE tenant_id = $1 ORDER BY sort_order, name`,
+      [tenantId]
     );
-    // Attach courses + items for each combo
     for (const c of combos) {
       const { rows: courses } = await pool.query(
         `SELECT cc.*,
@@ -25,10 +29,10 @@ async function listCombos(req, res, next) {
          FROM combo_courses cc
          LEFT JOIN combo_course_items cci ON cci.course_id = cc.id
          LEFT JOIN menu_items mi ON mi.id = cci.menu_item_id
-         WHERE cc.combo_id = $1
+         WHERE cc.combo_id = $1 AND cc.tenant_id = $2
          GROUP BY cc.id
          ORDER BY cc.sort_order`,
-        [c.id]
+        [c.id, tenantId]
       );
       c.courses = courses;
     }
@@ -40,6 +44,7 @@ async function listCombos(req, res, next) {
 
 async function createCombo(req, res, next) {
   const client = await pool.connect();
+  const tenantId = TENANT(req);
   try {
     const { name, price, description, sort_order = 0, courses = [] } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Nome obbligatorio' });
@@ -48,22 +53,22 @@ async function createCombo(req, res, next) {
     await client.query('BEGIN');
 
     const { rows: [combo] } = await client.query(
-      `INSERT INTO combo_menus (name, price, description, sort_order)
-       VALUES ($1,$2,$3,$4) RETURNING *`,
-      [name.trim(), price, description || null, sort_order]
+      `INSERT INTO combo_menus (tenant_id, name, price, description, sort_order)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [tenantId, name.trim(), price, description || null, sort_order]
     );
 
     for (const [i, course] of courses.entries()) {
       const { rows: [cc] } = await client.query(
-        `INSERT INTO combo_courses (combo_id, name, min_choices, max_choices, sort_order)
-         VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-        [combo.id, course.name, course.min_choices ?? 1, course.max_choices ?? 1, i]
+        `INSERT INTO combo_courses (tenant_id, combo_id, name, min_choices, max_choices, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [tenantId, combo.id, course.name, course.min_choices ?? 1, course.max_choices ?? 1, i]
       );
       for (const item of (course.items ?? [])) {
         await client.query(
-          `INSERT INTO combo_course_items (course_id, menu_item_id, price_supplement)
-           VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-          [cc.id, item.menu_item_id, item.price_supplement ?? 0]
+          `INSERT INTO combo_course_items (tenant_id, course_id, menu_item_id, price_supplement)
+           VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+          [tenantId, cc.id, item.menu_item_id, item.price_supplement ?? 0]
         );
       }
     }
@@ -87,8 +92,8 @@ async function updateCombo(req, res, next) {
          description = COALESCE($3, description),
          is_active   = COALESCE($4, is_active),
          sort_order  = COALESCE($5, sort_order)
-       WHERE id=$6 RETURNING *`,
-      [name || null, price ?? null, description ?? null, is_active ?? null, sort_order ?? null, id]
+       WHERE id=$6 AND tenant_id=$7 RETURNING *`,
+      [name || null, price ?? null, description ?? null, is_active ?? null, sort_order ?? null, id, TENANT(req)]
     );
     if (!c) return res.status(404).json({ error: 'Combo non trovata' });
     res.json(c);
@@ -98,7 +103,10 @@ async function updateCombo(req, res, next) {
 async function deleteCombo(req, res, next) {
   try {
     const { id } = req.params;
-    await pool.query(`UPDATE combo_menus SET is_active=false WHERE id=$1`, [id]);
+    await pool.query(
+      `UPDATE combo_menus SET is_active=false WHERE id=$1 AND tenant_id=$2`,
+      [id, TENANT(req)]
+    );
     res.status(204).end();
   } catch (err) { next(err); }
 }
@@ -109,11 +117,18 @@ async function addCourse(req, res, next) {
   try {
     const { id: combo_id } = req.params;
     const { name, min_choices = 1, max_choices = 1 } = req.body;
+    const tenantId = TENANT(req);
     if (!name?.trim()) return res.status(400).json({ error: 'Nome portata obbligatorio' });
+    // Verify combo belongs to tenant
+    const { rows: [parent] } = await pool.query(
+      'SELECT id FROM combo_menus WHERE id=$1 AND tenant_id=$2',
+      [combo_id, tenantId]
+    );
+    if (!parent) return res.status(404).json({ error: 'Combo non trovata' });
     const { rows: [cc] } = await pool.query(
-      `INSERT INTO combo_courses (combo_id, name, min_choices, max_choices)
-       VALUES ($1,$2,$3,$4) RETURNING *`,
-      [combo_id, name.trim(), min_choices, max_choices]
+      `INSERT INTO combo_courses (tenant_id, combo_id, name, min_choices, max_choices)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [tenantId, combo_id, name.trim(), min_choices, max_choices]
     );
     res.status(201).json(cc);
   } catch (err) { next(err); }
@@ -122,7 +137,10 @@ async function addCourse(req, res, next) {
 async function removeCourse(req, res, next) {
   try {
     const { courseId } = req.params;
-    await pool.query('DELETE FROM combo_courses WHERE id=$1', [courseId]);
+    await pool.query(
+      'DELETE FROM combo_courses WHERE id=$1 AND tenant_id=$2',
+      [courseId, TENANT(req)]
+    );
     res.status(204).end();
   } catch (err) { next(err); }
 }
@@ -131,11 +149,18 @@ async function addCourseItem(req, res, next) {
   try {
     const { courseId } = req.params;
     const { menu_item_id, price_supplement = 0 } = req.body;
+    const tenantId = TENANT(req);
     if (!menu_item_id) return res.status(400).json({ error: 'menu_item_id obbligatorio' });
+    // Verify course belongs to tenant
+    const { rows: [parent] } = await pool.query(
+      'SELECT id FROM combo_courses WHERE id=$1 AND tenant_id=$2',
+      [courseId, tenantId]
+    );
+    if (!parent) return res.status(404).json({ error: 'Portata non trovata' });
     const { rows: [ci] } = await pool.query(
-      `INSERT INTO combo_course_items (course_id, menu_item_id, price_supplement)
-       VALUES ($1,$2,$3) ON CONFLICT (course_id, menu_item_id) DO UPDATE SET price_supplement=$3 RETURNING *`,
-      [courseId, menu_item_id, price_supplement]
+      `INSERT INTO combo_course_items (tenant_id, course_id, menu_item_id, price_supplement)
+       VALUES ($1,$2,$3,$4) ON CONFLICT (course_id, menu_item_id) DO UPDATE SET price_supplement=$4 RETURNING *`,
+      [tenantId, courseId, menu_item_id, price_supplement]
     );
     res.status(201).json(ci);
   } catch (err) { next(err); }
@@ -144,7 +169,10 @@ async function addCourseItem(req, res, next) {
 async function removeCourseItem(req, res, next) {
   try {
     const { itemId } = req.params;
-    await pool.query('DELETE FROM combo_course_items WHERE id=$1', [itemId]);
+    await pool.query(
+      'DELETE FROM combo_course_items WHERE id=$1 AND tenant_id=$2',
+      [itemId, TENANT(req)]
+    );
     res.status(204).end();
   } catch (err) { next(err); }
 }

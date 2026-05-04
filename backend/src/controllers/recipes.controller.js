@@ -1,6 +1,8 @@
 const pool = require('../config/db');
 
-// ── GET RECIPE FOR A MENU ITEM ────────────────────────────────
+// Tenant isolation: recipes / cost computations scoped al tenant.
+const TENANT = (req) => req.tenant.id;
+
 async function getRecipe(req, res, next) {
   try {
     const { itemId } = req.params;
@@ -9,15 +11,14 @@ async function getRecipe(req, res, next) {
               i.id AS ingredient_id, i.name, i.unit, i.current_stock, i.cost_per_unit
        FROM recipes r
        JOIN ingredients i ON i.id = r.ingredient_id
-       WHERE r.menu_item_id = $1
+       WHERE r.menu_item_id = $1 AND r.tenant_id = $2
        ORDER BY i.name`,
-      [itemId]
+      [itemId, TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
 }
 
-// ── ADD / UPDATE INGREDIENT IN RECIPE ────────────────────────
 async function upsertRecipeItem(req, res, next) {
   try {
     const { itemId } = req.params;
@@ -26,27 +27,28 @@ async function upsertRecipeItem(req, res, next) {
       return res.status(400).json({ error: 'ingredient_id e quantity obbligatori' });
     }
     const { rows } = await pool.query(
-      `INSERT INTO recipes (menu_item_id, ingredient_id, quantity)
-       VALUES ($1,$2,$3)
+      `INSERT INTO recipes (tenant_id, menu_item_id, ingredient_id, quantity)
+       VALUES ($1,$2,$3,$4)
        ON CONFLICT (menu_item_id, ingredient_id)
        DO UPDATE SET quantity = EXCLUDED.quantity
        RETURNING *`,
-      [itemId, ingredient_id, quantity]
+      [TENANT(req), itemId, ingredient_id, quantity]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
 }
 
-// ── REMOVE INGREDIENT FROM RECIPE ────────────────────────────
 async function removeRecipeItem(req, res, next) {
   try {
     const { recipeId } = req.params;
-    await pool.query('DELETE FROM recipes WHERE id=$1', [recipeId]);
+    await pool.query(
+      'DELETE FROM recipes WHERE id=$1 AND tenant_id=$2',
+      [recipeId, TENANT(req)]
+    );
     res.status(204).end();
   } catch (err) { next(err); }
 }
 
-// ── COST OF RECIPE (costo materie prime per porzione) ─────────
 async function getRecipeCost(req, res, next) {
   try {
     const { itemId } = req.params;
@@ -60,8 +62,8 @@ async function getRecipeCost(req, res, next) {
          ) ORDER BY i.name) AS breakdown
        FROM recipes r
        JOIN ingredients i ON i.id = r.ingredient_id
-       WHERE r.menu_item_id = $1`,
-      [itemId]
+       WHERE r.menu_item_id = $1 AND r.tenant_id = $2`,
+      [itemId, TENANT(req)]
     );
     res.json(rows[0]);
   } catch (err) { next(err); }

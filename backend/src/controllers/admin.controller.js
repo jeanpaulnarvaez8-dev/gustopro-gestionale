@@ -1,5 +1,9 @@
 const pool = require('../config/db');
 
+// Tenant isolation: ogni dashboard / analytics / report è scoped al tenant.
+// Senza filtro, l'admin del Bistrot vedrebbe le stats del Riva.
+const TENANT = (req) => req.tenant.id;
+
 async function getDashboardStats(req, res, next) {
   try {
     const { rows: [stats] } = await pool.query(
@@ -17,7 +21,9 @@ async function getDashboardStats(req, res, next) {
          COALESCE(AVG(total_amount) FILTER (
            WHERE status='completed' AND DATE(created_at AT TIME ZONE 'Europe/Rome') = CURRENT_DATE
          ), 0) AS avg_ticket_today
-       FROM orders`
+       FROM orders
+       WHERE tenant_id = $1`,
+      [TENANT(req)]
     );
 
     res.json({
@@ -39,11 +45,12 @@ async function getHourlyRevenue(req, res, next) {
        FROM orders
        WHERE status = 'completed'
          AND DATE(created_at AT TIME ZONE 'Europe/Rome') = CURRENT_DATE
+         AND tenant_id = $1
        GROUP BY hour
-       ORDER BY hour`
+       ORDER BY hour`,
+      [TENANT(req)]
     );
 
-    // Fill missing hours with 0
     const hourMap = {};
     rows.forEach(r => { hourMap[parseInt(r.hour)] = parseFloat(r.revenue); });
     const result = Array.from({ length: 24 }, (_, h) => ({
@@ -75,10 +82,11 @@ async function getTopItems(req, res, next) {
        WHERE o.status   = 'completed'
          AND oi.status != 'cancelled'
          AND o.created_at >= NOW() - ($1::int || ' days')::INTERVAL
+         AND o.tenant_id = $3
        GROUP BY mi.id, mi.name, c.name
        ORDER BY total_quantity DESC
        LIMIT $2`,
-      [days, limit]
+      [days, limit, TENANT(req)]
     );
 
     res.json(rows.map(r => ({
@@ -106,12 +114,12 @@ async function getByWeekday(req, res, next) {
        FROM orders
        WHERE status = 'completed'
          AND created_at >= NOW() - ($1::int || ' weeks')::INTERVAL
+         AND tenant_id = $2
        GROUP BY dow
        ORDER BY dow`,
-      [weeks]
+      [weeks, TENANT(req)]
     );
 
-    // DOW 0 = Sunday (PostgreSQL); remap Mon–Sun
     const IT_LABELS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
     const byDow = Object.fromEntries(rows.map(r => [parseInt(r.dow), r]));
 
@@ -130,21 +138,17 @@ async function getByWeekday(req, res, next) {
       };
     });
 
-    // Reorder: Mon(1) … Sat(6) Sun(0)
     res.json([...all.slice(1), all[0]]);
   } catch (err) { next(err); }
 }
 
-// ── getTaxReport ──────────────────────────────────────────────
-// Corrispettivi telematici per Agenzia delle Entrate
-// ?from=YYYY-MM-DD&to=YYYY-MM-DD (default: oggi)
 async function getTaxReport(req, res, next) {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const from  = req.query.from || today;
     const to    = req.query.to   || today;
+    const tenantId = TENANT(req);
 
-    // Breakdown IVA per aliquota (combo senza category → 10% default)
     const { rows: byAliquota } = await pool.query(
       `SELECT
          COALESCE(c.tax_rate, 10.00)::NUMERIC(5,2)  AS aliquota,
@@ -162,12 +166,12 @@ async function getTaxReport(req, res, next) {
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        LEFT JOIN categories  c  ON c.id = mi.category_id
        WHERE DATE(r.created_at AT TIME ZONE 'Europe/Rome') BETWEEN $1 AND $2
+         AND r.tenant_id = $3
        GROUP BY COALESCE(c.tax_rate, 10.00)
        ORDER BY aliquota`,
-      [from, to]
+      [from, to, tenantId]
     );
 
-    // Corrispettivi giornalieri
     const { rows: byDay } = await pool.query(
       `SELECT
          DATE(r.created_at AT TIME ZONE 'Europe/Rome') AS giorno,
@@ -176,9 +180,10 @@ async function getTaxReport(req, res, next) {
          SUM(r.tax_amount)    AS iva
        FROM receipts r
        WHERE DATE(r.created_at AT TIME ZONE 'Europe/Rome') BETWEEN $1 AND $2
+         AND r.tenant_id = $3
        GROUP BY giorno
        ORDER BY giorno`,
-      [from, to]
+      [from, to, tenantId]
     );
 
     const totale = byAliquota.reduce(
@@ -216,6 +221,7 @@ async function getStockReconciliation(req, res, next) {
     const today = new Date().toISOString().slice(0, 10);
     const from  = req.query.from || today;
     const to    = req.query.to   || today;
+    const tenantId = TENANT(req);
 
     const { rows } = await pool.query(`
       WITH movements_in_period AS (
@@ -228,6 +234,7 @@ async function getStockReconciliation(req, res, next) {
         FROM stock_movements
         WHERE created_at >= $1::date
           AND created_at <  $2::date + INTERVAL '1 day'
+          AND tenant_id = $3
         GROUP BY ingredient_id
       )
       SELECT
@@ -243,8 +250,9 @@ async function getStockReconciliation(req, res, next) {
       FROM ingredients i
       LEFT JOIN movements_in_period m ON m.ingredient_id = i.id
       WHERE i.is_active = true
+        AND i.tenant_id = $3
       ORDER BY i.name
-    `, [from, to]);
+    `, [from, to, tenantId]);
 
     res.json({
       periodo: { from, to },
@@ -283,10 +291,13 @@ async function getStaffPerformance(req, res, next) {
          COALESCE(SUM(spl.escalations), 0)::int AS escalations,
          ROUND(COALESCE(AVG(spl.score), 100), 1) AS avg_score
        FROM users u
-       LEFT JOIN staff_performance_log spl ON spl.user_id = u.id AND ${dateFilter}
+       LEFT JOIN staff_performance_log spl
+              ON spl.user_id = u.id AND spl.tenant_id = u.tenant_id AND ${dateFilter}
        WHERE u.role = 'waiter' AND u.is_active = true
+         AND u.tenant_id = $1
        GROUP BY u.id, u.name, u.sub_role
-       ORDER BY avg_score DESC, items_served DESC`
+       ORDER BY avg_score DESC, items_served DESC`,
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }

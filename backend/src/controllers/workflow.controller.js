@@ -1,20 +1,27 @@
 const pool = require('../config/db');
 const { getIO } = require('../socket');
 
+// Tenant isolation: ogni operazione su workflow/audit è scoped al tenant.
+// Helper functions che ricevono un transaction client accettano tenantId
+// come parametro esplicito.
+const TENANT = (req) => req.tenant.id;
+
 // ── Audit helper ────────────────────────────────────────────
-async function auditLog(client, { order_id, item_id, action, from_value, to_value, user_id, user_name, metadata }) {
+async function auditLog(client, { tenant_id, order_id, item_id, action, from_value, to_value, user_id, user_name, metadata }) {
+  if (!tenant_id) {
+    throw new Error('auditLog: tenant_id obbligatorio per multi-tenant safety');
+  }
   return client.query(
-    `INSERT INTO order_audit_log (order_id, item_id, action, from_value, to_value, user_id, user_name, metadata)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [order_id, item_id, action, from_value || null, to_value || null, user_id || null, user_name || null, metadata ? JSON.stringify(metadata) : null]
+    `INSERT INTO order_audit_log (tenant_id, order_id, item_id, action, from_value, to_value, user_id, user_name, metadata)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [tenant_id, order_id, item_id, action, from_value || null, to_value || null, user_id || null, user_name || null, metadata ? JSON.stringify(metadata) : null]
   );
 }
 
 // ── Cambia workflow_status di un singolo item ───────────────
-// PATCH /api/workflow/items/:itemId/status
-// Body: { workflow_status: 'waiting' | 'production' | 'delivered' }
 async function changeWorkflowStatus(req, res, next) {
   const client = await pool.connect();
+  const tenantId = TENANT(req);
   try {
     const { itemId } = req.params;
     const { workflow_status } = req.body;
@@ -24,29 +31,23 @@ async function changeWorkflowStatus(req, res, next) {
     }
 
     const { rows: [item] } = await client.query(
-      'SELECT oi.*, o.waiter_id, o.table_id FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE oi.id = $1',
-      [itemId]
+      `SELECT oi.*, o.waiter_id, o.table_id
+         FROM order_items oi JOIN orders o ON o.id = oi.order_id
+         WHERE oi.id = $1 AND oi.tenant_id = $2`,
+      [itemId, tenantId]
     );
     if (!item) return res.status(404).json({ error: 'Item non trovato' });
 
-    // Solo cameriere assegnato, manager o admin possono cambiare workflow
     const isOwner = req.user.id === item.waiter_id;
     const isPrivileged = ['admin', 'manager'].includes(req.user.role);
     if (!isOwner && !isPrivileged) {
       return res.status(403).json({ error: 'Non autorizzato a modificare questo item' });
     }
 
-    // Validazione transizioni
     const from = item.workflow_status;
     if (from === workflow_status) {
       return res.status(400).json({ error: 'Lo stato e\' gia\' impostato' });
     }
-
-    // A → P: sblocco (rilascio in produzione)
-    // A → C: non permesso (deve passare da P)
-    // P → A: non permesso (gia' in cucina)
-    // P → C: consegnato (da KDS/cameriere)
-    // C → qualsiasi: non permesso
     if (from === 'delivered') {
       return res.status(400).json({ error: 'Una voce consegnata non puo\' cambiare stato' });
     }
@@ -66,13 +67,13 @@ async function changeWorkflowStatus(req, res, next) {
          workflow_status = $1,
          released_at = CASE WHEN $3 THEN NOW() ELSE released_at END,
          status = CASE WHEN $3 THEN 'pending' ELSE status END
-       WHERE id = $2 RETURNING *`,
-      [workflow_status, itemId, isRelease]
+       WHERE id = $2 AND tenant_id = $4 RETURNING *`,
+      [workflow_status, itemId, isRelease, tenantId]
     );
 
-    // Audit log
     const action = from === 'waiting' && workflow_status === 'production' ? 'alert_released' : 'workflow_change';
     await auditLog(client, {
+      tenant_id: tenantId,
       order_id: item.order_id,
       item_id: itemId,
       action,
@@ -85,7 +86,6 @@ async function changeWorkflowStatus(req, res, next) {
 
     await client.query('COMMIT');
 
-    // Socket events
     const io = getIO();
     if (io) {
       io.emit('workflow-status-changed', {
@@ -94,8 +94,6 @@ async function changeWorkflowStatus(req, res, next) {
         from: from,
         to: workflow_status,
       });
-
-      // Se sbloccato (A → P), notifica cucina
       if (from === 'waiting' && workflow_status === 'production') {
         io.emit('item-released-to-production', {
           orderId: item.order_id,
@@ -113,8 +111,6 @@ async function changeWorkflowStatus(req, res, next) {
   }
 }
 
-// ── Monitor Attese: voci in waiting ─────────────────────────
-// GET /api/workflow/waiting
 async function getWaitingItems(req, res, next) {
   try {
     const { rows } = await pool.query(
@@ -140,10 +136,11 @@ async function getWaitingItems(req, res, next) {
        WHERE oi.workflow_status = 'waiting'
          AND oi.status NOT IN ('served', 'cancelled')
          AND o.status = 'open'
-       ORDER BY oi.inserted_at ASC`
+         AND oi.tenant_id = $1
+       ORDER BY oi.inserted_at ASC`,
+      [TENANT(req)]
     );
 
-    // Raggruppa per ordine
     const ordersMap = {};
     for (const row of rows) {
       if (!ordersMap[row.order_id]) {
@@ -171,8 +168,6 @@ async function getWaitingItems(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ── Incroci: piatti uguali su piu' tavoli ───────────────────
-// GET /api/workflow/crossmatches
 async function getCrossmatches(req, res, next) {
   try {
     const { rows } = await pool.query(
@@ -197,19 +192,19 @@ async function getCrossmatches(req, res, next) {
        WHERE oi.workflow_status IN ('waiting', 'production')
          AND oi.status NOT IN ('served', 'cancelled')
          AND o.status = 'open'
+         AND oi.tenant_id = $1
        GROUP BY mi.id, mi.name, c.course_type
        HAVING COUNT(DISTINCT o.id) > 1
-       ORDER BY SUM(oi.quantity) DESC`
+       ORDER BY SUM(oi.quantity) DESC`,
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
 }
 
-// ── Risposta alert obbligatorio (libera / rinvia) ───────────
-// POST /api/workflow/alerts/:alertId/respond
-// Body: { action: 'release' | 'defer', defer_minutes?: 2|3|5|number }
 async function respondToAlert(req, res, next) {
   const client = await pool.connect();
+  const tenantId = TENANT(req);
   try {
     const { alertId } = req.params;
     const { action, defer_minutes } = req.body;
@@ -222,28 +217,27 @@ async function respondToAlert(req, res, next) {
       `SELECT sa.*, oi.order_id, oi.workflow_status, oi.id AS oi_id
        FROM service_alerts sa
        JOIN order_items oi ON oi.id = sa.order_item_id
-       WHERE sa.id = $1 AND sa.acknowledged = false`,
-      [alertId]
+       WHERE sa.id = $1 AND sa.acknowledged = false AND sa.tenant_id = $2`,
+      [alertId, tenantId]
     );
     if (!alert) return res.status(404).json({ error: 'Alert non trovato o gia\' gestito' });
 
     await client.query('BEGIN');
 
     if (action === 'release') {
-      // Sblocca: A → P
       if (alert.workflow_status === 'waiting') {
         await client.query(
-          `UPDATE order_items SET workflow_status = 'production', released_at = NOW(), status = 'pending' WHERE id = $1`,
-          [alert.oi_id]
+          `UPDATE order_items SET workflow_status = 'production', released_at = NOW(), status = 'pending'
+             WHERE id = $1 AND tenant_id = $2`,
+          [alert.oi_id, tenantId]
         );
       }
-      // Chiudi alert
       await client.query(
-        'UPDATE service_alerts SET acknowledged = true WHERE id = $1',
-        [alertId]
+        'UPDATE service_alerts SET acknowledged = true WHERE id = $1 AND tenant_id = $2',
+        [alertId, tenantId]
       );
-      // Audit
       await auditLog(client, {
+        tenant_id: tenantId,
         order_id: alert.order_id,
         item_id: alert.oi_id,
         action: 'alert_released',
@@ -255,7 +249,6 @@ async function respondToAlert(req, res, next) {
 
       await client.query('COMMIT');
 
-      // Socket: notifica cucina
       const io = getIO();
       if (io) {
         io.emit('workflow-status-changed', {
@@ -272,7 +265,6 @@ async function respondToAlert(req, res, next) {
 
       res.json({ status: 'released', item_id: alert.oi_id });
     } else {
-      // Rinvia
       const minutes = Math.max(1, Math.min(parseInt(defer_minutes) || 3, 30));
       const deferEntry = { deferred_at: new Date().toISOString(), minutes, user_id: req.user.id };
 
@@ -281,11 +273,11 @@ async function respondToAlert(req, res, next) {
            postponed_until = NOW() + make_interval(mins => $1),
            defer_count = defer_count + 1,
            defer_history = defer_history || $2::jsonb
-         WHERE id = $3`,
-        [minutes, JSON.stringify([deferEntry]), alertId]
+         WHERE id = $3 AND tenant_id = $4`,
+        [minutes, JSON.stringify([deferEntry]), alertId, tenantId]
       );
-      // Audit
       await auditLog(client, {
+        tenant_id: tenantId,
         order_id: alert.order_id,
         item_id: alert.oi_id,
         action: 'alert_deferred',
@@ -307,8 +299,6 @@ async function respondToAlert(req, res, next) {
   }
 }
 
-// ── Alert pendenti per cameriere ────────────────────────────
-// GET /api/workflow/alerts/pending
 async function getPendingAlerts(req, res, next) {
   try {
     const { rows } = await pool.query(
@@ -328,15 +318,14 @@ async function getPendingAlerts(req, res, next) {
          AND o.status = 'open'
          AND (sa.target_user_id = $1 OR sa.target_user_id IS NULL)
          AND (sa.postponed_until IS NULL OR sa.postponed_until <= NOW())
+         AND sa.tenant_id = $2
        ORDER BY sa.created_at ASC`,
-      [req.user.id]
+      [req.user.id, TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
 }
 
-// ── Alert admin: voci inserite come Consegnato diretto ──────
-// GET /api/workflow/alerts/direct-delivered
 async function getDirectDeliveredAlerts(req, res, next) {
   try {
     const { rows } = await pool.query(
@@ -347,23 +336,22 @@ async function getDirectDeliveredAlerts(req, res, next) {
        LEFT JOIN orders o ON o.id = al.order_id
        LEFT JOIN tables t ON t.id = o.table_id
        LEFT JOIN zones z ON z.id = t.zone_id
-       WHERE al.action = 'direct_delivered'
+       WHERE al.action = 'direct_delivered' AND al.tenant_id = $1
        ORDER BY al.created_at DESC
-       LIMIT 50`
+       LIMIT 50`,
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
 }
 
-// ── Cancella voce (solo admin/manager) ──────────────────────
-// DELETE /api/workflow/items/:itemId
 async function deleteItem(req, res, next) {
-  // Double-check: solo admin/manager possono cancellare
   if (!['admin', 'manager'].includes(req.user?.role)) {
     return res.status(403).json({ error: 'Solo admin o responsabili possono cancellare voci' });
   }
 
   const client = await pool.connect();
+  const tenantId = TENANT(req);
   try {
     const { itemId } = req.params;
 
@@ -375,21 +363,20 @@ async function deleteItem(req, res, next) {
        JOIN orders o ON o.id = oi.order_id
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        LEFT JOIN tables t ON t.id = o.table_id
-       WHERE oi.id = $1`,
-      [itemId]
+       WHERE oi.id = $1 AND oi.tenant_id = $2`,
+      [itemId, tenantId]
     );
     if (!item) return res.status(404).json({ error: 'Item non trovato' });
 
     await client.query('BEGIN');
 
-    // Non cancella fisicamente, segna come cancelled
     await client.query(
-      "UPDATE order_items SET status = 'cancelled' WHERE id = $1",
-      [itemId]
+      "UPDATE order_items SET status = 'cancelled' WHERE id = $1 AND tenant_id = $2",
+      [itemId, tenantId]
     );
 
-    // Audit completo
     await auditLog(client, {
+      tenant_id: tenantId,
       order_id: item.order_id,
       item_id: itemId,
       action: 'item_delete',
@@ -422,8 +409,6 @@ async function deleteItem(req, res, next) {
   }
 }
 
-// ── Audit log per ordine ────────────────────────────────────
-// GET /api/workflow/audit/:orderId
 async function getAuditLog(req, res, next) {
   try {
     const { orderId } = req.params;
@@ -433,9 +418,9 @@ async function getAuditLog(req, res, next) {
        FROM order_audit_log al
        LEFT JOIN order_items oi ON oi.id = al.item_id
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
-       WHERE al.order_id = $1
+       WHERE al.order_id = $1 AND al.tenant_id = $2
        ORDER BY al.created_at ASC`,
-      [orderId]
+      [orderId, TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }

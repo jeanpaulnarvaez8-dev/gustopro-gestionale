@@ -1,5 +1,8 @@
 const pool = require('../config/db');
 
+// Tenant isolation: ingredienti, stock, movimenti scoped al tenant.
+const TENANT = (req) => req.tenant.id;
+
 // ── LIST ─────────────────────────────────────────────────────
 async function listIngredients(req, res, next) {
   try {
@@ -9,8 +12,9 @@ async function listIngredients(req, res, next) {
               CASE WHEN i.min_stock > 0 AND i.current_stock <= i.min_stock THEN true ELSE false END AS low_stock
        FROM ingredients i
        LEFT JOIN suppliers s ON s.id = i.supplier_id
-       WHERE i.is_active = true
-       ORDER BY i.name`
+       WHERE i.is_active = true AND i.tenant_id = $1
+       ORDER BY i.name`,
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -23,7 +27,9 @@ async function getLowStock(req, res, next) {
        FROM ingredients i
        LEFT JOIN suppliers s ON s.id = i.supplier_id
        WHERE i.is_active = true AND i.min_stock > 0 AND i.current_stock <= i.min_stock
-       ORDER BY (i.current_stock / NULLIF(i.min_stock, 0)) ASC`
+         AND i.tenant_id = $1
+       ORDER BY (i.current_stock / NULLIF(i.min_stock, 0)) ASC`,
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -35,9 +41,9 @@ async function createIngredient(req, res, next) {
     const { name, unit = 'kg', current_stock = 0, min_stock = 0, cost_per_unit = 0, supplier_id } = req.body;
     if (!name) return res.status(400).json({ error: 'name obbligatorio' });
     const { rows } = await pool.query(
-      `INSERT INTO ingredients (name, unit, current_stock, min_stock, cost_per_unit, supplier_id)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [name, unit, current_stock, min_stock, cost_per_unit, supplier_id || null]
+      `INSERT INTO ingredients (tenant_id, name, unit, current_stock, min_stock, cost_per_unit, supplier_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [TENANT(req), name, unit, current_stock, min_stock, cost_per_unit, supplier_id || null]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -56,9 +62,9 @@ async function updateIngredient(req, res, next) {
          cost_per_unit = COALESCE($4, cost_per_unit),
          supplier_id   = COALESCE($5, supplier_id),
          is_active     = COALESCE($6, is_active)
-       WHERE id=$7 RETURNING *`,
+       WHERE id=$7 AND tenant_id=$8 RETURNING *`,
       [name || null, unit || null, min_stock ?? null, cost_per_unit ?? null,
-       supplier_id || null, is_active ?? null, id]
+       supplier_id || null, is_active ?? null, id, TENANT(req)]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Ingrediente non trovato' });
     res.json(rows[0]);
@@ -68,6 +74,7 @@ async function updateIngredient(req, res, next) {
 // ── ADJUST STOCK ─────────────────────────────────────────────
 async function adjustStock(req, res, next) {
   const client = await pool.connect();
+  const tenantId = TENANT(req);
   try {
     const { id } = req.params;
     const { quantity, type, notes } = req.body;
@@ -82,15 +89,15 @@ async function adjustStock(req, res, next) {
     const { rows } = await client.query(
       `UPDATE ingredients
        SET current_stock = GREATEST(0, current_stock + $1), updated_at = NOW()
-       WHERE id=$2 RETURNING *`,
-      [delta, id]
+       WHERE id=$2 AND tenant_id=$3 RETURNING *`,
+      [delta, id, tenantId]
     );
     if (!rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Ingrediente non trovato' }); }
 
     await client.query(
-      `INSERT INTO stock_movements (ingredient_id, type, quantity, reference_type, notes, created_by)
-       VALUES ($1,$2,$3,'manual',$4,$5)`,
-      [id, type, Math.abs(quantity), notes || null, req.user.id]
+      `INSERT INTO stock_movements (tenant_id, ingredient_id, type, quantity, reference_type, notes, created_by)
+       VALUES ($1,$2,$3,$4,'manual',$5,$6)`,
+      [tenantId, id, type, Math.abs(quantity), notes || null, req.user.id]
     );
 
     await client.query('COMMIT');
@@ -109,10 +116,10 @@ async function getMovements(req, res, next) {
       `SELECT sm.*, u.name AS created_by_name
        FROM stock_movements sm
        LEFT JOIN users u ON u.id = sm.created_by
-       WHERE sm.ingredient_id = $1
+       WHERE sm.ingredient_id = $1 AND sm.tenant_id = $2
        ORDER BY sm.created_at DESC
        LIMIT 100`,
-      [id]
+      [id, TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
