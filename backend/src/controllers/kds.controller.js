@@ -130,7 +130,7 @@ async function updateItemStatus(req, res, next) {
         [item.order_id, tenantId]
       );
       if (orderInfo) {
-        trackItemServed(orderInfo.waiter_id, item.ready_at, item.served_at);
+        trackItemServed(tenantId, orderInfo.waiter_id, item.ready_at, item.served_at);
       }
     }
 
