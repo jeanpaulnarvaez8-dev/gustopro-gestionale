@@ -10,12 +10,34 @@
 #   Aggiungere: */5 * * * * /share/ZFS20_DATA/dev-projects/gustopro-gestionale/scripts/auto-deploy.sh >> /share/ZFS20_DATA/dev-projects/gustopro-gestionale/logs/deploy.log 2>&1
 # ─────────────────────────────────────────────────────
 
-export PATH="/share/ZFS530_DATA/.qpkg/container-station/bin:/opt/bin:/opt/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+export PATH="/share/ZFS530_DATA/.qpkg/container-station/bin:/share/ZFS2_DATA/.qpkg/container-station/bin:/share/CACHEDEV1_DATA/.qpkg/container-station/bin:/opt/bin:/opt/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
-PROJECT_DIR="/share/ZFS20_DATA/dev-projects/gustopro-gestionale"
+# Auto-detect project root from this script's location.
+# Survives share renames (e.g. ZFS20_DATA -> ZFS2_DATA after firmware upgrade)
+# without needing manual path edits.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_PREFIX="[$(date '+%Y-%m-%d %H:%M:%S')]"
 
 cd "$PROJECT_DIR" || { echo "$LOG_PREFIX ERRORE: directory non trovata $PROJECT_DIR"; exit 1; }
+if [ ! -f "$PROJECT_DIR/docker-compose.yml" ]; then
+  echo "$LOG_PREFIX ERRORE: docker-compose.yml mancante in $PROJECT_DIR"
+  exit 1
+fi
+
+# Resolve docker binary — Container Station can live under different shares
+# depending on QNAP firmware / pool layout. If docker isn't already in PATH,
+# search the .qpkg directories and prepend the right one.
+if ! command -v docker >/dev/null 2>&1; then
+  DOCKER_BIN="$(find /share -maxdepth 4 -path '*/.qpkg/container-station/bin/docker' -type f 2>/dev/null | head -1)"
+  if [ -n "$DOCKER_BIN" ]; then
+    export PATH="$(dirname "$DOCKER_BIN"):$PATH"
+    echo "$LOG_PREFIX docker risolto in $DOCKER_BIN"
+  else
+    echo "$LOG_PREFIX ERRORE: docker non trovato (Container Station installato?)"
+    exit 1
+  fi
+fi
 
 # ── Fix nginx gustopro.conf (gira SEMPRE, anche senza nuovi commit) ──
 NGINX_CONF_DIR="/share/Container/fix-point/nginx/conf.d"
