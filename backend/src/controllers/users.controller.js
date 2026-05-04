@@ -1,10 +1,19 @@
 const bcrypt = require('bcrypt');
 const pool = require('../config/db');
 
+// Tenant isolation: every read/write is scoped to req.tenant.id, set by
+// the resolveTenant middleware. Without this filter, an admin of tenant A
+// could enumerate / modify / delete users of tenant B.
+const TENANT = (req) => req.tenant.id;
+
 async function listUsers(req, res, next) {
   try {
     const { rows } = await pool.query(
-      'SELECT id, name, role, sub_role, is_active, created_at FROM users ORDER BY name'
+      `SELECT id, name, role, sub_role, is_active, created_at
+         FROM users
+         WHERE tenant_id = $1
+         ORDER BY name`,
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -19,9 +28,10 @@ async function createUser(req, res, next) {
     const pin_hash = await bcrypt.hash(pin, 10);
     const subRole = role === 'waiter' ? (sub_role || null) : null;
     const { rows } = await pool.query(
-      `INSERT INTO users (name, pin_hash, role, sub_role) VALUES ($1,$2,$3,$4)
-       RETURNING id, name, role, sub_role, is_active, created_at`,
-      [name, pin_hash, role, subRole]
+      `INSERT INTO users (tenant_id, name, pin_hash, role, sub_role)
+         VALUES ($1,$2,$3,$4,$5)
+         RETURNING id, name, role, sub_role, is_active, created_at`,
+      [TENANT(req), name, pin_hash, role, subRole]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -50,10 +60,14 @@ async function updateUser(req, res, next) {
 
     if (!fields.length) return res.status(400).json({ error: 'Nessun campo da aggiornare' });
     values.push(id);
+    const idIdx = i++;
+    values.push(TENANT(req));
+    const tenantIdx = i;
 
     const { rows } = await pool.query(
-      `UPDATE users SET ${fields.join(',')} WHERE id=$${i}
-       RETURNING id, name, role, sub_role, is_active, created_at`,
+      `UPDATE users SET ${fields.join(',')}
+         WHERE id=$${idIdx} AND tenant_id=$${tenantIdx}
+         RETURNING id, name, role, sub_role, is_active, created_at`,
       values
     );
     if (!rows[0]) return res.status(404).json({ error: 'Utente non trovato' });
@@ -64,7 +78,10 @@ async function updateUser(req, res, next) {
 async function deleteUser(req, res, next) {
   try {
     const { id } = req.params;
-    await pool.query('UPDATE users SET is_active=false WHERE id=$1', [id]);
+    await pool.query(
+      'UPDATE users SET is_active=false WHERE id=$1 AND tenant_id=$2',
+      [id, TENANT(req)]
+    );
     res.status(204).end();
   } catch (err) { next(err); }
 }

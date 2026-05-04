@@ -1,12 +1,16 @@
 const pool = require('../config/db');
 
+// Tenant isolation: every menu query is scoped to req.tenant.id.
+const TENANT = (req) => req.tenant.id;
+
 async function listCategories(req, res, next) {
   try {
     const all = req.query.all === 'true';
     const { rows } = await pool.query(
       all
-        ? 'SELECT * FROM categories ORDER BY sort_order, name'
-        : 'SELECT * FROM categories WHERE is_active=true ORDER BY sort_order, name'
+        ? 'SELECT * FROM categories WHERE tenant_id=$1 ORDER BY sort_order, name'
+        : 'SELECT * FROM categories WHERE tenant_id=$1 AND is_active=true ORDER BY sort_order, name',
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -17,12 +21,12 @@ async function listItems(req, res, next) {
     const { categoryId } = req.query;
     const all = req.query.all === 'true';
     let query = all
-      ? 'SELECT * FROM menu_items WHERE 1=1'
-      : 'SELECT * FROM menu_items WHERE is_available=true';
-    const params = [];
+      ? 'SELECT * FROM menu_items WHERE tenant_id=$1'
+      : 'SELECT * FROM menu_items WHERE tenant_id=$1 AND is_available=true';
+    const params = [TENANT(req)];
     if (categoryId) {
-      query += ` AND category_id=$1`;
       params.push(categoryId);
+      query += ` AND category_id=$${params.length}`;
     }
     query += ' ORDER BY sort_order, name';
     const { rows } = await pool.query(query, params);
@@ -48,8 +52,10 @@ async function getItemModifiers(req, res, next) {
        JOIN modifier_groups mg ON mg.id = img.group_id
        JOIN modifiers m        ON m.group_id = mg.id AND m.is_active = true
        WHERE img.item_id = $1
+         AND img.tenant_id = $2
+         AND mg.tenant_id = $2
        ORDER BY mg.id, m.sort_order`,
-      [id]
+      [id, TENANT(req)]
     );
     const grouped = {};
     for (const row of rows) {
@@ -79,8 +85,8 @@ async function createCategory(req, res, next) {
     const { name, sort_order = 0, tax_rate = 10.00 } = req.body;
     if (!name) return res.status(400).json({ error: 'name obbligatorio' });
     const { rows } = await pool.query(
-      'INSERT INTO categories (name, sort_order, tax_rate) VALUES ($1,$2,$3) RETURNING *',
-      [name, sort_order, tax_rate]
+      'INSERT INTO categories (tenant_id, name, sort_order, tax_rate) VALUES ($1,$2,$3,$4) RETURNING *',
+      [TENANT(req), name, sort_order, tax_rate]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -98,8 +104,8 @@ async function updateCategory(req, res, next) {
          is_active   = COALESCE($4, is_active),
          course_type = COALESCE($5, course_type),
          is_beverage = COALESCE($6, is_beverage)
-       WHERE id=$7 RETURNING *`,
-      [name || null, sort_order ?? null, tax_rate ?? null, is_active ?? null, course_type ?? null, is_beverage ?? null, id]
+       WHERE id=$7 AND tenant_id=$8 RETURNING *`,
+      [name || null, sort_order ?? null, tax_rate ?? null, is_active ?? null, course_type ?? null, is_beverage ?? null, id, TENANT(req)]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Categoria non trovata' });
     res.json(rows[0]);
@@ -109,7 +115,10 @@ async function updateCategory(req, res, next) {
 async function deleteCategory(req, res, next) {
   try {
     const { id } = req.params;
-    await pool.query('UPDATE categories SET is_active=false WHERE id=$1', [id]);
+    await pool.query(
+      'UPDATE categories SET is_active=false WHERE id=$1 AND tenant_id=$2',
+      [id, TENANT(req)]
+    );
     res.status(204).end();
   } catch (err) { next(err); }
 }
@@ -121,9 +130,9 @@ async function createItem(req, res, next) {
       return res.status(400).json({ error: 'category_id, name, base_price obbligatori' });
     }
     const { rows } = await pool.query(
-      `INSERT INTO menu_items (category_id, name, description, base_price, prep_time_mins, sort_order, allergens, pricing_type)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [category_id, name, description || null, base_price, prep_time_mins || null, sort_order, JSON.stringify(allergens), pricing_type]
+      `INSERT INTO menu_items (tenant_id, category_id, name, description, base_price, prep_time_mins, sort_order, allergens, pricing_type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [TENANT(req), category_id, name, description || null, base_price, prep_time_mins || null, sort_order, JSON.stringify(allergens), pricing_type]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -143,11 +152,11 @@ async function updateItem(req, res, next) {
          prep_time_mins = COALESCE($6, prep_time_mins),
          allergens      = COALESCE($7, allergens),
          pricing_type   = COALESCE($8, pricing_type)
-       WHERE id=$9 RETURNING *`,
+       WHERE id=$9 AND tenant_id=$10 RETURNING *`,
       [name || null, description ?? null, base_price ?? null, is_available ?? null,
        sort_order ?? null, prep_time_mins ?? null,
        allergens !== undefined ? JSON.stringify(allergens) : null,
-       pricing_type ?? null, id]
+       pricing_type ?? null, id, TENANT(req)]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Item non trovato' });
     res.json(rows[0]);
@@ -157,7 +166,10 @@ async function updateItem(req, res, next) {
 async function deleteItem(req, res, next) {
   try {
     const { id } = req.params;
-    await pool.query('UPDATE menu_items SET is_available=false WHERE id=$1', [id]);
+    await pool.query(
+      'UPDATE menu_items SET is_available=false WHERE id=$1 AND tenant_id=$2',
+      [id, TENANT(req)]
+    );
     res.status(204).end();
   } catch (err) { next(err); }
 }

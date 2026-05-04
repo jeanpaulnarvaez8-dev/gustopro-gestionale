@@ -2,21 +2,28 @@ const pool = require('../config/db');
 const { getIO } = require('../socket');
 const { auditLog } = require('./workflow.controller');
 
+// Tenant isolation: every order/item operation is scoped to req.tenant.id.
+// Helper functions take tenantId as an explicit parameter because they
+// receive a transaction client (not req).
+const TENANT = (req) => req.tenant.id;
+
 // ── Helpers ──────────────────────────────────────────────────
 
-async function insertRegularItem(client, order_id, item, userId) {
+async function insertRegularItem(client, order_id, item, userId, tenantId) {
   const { menu_item_id, quantity = 1, notes: itemNotes, modifiers = [], weight_g, workflow_status = 'production' } = item;
 
+  // menu_item must belong to the same tenant
   const { rows: [menuItem] } = await client.query(
-    'SELECT base_price, pricing_type, name FROM menu_items WHERE id=$1 AND is_available=true',
-    [menu_item_id]
+    'SELECT base_price, pricing_type, name FROM menu_items WHERE id=$1 AND is_available=true AND tenant_id=$2',
+    [menu_item_id, tenantId]
   );
   if (!menuItem) throw { status: 400, message: `Item ${menu_item_id} non disponibile` };
 
   let modifierTotal = 0;
   for (const mod of modifiers) {
     const { rows: [m] } = await client.query(
-      'SELECT price_extra FROM modifiers WHERE id=$1 AND is_active=true', [mod.modifier_id]
+      'SELECT price_extra FROM modifiers WHERE id=$1 AND is_active=true AND tenant_id=$2',
+      [mod.modifier_id, tenantId]
     );
     if (m) modifierTotal += parseFloat(m.price_extra);
   }
@@ -25,49 +32,46 @@ async function insertRegularItem(client, order_id, item, userId) {
   let subtotal;
 
   if (menuItem.pricing_type === 'per_kg' && weight_g) {
-    // Prezzo al kg: base_price = €/kg, calcolo in base al peso
     unitPrice = (parseFloat(menuItem.base_price) * weight_g) / 1000;
     subtotal = (unitPrice + modifierTotal) * quantity;
   } else {
     subtotal = (unitPrice + modifierTotal) * quantity;
   }
 
-  // Valida workflow_status
   const wfStatus = ['waiting', 'production', 'delivered'].includes(workflow_status) ? workflow_status : 'production';
-  // Se consegnato diretto: status = 'served', altrimenti 'pending'
   const itemStatus = wfStatus === 'delivered' ? 'served' : 'pending';
-
   const servedAt = wfStatus === 'delivered' ? new Date() : null;
 
   const { rows: [orderItem] } = await client.query(
     `INSERT INTO order_items
-       (order_id, menu_item_id, quantity, unit_price, modifier_total, subtotal, notes, weight_g,
+       (tenant_id, order_id, menu_item_id, quantity, unit_price, modifier_total, subtotal, notes, weight_g,
         workflow_status, status, inserted_by, served_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-    [order_id, menu_item_id, quantity, unitPrice, modifierTotal, subtotal, itemNotes || null, weight_g || null,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    [tenantId, order_id, menu_item_id, quantity, unitPrice, modifierTotal, subtotal, itemNotes || null, weight_g || null,
      wfStatus, itemStatus, userId, servedAt]
   );
 
   for (const mod of modifiers) {
     const { rows: [m] } = await client.query(
-      'SELECT price_extra FROM modifiers WHERE id=$1', [mod.modifier_id]
+      'SELECT price_extra FROM modifiers WHERE id=$1 AND tenant_id=$2',
+      [mod.modifier_id, tenantId]
     );
     if (m) {
       await client.query(
-        'INSERT INTO order_item_modifiers (order_item_id, modifier_id, price_extra) VALUES ($1,$2,$3)',
-        [orderItem.id, mod.modifier_id, m.price_extra]
+        'INSERT INTO order_item_modifiers (tenant_id, order_item_id, modifier_id, price_extra) VALUES ($1,$2,$3,$4)',
+        [tenantId, orderItem.id, mod.modifier_id, m.price_extra]
       );
     }
   }
   return orderItem;
 }
 
-async function insertComboItem(client, order_id, item, userId) {
+async function insertComboItem(client, order_id, item, userId, tenantId) {
   const { combo_menu_id, quantity = 1, selections = [], notes: itemNotes, workflow_status = 'production' } = item;
 
   const { rows: [combo] } = await client.query(
-    'SELECT id, name, price FROM combo_menus WHERE id=$1 AND is_active=true',
-    [combo_menu_id]
+    'SELECT id, name, price FROM combo_menus WHERE id=$1 AND is_active=true AND tenant_id=$2',
+    [combo_menu_id, tenantId]
   );
   if (!combo) throw { status: 400, message: `Combo ${combo_menu_id} non disponibile` };
 
@@ -76,16 +80,15 @@ async function insertComboItem(client, order_id, item, userId) {
 
   const wfStatus = ['waiting', 'production', 'delivered'].includes(workflow_status) ? workflow_status : 'production';
   const itemStatus = wfStatus === 'delivered' ? 'served' : 'pending';
-
   const servedAt = wfStatus === 'delivered' ? new Date() : null;
 
   const { rows: [orderItem] } = await client.query(
     `INSERT INTO order_items
-       (order_id, menu_item_id, combo_menu_id, combo_menu_name, combo_selections,
+       (tenant_id, order_id, menu_item_id, combo_menu_id, combo_menu_name, combo_selections,
         quantity, unit_price, modifier_total, subtotal, notes,
         workflow_status, status, inserted_by, served_at)
-     VALUES ($1,NULL,$2,$3,$4,$5,$6,0,$7,$8,$9,$10,$11,$12) RETURNING *`,
-    [order_id, combo.id, combo.name, JSON.stringify(selections),
+     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,0,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    [tenantId, order_id, combo.id, combo.name, JSON.stringify(selections),
      quantity, unitPrice, subtotal, itemNotes || null,
      wfStatus, itemStatus, userId, servedAt]
   );
@@ -96,6 +99,7 @@ async function insertComboItem(client, order_id, item, userId) {
 
 async function createOrder(req, res, next) {
   const client = await pool.connect();
+  const tenantId = TENANT(req);
   try {
     const {
       table_id, items, notes, covers = 1,
@@ -112,13 +116,15 @@ async function createOrder(req, res, next) {
 
     await client.query('BEGIN');
 
-    // Race-condition guard: impedisce 2 ordini 'open' sullo stesso tavolo
-    // Locka la row del tavolo fino al COMMIT. Se esiste già ordine open, ritorna 409.
+    // Race-condition guard, tenant-scoped
     if (order_type === 'table' && table_id) {
-      await client.query('SELECT id FROM tables WHERE id = $1 FOR UPDATE', [table_id]);
+      await client.query(
+        'SELECT id FROM tables WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+        [table_id, tenantId]
+      );
       const { rows: existing } = await client.query(
-        `SELECT id FROM orders WHERE table_id = $1 AND status = 'open' LIMIT 1`,
-        [table_id]
+        `SELECT id FROM orders WHERE table_id = $1 AND tenant_id = $2 AND status = 'open' LIMIT 1`,
+        [table_id, tenantId]
       );
       if (existing.length > 0) {
         await client.query('ROLLBACK');
@@ -131,9 +137,9 @@ async function createOrder(req, res, next) {
 
     const { rows: [order] } = await client.query(
       `INSERT INTO orders
-         (table_id, waiter_id, notes, order_type, customer_name, customer_phone, pickup_time, covers)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [table_id || null, req.user.id, notes || null,
+         (tenant_id, table_id, waiter_id, notes, order_type, customer_name, customer_phone, pickup_time, covers)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [tenantId, table_id || null, req.user.id, notes || null,
        order_type, customer_name || null, customer_phone || null, pickup_time || null,
        Math.max(1, parseInt(covers) || 1)]
     );
@@ -142,11 +148,10 @@ async function createOrder(req, res, next) {
     for (const item of items) {
       try {
         const oi = item.type === 'combo'
-          ? await insertComboItem(client, order.id, item, req.user.id)
-          : await insertRegularItem(client, order.id, item, req.user.id);
+          ? await insertComboItem(client, order.id, item, req.user.id, tenantId)
+          : await insertRegularItem(client, order.id, item, req.user.id, tenantId);
         orderItems.push(oi);
 
-        // Audit log per ogni item inserito
         const action = oi.workflow_status === 'delivered' ? 'direct_delivered' : 'item_insert';
         await auditLog(client, {
           order_id: order.id,
@@ -166,32 +171,33 @@ async function createOrder(req, res, next) {
     await client.query('COMMIT');
 
     // Re-fetch order so trigger-recalculated totals are included
-    const { rows: [updatedOrder] } = await pool.query('SELECT * FROM orders WHERE id=$1', [order.id]);
+    const { rows: [updatedOrder] } = await pool.query(
+      'SELECT * FROM orders WHERE id=$1 AND tenant_id=$2',
+      [order.id, tenantId]
+    );
 
-    // Alert admin per voci inserite come Consegnato diretto (senza passare da cucina)
+    // Alert admin per voci consegnato diretto
     const directDelivered = orderItems.filter(oi => oi.workflow_status === 'delivered');
     if (directDelivered.length > 0) {
       const tableInfo2 = table_id
-        ? await pool.query('SELECT table_number FROM tables WHERE id=$1', [table_id])
+        ? await pool.query('SELECT table_number FROM tables WHERE id=$1 AND tenant_id=$2', [table_id, tenantId])
         : null;
       const tNum = tableInfo2?.rows[0]?.table_number || 'ASPORTO';
 
       for (const dd of directDelivered) {
-        // Crea alert admin
         const itemNameQ = await pool.query(
-          "SELECT COALESCE(mi.name, $2) AS name FROM menu_items mi WHERE mi.id = $1",
-          [dd.menu_item_id, dd.combo_menu_name || 'Item']
+          "SELECT COALESCE(mi.name, $2) AS name FROM menu_items mi WHERE mi.id = $1 AND mi.tenant_id = $3",
+          [dd.menu_item_id, dd.combo_menu_name || 'Item', tenantId]
         );
         const iName = itemNameQ.rows[0]?.name || 'Item';
 
         await pool.query(
-          `INSERT INTO service_alerts (order_item_id, alert_type, is_mandatory, table_number, waiter_name, item_name)
-           VALUES ($1, 'direct_delivered', true, $2, $3, $4)
+          `INSERT INTO service_alerts (tenant_id, order_item_id, alert_type, is_mandatory, table_number, waiter_name, item_name)
+           VALUES ($1, $2, 'direct_delivered', true, $3, $4, $5)
            ON CONFLICT (order_item_id, alert_type) DO NOTHING`,
-          [dd.id, tNum, req.user.name, iName]
+          [tenantId, dd.id, tNum, req.user.name, iName]
         );
 
-        // Notifica admin/manager in tempo reale
         getIO()?.to('role:admin').to('role:manager').emit('direct-delivered-alert', {
           orderId: order.id,
           itemId: dd.id,
@@ -204,9 +210,11 @@ async function createOrder(req, res, next) {
       }
     }
 
-    // Emit events
     if (table_id) {
-      const tableInfo = await pool.query('SELECT table_number FROM tables WHERE id=$1', [table_id]);
+      const tableInfo = await pool.query(
+        'SELECT table_number FROM tables WHERE id=$1 AND tenant_id=$2',
+        [table_id, tenantId]
+      );
       getIO()?.emit('new-order', {
         orderId: order.id, tableId: table_id,
         tableNumber: tableInfo.rows[0]?.table_number,
@@ -240,7 +248,11 @@ async function createOrder(req, res, next) {
 async function getOrder(req, res, next) {
   try {
     const { id } = req.params;
-    const { rows: [order] } = await pool.query('SELECT * FROM orders WHERE id=$1', [id]);
+    const tenantId = TENANT(req);
+    const { rows: [order] } = await pool.query(
+      'SELECT * FROM orders WHERE id=$1 AND tenant_id=$2',
+      [id, tenantId]
+    );
     if (!order) return res.status(404).json({ error: 'Ordine non trovato' });
 
     const { rows: items } = await pool.query(
@@ -248,9 +260,9 @@ async function getOrder(req, res, next) {
               COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name
        FROM order_items oi
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
-       WHERE oi.order_id = $1
+       WHERE oi.order_id = $1 AND oi.tenant_id = $2
        ORDER BY oi.sent_at`,
-      [id]
+      [id, tenantId]
     );
 
     res.json({ ...order, items });
@@ -261,6 +273,7 @@ async function getOrder(req, res, next) {
 
 async function addItems(req, res, next) {
   const client = await pool.connect();
+  const tenantId = TENANT(req);
   try {
     const { id: order_id } = req.params;
     const { items } = req.body;
@@ -271,7 +284,8 @@ async function addItems(req, res, next) {
     await client.query('BEGIN');
 
     const { rows: [order] } = await client.query(
-      "SELECT * FROM orders WHERE id=$1 AND status='open'", [order_id]
+      "SELECT * FROM orders WHERE id=$1 AND tenant_id=$2 AND status='open'",
+      [order_id, tenantId]
     );
     if (!order) return res.status(404).json({ error: 'Ordine non trovato o già chiuso' });
 
@@ -279,8 +293,8 @@ async function addItems(req, res, next) {
     for (const item of items) {
       try {
         const oi = item.type === 'combo'
-          ? await insertComboItem(client, order_id, item, req.user.id)
-          : await insertRegularItem(client, order_id, item, req.user.id);
+          ? await insertComboItem(client, order_id, item, req.user.id, tenantId)
+          : await insertRegularItem(client, order_id, item, req.user.id, tenantId);
         addedItems.push(oi);
 
         const action = oi.workflow_status === 'delivered' ? 'direct_delivered' : 'item_insert';
@@ -301,26 +315,25 @@ async function addItems(req, res, next) {
 
     await client.query('COMMIT');
 
-    // Alert admin per consegnato diretto
     const directDelivered = addedItems.filter(oi => oi.workflow_status === 'delivered');
     if (directDelivered.length > 0) {
       const tableInfo = order.table_id
-        ? await pool.query('SELECT table_number FROM tables WHERE id=$1', [order.table_id])
+        ? await pool.query('SELECT table_number FROM tables WHERE id=$1 AND tenant_id=$2', [order.table_id, tenantId])
         : null;
       const tNum = tableInfo?.rows[0]?.table_number || 'ASPORTO';
 
       for (const dd of directDelivered) {
         const itemNameQ = await pool.query(
-          "SELECT COALESCE(mi.name, $2) AS name FROM menu_items mi WHERE mi.id = $1",
-          [dd.menu_item_id, dd.combo_menu_name || 'Item']
+          "SELECT COALESCE(mi.name, $2) AS name FROM menu_items mi WHERE mi.id = $1 AND mi.tenant_id = $3",
+          [dd.menu_item_id, dd.combo_menu_name || 'Item', tenantId]
         );
         const iName = itemNameQ.rows[0]?.name || 'Item';
 
         await pool.query(
-          `INSERT INTO service_alerts (order_item_id, alert_type, is_mandatory, table_number, waiter_name, item_name)
-           VALUES ($1, 'direct_delivered', true, $2, $3, $4)
+          `INSERT INTO service_alerts (tenant_id, order_item_id, alert_type, is_mandatory, table_number, waiter_name, item_name)
+           VALUES ($1, $2, 'direct_delivered', true, $3, $4, $5)
            ON CONFLICT (order_item_id, alert_type) DO NOTHING`,
-          [dd.id, tNum, req.user.name, iName]
+          [tenantId, dd.id, tNum, req.user.name, iName]
         );
 
         getIO()?.to('role:admin').to('role:manager').emit('direct-delivered-alert', {
@@ -350,27 +363,26 @@ async function addItems(req, res, next) {
 async function cancelItem(req, res, next) {
   try {
     const { id: order_id, itemId } = req.params;
+    const tenantId = TENANT(req);
 
-    // Solo admin/manager possono cancellare voci
     if (!['admin', 'manager'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Solo admin o responsabili possono cancellare voci. Contatta un responsabile.' });
     }
 
     const { rows: [item] } = await pool.query(
-      `UPDATE order_items SET status='cancelled' WHERE id=$1 AND order_id=$2 RETURNING *`,
-      [itemId, order_id]
+      `UPDATE order_items SET status='cancelled' WHERE id=$1 AND order_id=$2 AND tenant_id=$3 RETURNING *`,
+      [itemId, order_id, tenantId]
     );
     if (!item) return res.status(404).json({ error: 'Item non trovato' });
 
-    // Audit log della cancellazione
     const itemNameQ = await pool.query(
-      "SELECT COALESCE(mi.name, oi.combo_menu_name, 'Item') AS name FROM order_items oi LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id WHERE oi.id = $1",
-      [itemId]
+      "SELECT COALESCE(mi.name, oi.combo_menu_name, 'Item') AS name FROM order_items oi LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id WHERE oi.id = $1 AND oi.tenant_id = $2",
+      [itemId, tenantId]
     );
     await pool.query(
-      `INSERT INTO order_audit_log (order_id, item_id, action, from_value, to_value, user_id, user_name, metadata)
-       VALUES ($1,$2,'item_delete',$3,'cancelled',$4,$5,$6)`,
-      [order_id, itemId, item.status, req.user.id, req.user.name,
+      `INSERT INTO order_audit_log (tenant_id, order_id, item_id, action, from_value, to_value, user_id, user_name, metadata)
+       VALUES ($1,$2,$3,'item_delete',$4,'cancelled',$5,$6,$7)`,
+      [tenantId, order_id, itemId, item.status, req.user.id, req.user.name,
        JSON.stringify({ item_name: itemNameQ.rows[0]?.name, quantity: item.quantity })]
     );
 
@@ -382,31 +394,34 @@ async function cancelItem(req, res, next) {
 
 async function cancelOrder(req, res, next) {
   const client = await pool.connect();
+  const tenantId = TENANT(req);
   try {
     const { id } = req.params;
     const { rows: [order] } = await client.query(
-      "SELECT * FROM orders WHERE id=$1 AND status='open'", [id]
+      "SELECT * FROM orders WHERE id=$1 AND tenant_id=$2 AND status='open'",
+      [id, tenantId]
     );
     if (!order) return res.status(404).json({ error: 'Ordine non trovato o già chiuso' });
 
     await client.query('BEGIN');
 
-    // Cancel all non-cancelled items
     await client.query(
-      "UPDATE order_items SET status='cancelled' WHERE order_id=$1 AND status != 'cancelled'",
-      [id]
+      "UPDATE order_items SET status='cancelled' WHERE order_id=$1 AND tenant_id=$2 AND status != 'cancelled'",
+      [id, tenantId]
     );
 
-    // Mark order cancelled
     const { rows: [updated] } = await client.query(
-      "UPDATE orders SET status='cancelled' WHERE id=$1 RETURNING *", [id]
+      "UPDATE orders SET status='cancelled' WHERE id=$1 AND tenant_id=$2 RETURNING *",
+      [id, tenantId]
     );
 
     await client.query('COMMIT');
 
-    // Free the table
     if (order.table_id) {
-      await pool.query("UPDATE tables SET status='free' WHERE id=$1", [order.table_id]);
+      await pool.query(
+        "UPDATE tables SET status='free' WHERE id=$1 AND tenant_id=$2",
+        [order.table_id, tenantId]
+      );
       getIO()?.emit('table-status-changed', {
         tableId: order.table_id,
         status: 'free',

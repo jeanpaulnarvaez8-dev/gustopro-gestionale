@@ -1,6 +1,9 @@
 const pool = require('../config/db');
 const { getIO } = require('../socket');
 
+// Tenant isolation: every reservation operation is scoped to req.tenant.id.
+const TENANT = (req) => req.tenant.id;
+
 async function listReservations(req, res, next) {
   try {
     const { date } = req.query;  // YYYY-MM-DD, defaults to today
@@ -15,9 +18,9 @@ async function listReservations(req, res, next) {
        LEFT JOIN tables    t ON t.id = r.table_id
        LEFT JOIN users     u ON u.id = r.created_by
        LEFT JOIN customers c ON c.id = r.customer_id
-       WHERE r.reserved_date = $1
+       WHERE r.reserved_date = $1 AND r.tenant_id = $2
        ORDER BY r.reserved_time, r.customer_name`,
-      [targetDate]
+      [targetDate, TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -34,8 +37,10 @@ async function listUpcoming(req, res, next) {
        LEFT JOIN customers c ON c.id = r.customer_id
        WHERE r.reserved_date >= CURRENT_DATE
          AND r.status NOT IN ('cancelled','no_show')
+         AND r.tenant_id = $1
        ORDER BY r.reserved_date, r.reserved_time
-       LIMIT 50`
+       LIMIT 50`,
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -66,10 +71,11 @@ async function createReservation(req, res, next) {
 
     const { rows: [r] } = await pool.query(
       `INSERT INTO reservations
-         (customer_id, customer_name, customer_phone, table_id,
+         (tenant_id, customer_id, customer_name, customer_phone, table_id,
           party_size, reserved_date, reserved_time, notes, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [
+        TENANT(req),
         customer_id || null, customer_name.trim(), customer_phone || null,
         table_id || null, party_size || 2,
         reserved_date, reserved_time, notes || null,
@@ -77,11 +83,11 @@ async function createReservation(req, res, next) {
       ]
     );
 
-    // Mark table as reserved if assigned
+    // Mark table as reserved if assigned (tenant-scoped)
     if (table_id) {
       await pool.query(
-        "UPDATE tables SET status='reserved' WHERE id=$1 AND status='free'",
-        [table_id]
+        "UPDATE tables SET status='reserved' WHERE id=$1 AND tenant_id=$2 AND status='free'",
+        [table_id, TENANT(req)]
       );
       getIO()?.emit('table-status-changed', { tableId: table_id, status: 'reserved' });
     }
@@ -117,33 +123,33 @@ async function updateReservation(req, res, next) {
          status         = COALESCE($7, status),
          notes          = COALESCE($8, notes),
          updated_at     = NOW()
-       WHERE id=$9 RETURNING *`,
+       WHERE id=$9 AND tenant_id=$10 RETURNING *`,
       [
         customer_name || null, customer_phone || null, table_id || null,
         party_size || null, reserved_date || null, reserved_time || null,
-        status || null, notes || null, id,
+        status || null, notes || null, id, TENANT(req),
       ]
     );
     if (!r) return res.status(404).json({ error: 'Prenotazione non trovata' });
 
-    // If seated → mark table occupied
+    // If seated → mark table occupied (tenant-scoped)
     if (status === 'seated' && r.table_id) {
       await pool.query(
-        "UPDATE tables SET status='occupied' WHERE id=$1", [r.table_id]
+        "UPDATE tables SET status='occupied' WHERE id=$1 AND tenant_id=$2",
+        [r.table_id, TENANT(req)]
       );
       getIO()?.emit('table-status-changed', { tableId: r.table_id, status: 'occupied' });
     }
-    // If cancelled → free up table
+    // If cancelled → free up table (tenant-scoped)
     if (status === 'cancelled' && r.table_id) {
-      // Only free if no open order exists
       const { rows: [open] } = await pool.query(
-        "SELECT id FROM orders WHERE table_id=$1 AND status='open' LIMIT 1",
-        [r.table_id]
+        "SELECT id FROM orders WHERE table_id=$1 AND status='open' AND tenant_id=$2 LIMIT 1",
+        [r.table_id, TENANT(req)]
       );
       if (!open) {
         await pool.query(
-          "UPDATE tables SET status='free' WHERE id=$1 AND status='reserved'",
-          [r.table_id]
+          "UPDATE tables SET status='free' WHERE id=$1 AND tenant_id=$2 AND status='reserved'",
+          [r.table_id, TENANT(req)]
         );
         getIO()?.emit('table-status-changed', { tableId: r.table_id, status: 'free' });
       }
@@ -157,15 +163,16 @@ async function deleteReservation(req, res, next) {
   try {
     const { id } = req.params;
     const { rows: [r] } = await pool.query(
-      'DELETE FROM reservations WHERE id=$1 RETURNING *', [id]
+      'DELETE FROM reservations WHERE id=$1 AND tenant_id=$2 RETURNING *',
+      [id, TENANT(req)]
     );
     if (!r) return res.status(404).json({ error: 'Non trovata' });
 
-    // Free table if reserved
+    // Free table if reserved (tenant-scoped)
     if (r.table_id) {
       await pool.query(
-        "UPDATE tables SET status='free' WHERE id=$1 AND status='reserved'",
-        [r.table_id]
+        "UPDATE tables SET status='free' WHERE id=$1 AND tenant_id=$2 AND status='reserved'",
+        [r.table_id, TENANT(req)]
       );
       getIO()?.emit('table-status-changed', { tableId: r.table_id, status: 'free' });
     }
