@@ -88,9 +88,17 @@ NGINXEOF
   echo "$LOG_PREFIX nginx gustopro.conf ricreato e ricaricato"
 fi
 
-# Scarica info dal remoto senza applicare
+# Resolve git binary. On QNAP without Entware, git isn't installed on the
+# host; fall back to a containerised git (alpine/git, ~30MB image) so the
+# whole pipeline runs without any extra system packages.
 # -c safe.directory evita "dubious ownership" quando lo script gira come root
-GIT="git -c safe.directory=$PROJECT_DIR"
+if command -v git >/dev/null 2>&1; then
+  GIT="git -c safe.directory=$PROJECT_DIR"
+else
+  echo "$LOG_PREFIX git host non trovato — uso container alpine/git"
+  docker pull alpine/git >/dev/null 2>&1 || true
+  GIT="docker run --rm -v $PROJECT_DIR:/git -w /git alpine/git -c safe.directory=/git"
+fi
 
 $GIT fetch origin main --quiet
 
