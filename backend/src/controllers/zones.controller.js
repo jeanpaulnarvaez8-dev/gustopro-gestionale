@@ -1,8 +1,14 @@
 const pool = require('../config/db');
 
+// Tenant isolation: every zone operation is scoped to req.tenant.id.
+const TENANT = (req) => req.tenant.id;
+
 async function listZones(req, res, next) {
   try {
-    const { rows } = await pool.query('SELECT * FROM zones ORDER BY sort_order, name');
+    const { rows } = await pool.query(
+      'SELECT * FROM zones WHERE tenant_id=$1 ORDER BY sort_order, name',
+      [TENANT(req)]
+    );
     res.json(rows);
   } catch (err) { next(err); }
 }
@@ -12,8 +18,8 @@ async function createZone(req, res, next) {
     const { name, sort_order = 0, color = '#3B82F6', floor_x = 0, floor_y = 0, floor_w = 400, floor_h = 300 } = req.body;
     if (!name) return res.status(400).json({ error: 'name obbligatorio' });
     const { rows } = await pool.query(
-      'INSERT INTO zones (name, sort_order, color, floor_x, floor_y, floor_w, floor_h) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-      [name, sort_order, color, floor_x, floor_y, floor_w, floor_h]
+      'INSERT INTO zones (tenant_id, name, sort_order, color, floor_x, floor_y, floor_w, floor_h) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+      [TENANT(req), name, sort_order, color, floor_x, floor_y, floor_w, floor_h]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -32,9 +38,10 @@ async function updateZone(req, res, next) {
          floor_y    = COALESCE($5, floor_y),
          floor_w    = COALESCE($6, floor_w),
          floor_h    = COALESCE($7, floor_h)
-       WHERE id=$8 RETURNING *`,
+       WHERE id=$8 AND tenant_id=$9 RETURNING *`,
       [name || null, sort_order ?? null, color ?? null,
-       floor_x ?? null, floor_y ?? null, floor_w ?? null, floor_h ?? null, id]
+       floor_x ?? null, floor_y ?? null, floor_w ?? null, floor_h ?? null,
+       id, TENANT(req)]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Zona non trovata' });
     res.json(rows[0]);
@@ -44,11 +51,17 @@ async function updateZone(req, res, next) {
 async function deleteZone(req, res, next) {
   try {
     const { id } = req.params;
-    const { rows } = await pool.query('SELECT COUNT(*) FROM tables WHERE zone_id=$1', [id]);
+    const { rows } = await pool.query(
+      'SELECT COUNT(*) FROM tables WHERE zone_id=$1 AND tenant_id=$2',
+      [id, TENANT(req)]
+    );
     if (parseInt(rows[0].count) > 0) {
       return res.status(400).json({ error: 'La zona ha tavoli attivi. Sposta i tavoli prima di eliminarla.' });
     }
-    await pool.query('DELETE FROM zones WHERE id=$1', [id]);
+    await pool.query(
+      'DELETE FROM zones WHERE id=$1 AND tenant_id=$2',
+      [id, TENANT(req)]
+    );
     res.status(204).end();
   } catch (err) { next(err); }
 }

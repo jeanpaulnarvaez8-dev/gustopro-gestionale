@@ -3,6 +3,10 @@ const { getIO } = require('../socket');
 const { ORDER_ITEM_STATUSES } = require('../config/constants');
 const { trackItemServed } = require('../services/performanceTracker');
 
+// Tenant isolation: KDS deve mostrare SOLO ticket della propria cucina.
+// Senza filtro, una pizzeria vedrebbe gli ordini di un ristorante diverso.
+const TENANT = (req) => req.tenant.id;
+
 async function getPendingOrders(req, res, next) {
   try {
     const { rows } = await pool.query(
@@ -41,6 +45,7 @@ async function getPendingOrders(req, res, next) {
        WHERE o.status = 'open'
          AND oi.status NOT IN ('served','cancelled')
          AND oi.workflow_status = 'production'
+         AND oi.tenant_id = $1
        GROUP BY o.id, o.created_at, o.order_type, o.customer_name, o.pickup_time,
                 t.table_number, z.name,
                 oi.id, oi.quantity, oi.status, oi.display_status, oi.workflow_status, oi.notes, oi.sent_at,
@@ -48,7 +53,8 @@ async function getPendingOrders(req, res, next) {
                 mi.name, mi.prep_time_mins, c.course_type
        ORDER BY
          CASE oi.display_status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 ELSE 2 END,
-         oi.sent_at ASC`
+         oi.sent_at ASC`,
+      [TENANT(req)]
     );
 
     // Group by order
@@ -90,6 +96,7 @@ async function updateItemStatus(req, res, next) {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const tenantId = TENANT(req);
 
     const validStatuses = ['cooking', 'ready', 'served', 'cancelled'];
     if (!validStatuses.includes(status)) {
@@ -101,8 +108,8 @@ async function updateItemStatus(req, res, next) {
          status    = $1::varchar,
          ready_at  = CASE WHEN $1::varchar = 'ready'  AND ready_at  IS NULL THEN NOW() ELSE ready_at  END,
          served_at = CASE WHEN $1::varchar = 'served' AND served_at IS NULL THEN NOW() ELSE served_at END
-       WHERE id = $2 RETURNING *`,
-      [status, id]
+       WHERE id = $2 AND tenant_id = $3 RETURNING *`,
+      [status, id, tenantId]
     );
     if (!item) return res.status(404).json({ error: 'Item non trovato' });
 
@@ -112,20 +119,21 @@ async function updateItemStatus(req, res, next) {
       status,
     });
 
-    // Quando servito: pulisci alert, traccia performance, notifica tutti
     if (status === 'served') {
-      await pool.query('DELETE FROM service_alerts WHERE order_item_id = $1', [id]);
+      await pool.query(
+        'DELETE FROM service_alerts WHERE order_item_id = $1 AND tenant_id = $2',
+        [id, tenantId]
+      );
       getIO()?.emit('item-served', { orderId: item.order_id, itemId: id });
-      // Traccia performance cameriere
       const { rows: [orderInfo] } = await pool.query(
-        'SELECT waiter_id FROM orders WHERE id = $1', [item.order_id]
+        'SELECT waiter_id FROM orders WHERE id = $1 AND tenant_id = $2',
+        [item.order_id, tenantId]
       );
       if (orderInfo) {
         trackItemServed(orderInfo.waiter_id, item.ready_at, item.served_at);
       }
     }
 
-    // Notifica diretta al cameriere quando il piatto è pronto
     if (status === 'ready') {
       const { rows: [info] } = await pool.query(
         `SELECT o.waiter_id,
@@ -136,8 +144,8 @@ async function updateItemStatus(req, res, next) {
            JOIN orders o       ON o.id = oi.order_id
            LEFT JOIN tables t  ON t.id = o.table_id
            LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
-          WHERE oi.id = $1`,
-        [id]
+          WHERE oi.id = $1 AND oi.tenant_id = $2`,
+        [id, tenantId]
       );
       if (info) {
         getIO()?.to(`user:${info.waiter_id}`).emit('item-ready-notify', {

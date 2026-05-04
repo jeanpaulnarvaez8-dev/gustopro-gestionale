@@ -1,10 +1,17 @@
 const pool = require('../config/db');
 const { getIO } = require('../socket');
 
+// Tenant isolation: pre-conti, pagamenti, ricevute scoped al tenant.
+const TENANT = (req) => req.tenant.id;
+
 async function generatePreConto(req, res, next) {
   try {
     const { orderId } = req.params;
-    const { rows: [order] } = await pool.query('SELECT * FROM orders WHERE id=$1', [orderId]);
+    const tenantId = TENANT(req);
+    const { rows: [order] } = await pool.query(
+      'SELECT * FROM orders WHERE id=$1 AND tenant_id=$2',
+      [orderId, tenantId]
+    );
     if (!order) return res.status(404).json({ error: 'Ordine non trovato' });
 
     const { rows: items } = await pool.query(
@@ -19,14 +26,15 @@ async function generatePreConto(req, res, next) {
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        LEFT JOIN order_item_modifiers oim ON oim.order_item_id = oi.id
        LEFT JOIN modifiers m ON m.id = oim.modifier_id
-       WHERE oi.order_id = $1 AND oi.status != 'cancelled'
+       WHERE oi.order_id = $1 AND oi.tenant_id = $2 AND oi.status != 'cancelled'
        GROUP BY oi.id, mi.name, oi.combo_menu_name
        ORDER BY oi.sent_at`,
-      [orderId]
+      [orderId, tenantId]
     );
 
     const tableInfo = await pool.query(
-      'SELECT table_number, zone_id FROM tables WHERE id=$1', [order.table_id]
+      'SELECT table_number, zone_id FROM tables WHERE id=$1 AND tenant_id=$2',
+      [order.table_id, tenantId]
     );
 
     res.json({
@@ -43,6 +51,7 @@ async function generatePreConto(req, res, next) {
 
 async function processPayment(req, res, next) {
   const client = await pool.connect();
+  const tenantId = TENANT(req);
   try {
     const { order_id, amount, payment_method, is_split = false, split_index = 1, split_total = 1 } = req.body;
     const VALID_METHODS = ['cash', 'card', 'digital', 'room_charge'];
@@ -59,14 +68,15 @@ async function processPayment(req, res, next) {
     await client.query('BEGIN');
 
     const { rows: [order] } = await client.query(
-      "SELECT * FROM orders WHERE id=$1 AND status='open'", [order_id]
+      "SELECT * FROM orders WHERE id=$1 AND tenant_id=$2 AND status='open'",
+      [order_id, tenantId]
     );
     if (!order) return res.status(404).json({ error: 'Ordine non trovato o già chiuso' });
 
     // Calcola resto da dare al cliente (solo su pagamento cash, ultima tranche)
     const { rows: [prevPaid] } = await client.query(
-      'SELECT COALESCE(SUM(amount),0) AS paid FROM payments WHERE order_id=$1',
-      [order_id]
+      'SELECT COALESCE(SUM(amount),0) AS paid FROM payments WHERE order_id=$1 AND tenant_id=$2',
+      [order_id, tenantId]
     );
     const alreadyPaid = parseFloat(prevPaid.paid);
     const orderTotalRemaining = parseFloat(order.total_amount) - alreadyPaid;
@@ -77,11 +87,10 @@ async function processPayment(req, res, next) {
 
     // Insert payment (amount = importo effettivo incassato, eventuale resto già dedotto)
     const { rows: [payment] } = await client.query(
-      `INSERT INTO payments (order_id, amount, payment_method, processed_by)
-       VALUES ($1,$2,$3,$4) RETURNING *`,
-      [order_id, effectiveAmount, payment_method, req.user.id]
+      `INSERT INTO payments (tenant_id, order_id, amount, payment_method, processed_by)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [tenantId, order_id, effectiveAmount, payment_method, req.user.id]
     );
-    // Aggiungo change_given al response (anche se non persistito in payments)
     payment.change_given = changeGiven;
     payment.received_amount = parseFloat(amount);
 
@@ -91,36 +100,35 @@ async function processPayment(req, res, next) {
               COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name
        FROM order_items oi
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
-       WHERE oi.order_id=$1 AND oi.status != 'cancelled'`,
-      [order_id]
+       WHERE oi.order_id=$1 AND oi.tenant_id=$2 AND oi.status != 'cancelled'`,
+      [order_id, tenantId]
     );
 
     // Insert receipt
     const { rows: [receipt] } = await client.query(
-      `INSERT INTO receipts (order_id, issued_by, total_amount, tax_amount, is_split, split_index, split_total, receipt_data)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [order_id, req.user.id, amount, order.tax_amount, is_split, split_index, split_total, JSON.stringify({ items })]
+      `INSERT INTO receipts (tenant_id, order_id, issued_by, total_amount, tax_amount, is_split, split_index, split_total, receipt_data)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [tenantId, order_id, req.user.id, amount, order.tax_amount, is_split, split_index, split_total, JSON.stringify({ items })]
     );
 
     // Check if fully paid
     const { rows: [totals] } = await client.query(
-      'SELECT COALESCE(SUM(amount),0) AS paid FROM payments WHERE order_id=$1',
-      [order_id]
+      'SELECT COALESCE(SUM(amount),0) AS paid FROM payments WHERE order_id=$1 AND tenant_id=$2',
+      [order_id, tenantId]
     );
     const totalPaid = parseFloat(totals.paid);
     const orderTotal = parseFloat(order.total_amount);
     const newPaymentStatus = totalPaid >= orderTotal ? 'paid' : 'partial';
 
-    // If fully paid, close the order
     if (newPaymentStatus === 'paid') {
       await client.query(
-        "UPDATE orders SET payment_status='paid', status='completed' WHERE id=$1",
-        [order_id]
+        "UPDATE orders SET payment_status='paid', status='completed' WHERE id=$1 AND tenant_id=$2",
+        [order_id, tenantId]
       );
     } else {
       await client.query(
-        "UPDATE orders SET payment_status='partial' WHERE id=$1",
-        [order_id]
+        "UPDATE orders SET payment_status='partial' WHERE id=$1 AND tenant_id=$2",
+        [order_id, tenantId]
       );
     }
 
@@ -128,7 +136,6 @@ async function processPayment(req, res, next) {
 
     if (newPaymentStatus === 'paid') {
       getIO()?.emit('order-settled', { orderId: order_id, tableId: order.table_id });
-      // Notify TableMap: table is now dirty (trigger updated DB, push to clients)
       if (order.table_id) {
         getIO()?.emit('table-status-changed', {
           tableId: order.table_id,
@@ -155,8 +162,10 @@ async function listReceipts(req, res, next) {
        JOIN orders o ON o.id = r.order_id
        LEFT JOIN tables t ON t.id = o.table_id
        LEFT JOIN users u ON u.id = r.issued_by
+       WHERE r.tenant_id = $1
        ORDER BY r.created_at DESC
-       LIMIT 100`
+       LIMIT 100`,
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
