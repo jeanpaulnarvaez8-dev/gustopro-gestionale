@@ -69,8 +69,8 @@ function KpisTab() {
               </tr>
             </thead>
             <tbody>
-              {data.top_loss_items.map((item, i) => (
-                <tr key={i} className="border-b border-[#2A2A2A] last:border-0">
+              {data.top_loss_items.map((item) => (
+                <tr key={`loss-${item.item_name}`} className="border-b border-[#2A2A2A] last:border-0">
                   <td className="px-4 py-2.5 text-[#F5F5DC]">{item.item_name}</td>
                   <td className="px-4 py-2.5 text-red-400 text-right font-semibold">{formatPrice(item.total_loss)}</td>
                   <td className="px-4 py-2.5 text-[#888] text-right">{item.occurrences}</td>
@@ -101,8 +101,8 @@ function KpisTab() {
                 </tr>
               </thead>
               <tbody>
-                {data.recent_alerts.map((a, i) => (
-                  <tr key={i} className="border-b border-[#2A2A2A] last:border-0">
+                {data.recent_alerts.map((a) => (
+                  <tr key={`alert-${a.item_name}-${a.received_at}`} className="border-b border-[#2A2A2A] last:border-0">
                     <td className="px-4 py-2.5 text-[#F5F5DC]">{a.item_name}</td>
                     <td className="px-4 py-2.5 text-[#888] text-right">{a.qty_ordered} {a.unit}</td>
                     <td className="px-4 py-2.5 text-[#888] text-right">{a.qty_received} {a.unit}</td>
@@ -197,11 +197,12 @@ function POForm({ suppliers, onClose, onSaved }) {
   const [supplierName, setSupplierName] = useState('')
   const [expectedDate, setExpectedDate] = useState('')
   const [notes, setNotes] = useState('')
-  const [items, setItems] = useState([{ item_name: '', qty_ordered: 1, unit: 'kg', unit_cost: 0 }])
+  const makeEmptyPOItem = () => ({ _uid: crypto.randomUUID(), item_name: '', qty_ordered: 1, unit: 'kg', unit_cost: 0 })
+  const [items, setItems] = useState([makeEmptyPOItem()])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
-  const addItem = () => setItems(prev => [...prev, { item_name: '', qty_ordered: 1, unit: 'kg', unit_cost: 0 }])
+  const addItem = () => setItems(prev => [...prev, makeEmptyPOItem()])
   const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i))
   const updateItem = (i, field, val) => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: val } : it))
 
@@ -269,7 +270,7 @@ function POForm({ suppliers, onClose, onSaved }) {
               </button>
             </div>
             {items.map((it, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-center">
+              <div key={it._uid || `po-item-${i}`} className="grid grid-cols-12 gap-2 items-center">
                 <input value={it.item_name} onChange={e => updateItem(i, 'item_name', e.target.value)}
                   placeholder="Nome articolo"
                   className="col-span-4 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-2 py-1.5 text-[#F5F5DC] text-xs placeholder-[#555]" />
@@ -392,7 +393,7 @@ function ReceiptForm({ pendingPOs, onClose, onSaved }) {
   const barcodeRef = useRef(null)
 
   function emptyItem() {
-    return { item_name: '', barcode: '', qty_ordered: 0, qty_received: 0, unit: 'kg', unit_cost: 0, batch_no: '', expiry_date: '' }
+    return { _uid: crypto.randomUUID(), item_name: '', barcode: '', qty_ordered: 0, qty_received: 0, unit: 'kg', unit_cost: 0, batch_no: '', expiry_date: '' }
   }
 
   const addItem = () => setItems(prev => [...prev, emptyItem()])
@@ -407,6 +408,7 @@ function ReceiptForm({ pendingPOs, onClose, onSaved }) {
       const found = res.data  // now a single object or null
       if (found?.item_name) {
         setItems(prev => [...prev, {
+          _uid: crypto.randomUUID(),
           item_name: found.item_name,
           barcode: code,
           qty_ordered: found.qty_ordered ?? 0,
@@ -510,7 +512,7 @@ function ReceiptForm({ pendingPOs, onClose, onSaved }) {
               </button>
             </div>
             {items.map((it, i) => (
-              <div key={i} className="grid grid-cols-12 gap-1.5 items-center">
+              <div key={it._uid || `receipt-item-${i}`} className="grid grid-cols-12 gap-1.5 items-center">
                 <input value={it.item_name} onChange={e => updateItem(i, 'item_name', e.target.value)}
                   placeholder="Articolo"
                   className="col-span-3 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-2 py-1.5 text-[#F5F5DC] text-xs placeholder-[#555]" />

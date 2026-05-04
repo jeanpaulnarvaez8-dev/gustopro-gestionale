@@ -112,6 +112,23 @@ async function createOrder(req, res, next) {
 
     await client.query('BEGIN');
 
+    // Race-condition guard: impedisce 2 ordini 'open' sullo stesso tavolo
+    // Locka la row del tavolo fino al COMMIT. Se esiste già ordine open, ritorna 409.
+    if (order_type === 'table' && table_id) {
+      await client.query('SELECT id FROM tables WHERE id = $1 FOR UPDATE', [table_id]);
+      const { rows: existing } = await client.query(
+        `SELECT id FROM orders WHERE table_id = $1 AND status = 'open' LIMIT 1`,
+        [table_id]
+      );
+      if (existing.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Tavolo ha già un ordine aperto',
+          existing_order_id: existing[0].id,
+        });
+      }
+    }
+
     const { rows: [order] } = await client.query(
       `INSERT INTO orders
          (table_id, waiter_id, notes, order_type, customer_name, customer_phone, pickup_time, covers)

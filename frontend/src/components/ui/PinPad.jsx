@@ -69,7 +69,7 @@ export default function PinPad({ onSubmit, loading, error, maxLength = 4 }) {
       {/* Keypad */}
       <div className="grid grid-cols-3 gap-3">
         {keys.map((k, i) => {
-          if (k === '') return <div key={i} />
+          if (k === '') return <div key={`empty-${i}`} />
           if (k === '⌫') {
             return (
               <motion.button
@@ -85,7 +85,7 @@ export default function PinPad({ onSubmit, loading, error, maxLength = 4 }) {
           }
           return (
             <motion.button
-              key={k}
+              key={`digit-${k}`}
               whileTap={{ scale: 0.92 }}
               onClick={() => handleKey(k)}
               disabled={loading}

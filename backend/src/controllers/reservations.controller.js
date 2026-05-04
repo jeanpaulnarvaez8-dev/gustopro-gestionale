@@ -52,6 +52,18 @@ async function createReservation(req, res, next) {
     if (!reserved_date)         return res.status(400).json({ error: 'Data obbligatoria' });
     if (!reserved_time)         return res.status(400).json({ error: 'Orario obbligatorio' });
 
+    // Validazione data: non può essere nel passato (permessa oggi)
+    const today = new Date().toISOString().slice(0, 10);
+    if (reserved_date < today) {
+      return res.status(400).json({ error: 'Non puoi prenotare per una data passata' });
+    }
+
+    // Validazione party_size: almeno 1
+    const psize = parseInt(party_size);
+    if (party_size !== undefined && party_size !== null && (isNaN(psize) || psize < 1 || psize > 50)) {
+      return res.status(400).json({ error: 'Numero persone deve essere tra 1 e 50' });
+    }
+
     const { rows: [r] } = await pool.query(
       `INSERT INTO reservations
          (customer_id, customer_name, customer_phone, table_id,

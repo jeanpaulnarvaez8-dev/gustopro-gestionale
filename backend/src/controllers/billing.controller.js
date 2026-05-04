@@ -63,12 +63,27 @@ async function processPayment(req, res, next) {
     );
     if (!order) return res.status(404).json({ error: 'Ordine non trovato o già chiuso' });
 
-    // Insert payment
+    // Calcola resto da dare al cliente (solo su pagamento cash, ultima tranche)
+    const { rows: [prevPaid] } = await client.query(
+      'SELECT COALESCE(SUM(amount),0) AS paid FROM payments WHERE order_id=$1',
+      [order_id]
+    );
+    const alreadyPaid = parseFloat(prevPaid.paid);
+    const orderTotalRemaining = parseFloat(order.total_amount) - alreadyPaid;
+    const overpayment = parseFloat(amount) - orderTotalRemaining;
+    const changeGiven = (payment_method === 'cash' && overpayment > 0) ? overpayment : 0;
+    // Se cash e overpayment, registriamo l'importo effettivo (= dovuto) e il resto separato
+    const effectiveAmount = changeGiven > 0 ? orderTotalRemaining : parseFloat(amount);
+
+    // Insert payment (amount = importo effettivo incassato, eventuale resto già dedotto)
     const { rows: [payment] } = await client.query(
       `INSERT INTO payments (order_id, amount, payment_method, processed_by)
        VALUES ($1,$2,$3,$4) RETURNING *`,
-      [order_id, amount, payment_method, req.user.id]
+      [order_id, effectiveAmount, payment_method, req.user.id]
     );
+    // Aggiungo change_given al response (anche se non persistito in payments)
+    payment.change_given = changeGiven;
+    payment.received_amount = parseFloat(amount);
 
     // Snapshot receipt data
     const { rows: items } = await client.query(
