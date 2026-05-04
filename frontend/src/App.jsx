@@ -25,6 +25,7 @@ import FloorPlanPage from './pages/FloorPlanPage'
 import AdminHomePage from './pages/AdminHomePage'
 import WaitingMonitorPage from './pages/WaitingMonitorPage'
 import NotFoundPage from './pages/NotFoundPage'
+import SuperadminPage from './pages/SuperadminPage'
 import ServiceAlertBanner from './components/ServiceAlertBanner'
 import MobileBottomNav from './components/MobileBottomNav'
 import MandatoryAlertModal from './components/MandatoryAlertModal'
@@ -65,6 +66,11 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+
+      {/* Super-admin (server-to-server, X-Superadmin-Key header).
+          Pubblica perche' non usa il JWT del normale login: e' protetta lato
+          backend dal middleware requireSuperadmin che verifica la key. */}
+      <Route path="/admin-saas" element={<SuperadminPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<HomeRedirect />} />

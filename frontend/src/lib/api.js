@@ -219,4 +219,25 @@ export const workflowAPI = {
   getAuditLog:           (orderId) => api.get(`/workflow/audit/${orderId}`),
 };
 
+// ─── Super-admin (server-to-server, no JWT) ───────────────────
+// Auth via X-Superadmin-Key header. La chiave vive in sessionStorage:
+// scompare alla chiusura della tab ed e' separata da JWT del normale login.
+const superadminApi = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'https://loyal-eagerness-production.up.railway.app/api',
+});
+superadminApi.interceptors.request.use((config) => {
+  const sak = sessionStorage.getItem('gustopro_sak');
+  if (sak) config.headers['X-Superadmin-Key'] = sak;
+  return config;
+});
+
+export const superadminAPI = {
+  setKey:   (key) => sessionStorage.setItem('gustopro_sak', key),
+  clearKey: ()    => sessionStorage.removeItem('gustopro_sak'),
+  hasKey:   ()    => !!sessionStorage.getItem('gustopro_sak'),
+  listTenants:   ()         => superadminApi.get('/superadmin/tenants'),
+  createTenant:  (data)     => superadminApi.post('/superadmin/tenants', data),
+  updateTenant:  (id, data) => superadminApi.patch(`/superadmin/tenants/${id}`, data),
+};
+
 export default api;
