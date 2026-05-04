@@ -7,6 +7,12 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
+// nginx fix-point sets X-Forwarded-For; trusting one hop ahead lets
+// express-rate-limit identify per-IP clients correctly (otherwise all
+// requests appear to come from the proxy and a single hostile client
+// can lock everyone else out).
+app.set('trust proxy', 1);
+
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
   .split(',')
   .map(s => s.trim());
