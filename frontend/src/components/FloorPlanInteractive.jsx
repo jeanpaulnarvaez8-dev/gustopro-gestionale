@@ -88,85 +88,133 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing }) {
   )
 }
 
+// Planimetria architettonica reale Riva Beach Salento (vista live).
+// Stessa struttura del FloorPlanEditor — solo colori leggermente diversi
+// per il contesto "live" (più sobrio, meno marker editor).
 function Restaurant({ zones }) {
-  const bar = zones.find(z => z.name === 'BAR')
-  const botti = zones.find(z => z.name === 'Botti in Legno')
+  const WALL = '#0a0a0a'
+  const WALL_LIGHT = '#1a1a1a'
+  const ROOM_FILL = '#101010'
 
   return (
     <g>
-      {/* Mare */}
-      <rect x={1140} y={0} width={260} height={950} fill="#071a2c" />
-      <text x={1260} y={480} textAnchor="middle" fill="#0d3a5c" fontSize="28" fontWeight="800"
-        fontFamily="system-ui" transform="rotate(90,1260,480)" letterSpacing="8">MARE</text>
+      {/* ─── Mare lato est ─────────────────────────── */}
+      <rect x={1180} y={0} width={220} height={950} fill="#071a2c" />
+      <text x={1290} y={480} textAnchor="middle" fill="#0d3a5c" fontSize="28" fontWeight="800"
+        fontFamily="system-ui" transform="rotate(90,1290,480)" letterSpacing="8">MARE</text>
       {[100,220,340,460,580,700,820].map(y => (
-        <path key={y} d={`M 1140 ${y} Q 1175 ${y-12} 1210 ${y} Q 1245 ${y+12} 1280 ${y}`}
+        <path key={y} d={`M 1180 ${y} Q 1215 ${y-12} 1250 ${y} Q 1285 ${y+12} 1290 ${y}`}
           stroke="#0d3a5c" strokeWidth="1.5" fill="none" />
       ))}
 
-      {/* Zone */}
+      {/* ─── SALA DA PRANZO (top-left, 7.94m × 3.40m) ── */}
+      <rect x={60} y={50} width={476} height={204} fill={ROOM_FILL} stroke={WALL} strokeWidth="6" />
+      <text x={298} y={150} textAnchor="middle" fill="#888" fontSize="16" fontWeight="700"
+        fontFamily="system-ui">SALA DA PRANZO</text>
+      <text x={298} y={170} textAnchor="middle" fill="#555" fontSize="9"
+        fontFamily="system-ui">7.94 × 3.40</text>
+
+      {/* ─── CHIOSCO BAR (top-right, 5.60m × 3.61m) ──── */}
+      <rect x={560} y={50} width={336} height={217} fill={ROOM_FILL} stroke={WALL} strokeWidth="6" />
+      <text x={728} y={150} textAnchor="middle" fill="#888" fontSize="16" fontWeight="700"
+        fontFamily="system-ui">CHIOSCO BAR</text>
+      <text x={728} y={170} textAnchor="middle" fill="#555" fontSize="9"
+        fontFamily="system-ui">5.60 × 3.61</text>
+
+      {/* Apertura 3.76m verso NETTUNO */}
+      <rect x={108} y={250} width={226} height={8} fill="#0a0a0a" />
+
+      {/* ─── BAR area centrale + bancone con sgabelli ── */}
+      <text x={620} y={420} fill="#666" fontSize="20" fontWeight="600"
+        fontFamily="system-ui">BAR</text>
+      <rect x={500} y={290} width={250} height={60} fill="#3a2010" stroke="#8B4513" strokeWidth="2" rx="4" />
+      {[0,1,2,3,4,5].map(i => (
+        <circle key={`bs${i}`} cx={530 + i*38} cy={370} r={7} fill="#222" stroke="#444" strokeWidth="1" />
+      ))}
+
+      {/* ─── NETTUNO (sala interna principale) ────────── */}
+      <path d={`
+        M 60 254
+        L 60 700
+        L 250 700
+        L 250 880
+        L 540 880
+        L 540 700
+        L 800 700
+        L 800 480
+        L 540 480
+        L 540 254
+        L 60 254
+        Z
+      `} fill={ROOM_FILL} stroke={WALL} strokeWidth="5" />
+      <text x={350} y={520} textAnchor="middle" fill="#888" fontSize="34" fontWeight="700"
+        fontFamily="system-ui" letterSpacing="6">NETTUNO</text>
+
+      {/* ─── VIP grande (terrazza ottagonale fronte mare) ─ */}
+      <g transform="translate(880, 350) rotate(-20, 150, 200)">
+        <path d={`
+          M 0 60
+          L 80 0
+          L 240 0
+          L 300 60
+          L 300 340
+          L 240 400
+          L 80 400
+          L 0 340
+          Z
+        `} fill={ROOM_FILL} stroke={WALL} strokeWidth="5" />
+        <text x={150} y={210} textAnchor="middle" fill="#888" fontSize="32" fontWeight="700"
+          fontFamily="system-ui" letterSpacing="4">VIP</text>
+      </g>
+
+      {/* ─── VIP piccola (basso-sx) ───────────────────── */}
+      <g transform="translate(60, 760)">
+        <path d={`
+          M 0 30
+          L 30 0
+          L 180 0
+          L 200 25
+          L 200 130
+          L 180 160
+          L 30 160
+          L 0 130
+          Z
+        `} fill={ROOM_FILL} stroke={WALL} strokeWidth="4" />
+        <text x={100} y={88} textAnchor="middle" fill="#888" fontSize="20" fontWeight="700"
+          fontFamily="system-ui" letterSpacing="3">VIP</text>
+      </g>
+
+      {/* ─── Cassa ─────────────────────────────────────── */}
+      <rect x={15} y={50} width={40} height={30} fill="#1a1a1a" stroke="#444" strokeWidth="1" rx="3" />
+      <text x={35} y={68} textAnchor="middle" fill="#888" fontSize="8" fontWeight="600" fontFamily="system-ui">CASSA</text>
+
+      {/* ─── WC ────────────────────────────────────────── */}
+      <rect x={15} y={290} width={40} height={28} fill="#111" stroke="#333" strokeWidth="1" rx="3" />
+      <text x={35} y={308} textAnchor="middle" fill="#555" fontSize="8" fontFamily="system-ui">WC</text>
+      <rect x={15} y={325} width={40} height={28} fill="#111" stroke="#333" strokeWidth="1" rx="3" />
+      <text x={35} y={343} textAnchor="middle" fill="#555" fontSize="8" fontFamily="system-ui">WC</text>
+
+      {/* ─── Cucina (dietro al chiosco bar) ────────────── */}
+      <rect x={900} y={50} width={120} height={217} fill={WALL_LIGHT} stroke={WALL} strokeWidth="3" rx="2" />
+      <text x={960} y={150} textAnchor="middle" fill="#666" fontSize="13" fontWeight="600"
+        fontFamily="system-ui">CUCINA</text>
+
+      {/* ─── Veranda fronte mare ───────────────────────── */}
+      <rect x={810} y={280} width={70} height={420} fill="#0c1010" stroke="#222" strokeWidth="1" rx="2" />
+      <text x={845} y={490} textAnchor="middle" fill="#444" fontSize="11" fontWeight="600"
+        fontFamily="system-ui" transform="rotate(-90,845,490)">VERANDA</text>
+
+      {/* ─── Zone DB come overlay tratteggiato (assegnazione tavoli/team) ─ */}
       {zones.map(z => (
-        <g key={z.id}>
+        <g key={z.id} opacity="0.35">
           <rect x={z.floor_x||0} y={z.floor_y||0} width={z.floor_w||400} height={z.floor_h||300}
-            fill={`${z.color||'#555'}06`} stroke={z.color||'#555'} strokeWidth="2" strokeDasharray="6,3" rx="6" />
+            fill="transparent" stroke={z.color||'#555'} strokeWidth="2" strokeDasharray="6,4" rx="6" />
           <text x={(z.floor_x||0)+12} y={(z.floor_y||0)+16} fill={z.color||'#555'}
-            fontSize="10" fontWeight="700" fontFamily="system-ui" opacity="0.5">
+            fontSize="10" fontWeight="700" fontFamily="system-ui">
             {z.name.toUpperCase()}
           </text>
         </g>
       ))}
-
-      {/* Bancone BAR con sgabelli */}
-      {bar && (
-        <g>
-          <rect x={bar.floor_x + 50} y={bar.floor_y + 30} width={180} height={80}
-            fill="#2a1810" stroke="#6b3a20" strokeWidth="2" rx="8" />
-          <text x={bar.floor_x + 140} y={bar.floor_y + 75} textAnchor="middle"
-            fill="#D4AF37" fontSize="13" fontWeight="700" fontFamily="system-ui">BAR</text>
-          {[0,1,2,3,4].map(i => (
-            <circle key={`bs${i}`} cx={bar.floor_x + 75 + i * 40} cy={bar.floor_y + 130}
-              r={7} fill="#222" stroke="#444" strokeWidth="0.8" />
-          ))}
-          {[0,1].map(i => (
-            <circle key={`bl${i}`} cx={bar.floor_x + 35} cy={bar.floor_y + 55 + i * 35}
-              r={7} fill="#222" stroke="#444" strokeWidth="0.8" />
-          ))}
-          {[0,1].map(i => (
-            <circle key={`br${i}`} cx={bar.floor_x + 245} cy={bar.floor_y + 55 + i * 35}
-              r={7} fill="#222" stroke="#444" strokeWidth="0.8" />
-          ))}
-        </g>
-      )}
-
-      {/* Pergola Botti (linee dal centro) */}
-      {botti && (() => {
-        const cx = botti.floor_x + botti.floor_w / 2
-        const cy = botti.floor_y + 20
-        const pts = [[450,130],[490,185],[545,220],[610,235],[675,220],[730,185],[770,130]]
-        return (
-          <g>
-            {pts.map(([tx,ty], i) => (
-              <line key={i} x1={cx} y1={cy} x2={tx+32} y2={ty+32}
-                stroke="#5a3a20" strokeWidth="1.5" opacity="0.25" />
-            ))}
-            <circle cx={cx} cy={cy} r={5} fill="#3a2510" stroke="#6b3a20" strokeWidth="1" />
-          </g>
-        )
-      })()}
-
-      {/* Cassa & Frigo */}
-      <rect x={15} y={15} width={55} height={28} fill="#1a1a1a" stroke="#444" strokeWidth="1" rx="4" />
-      <text x={42} y={32} textAnchor="middle" fill="#888" fontSize="8" fontWeight="600" fontFamily="system-ui">CASSA</text>
-      <rect x={15} y={50} width={55} height={22} fill="#0a1520" stroke="#2563EB" strokeWidth="1" rx="4" />
-      <text x={42} y={64} textAnchor="middle" fill="#4488bb" fontSize="7" fontWeight="600" fontFamily="system-ui">FRIGO PESCE</text>
-
-      {/* Muro divisorio rosso */}
-      <line x1={680} y1={310} x2={680} y2={930} stroke="#5a1515" strokeWidth="4" />
-
-      {/* WC */}
-      <rect x={50} y={870} width={40} height={28} fill="#111" stroke="#333" strokeWidth="1" rx="3" />
-      <text x={70} y={888} textAnchor="middle" fill="#555" fontSize="7" fontFamily="system-ui">WC</text>
-      <rect x={100} y={870} width={40} height={28} fill="#111" stroke="#333" strokeWidth="1" rx="3" />
-      <text x={120} y={888} textAnchor="middle" fill="#555" fontSize="7" fontFamily="system-ui">WC</text>
     </g>
   )
 }
