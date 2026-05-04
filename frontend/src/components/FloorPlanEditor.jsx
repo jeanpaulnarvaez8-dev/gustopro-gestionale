@@ -208,23 +208,10 @@ function RestaurantStructure({ zones }) {
       <text x={845} y={490} textAnchor="middle" fill="#444" fontSize="11" fontWeight="600"
         fontFamily="system-ui" transform="rotate(-90,845,490)">VERANDA</text>
 
-      {/* ─── Zone DB come overlay semi-trasparenti (per assegnazione tavoli) ─ */}
-      {zones.map(z => {
-        const x = z.floor_x || 0, y = z.floor_y || 0
-        const w = z.floor_w || 400, h = z.floor_h || 300
-        return (
-          <g key={z.id} opacity="0.4">
-            <rect x={x} y={y} width={w} height={h}
-              fill="transparent" stroke={z.color} strokeWidth="2" strokeDasharray="6,4" rx="4" />
-            <rect x={x + 8} y={y + 6} width={z.name.length * 8 + 16} height={20} rx="4"
-              fill={z.color} opacity="0.3" />
-            <text x={x + 16} y={y + 19} fill={z.color} fontSize="10" fontWeight="700"
-              fontFamily="system-ui">
-              {z.name.toUpperCase()}
-            </text>
-          </g>
-        )
-      })}
+      {/* Zone DB tratteggiate rimosse: usavano i floor_x/y vecchi e
+          confondevano l'occhio con la nuova struttura architettonica.
+          Il legame tavolo→zona resta solo via dato (zone_id), l'utente
+          la conosce dal contesto operativo. */}
     </g>
   )
 }

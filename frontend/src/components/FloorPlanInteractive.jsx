@@ -204,17 +204,8 @@ function Restaurant({ zones }) {
       <text x={845} y={490} textAnchor="middle" fill="#444" fontSize="11" fontWeight="600"
         fontFamily="system-ui" transform="rotate(-90,845,490)">VERANDA</text>
 
-      {/* ─── Zone DB come overlay tratteggiato (assegnazione tavoli/team) ─ */}
-      {zones.map(z => (
-        <g key={z.id} opacity="0.35">
-          <rect x={z.floor_x||0} y={z.floor_y||0} width={z.floor_w||400} height={z.floor_h||300}
-            fill="transparent" stroke={z.color||'#555'} strokeWidth="2" strokeDasharray="6,4" rx="6" />
-          <text x={(z.floor_x||0)+12} y={(z.floor_y||0)+16} fill={z.color||'#555'}
-            fontSize="10" fontWeight="700" fontFamily="system-ui">
-            {z.name.toUpperCase()}
-          </text>
-        </g>
-      ))}
+      {/* Zone DB tratteggiate rimosse: usavano i floor_x/y vecchi e
+          confondevano l'occhio con la nuova struttura architettonica. */}
     </g>
   )
 }
