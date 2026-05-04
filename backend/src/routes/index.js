@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { verifyToken } = require('../middleware/auth');
 const { resolveTenant } = require('../middleware/tenant');
+const { idempotencyMiddleware } = require('../middleware/idempotency');
 
 const router = Router();
 
@@ -16,6 +17,9 @@ router.use('/auth', resolveTenant, require('./auth.routes'));
 // (covers tokens issued before the tenant_id claim was added).
 router.use(verifyToken);
 router.use(resolveTenant);
+// Idempotency-Key support: se l'header e' presente, mutations (POST/PATCH/DELETE)
+// vengono dedotte server-side. Vedere middleware/idempotency.js per dettagli.
+router.use(idempotencyMiddleware);
 router.use('/users',        require('./users.routes'));
 router.use('/zones',        require('./zones.routes'));
 router.use('/tables',       require('./tables.routes'));

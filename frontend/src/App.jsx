@@ -30,6 +30,7 @@ import ServiceAlertBanner from './components/ServiceAlertBanner'
 import MobileBottomNav from './components/MobileBottomNav'
 import MandatoryAlertModal from './components/MandatoryAlertModal'
 import DirectDeliveredAlerts from './components/DirectDeliveredAlerts'
+import OfflineBanner from './components/OfflineBanner'
 
 function ProtectedRoute() {
   const { isAuthenticated, user } = useAuth()
@@ -64,6 +65,8 @@ function HomeRedirect() {
 
 export default function App() {
   return (
+    <>
+      <OfflineBanner />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
@@ -170,5 +173,6 @@ export default function App() {
 
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
+    </>
   )
 }

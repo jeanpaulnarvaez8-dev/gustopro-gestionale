@@ -24,6 +24,10 @@ registerSW({
   },
 })
 
+// Background sync della queue offline (mini-step D)
+import { startBackgroundSync } from './lib/offlineSync'
+startBackgroundSync()
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>

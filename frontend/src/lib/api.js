@@ -1,25 +1,129 @@
 import axios from 'axios';
+import { enqueueAction, uuidv4 } from './offlineDB';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'https://loyal-eagerness-production.up.railway.app/api',
   withCredentials: false,
 });
 
-// Attach JWT to every request
+// ─── Endpoint offline-aware ──────────────────────────────────
+// Lista delle mutazioni che, in caso di errore di rete, vengono messe
+// in coda IndexedDB invece di propagare l'errore. Per ogni endpoint
+// definiamo un kind (per logging/debug) e la regex sul path.
+const OFFLINE_AWARE_ENDPOINTS = [
+  { method: 'POST', regex: /^\/orders$/,                       kind: 'order:create'    },
+  { method: 'POST', regex: /^\/orders\/[a-z0-9-]+\/items$/i,   kind: 'order:add-items' },
+];
+
+function isOfflineError(err) {
+  if (!err) return false;
+  // Axios sets ERR_NETWORK quando non c'è risposta dal server
+  if (err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED') return true;
+  if (!err.response && err.message === 'Network Error') return true;
+  // 503 Service Unavailable → backend giù
+  if (err.response?.status === 503) return true;
+  // Browser dichiara offline esplicitamente
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  return false;
+}
+
+function pathOf(url) {
+  if (!url) return '';
+  // url può essere assoluto o path relativo. new URL gestisce entrambi se gli
+  // diamo una base fittizia.
+  try {
+    return new URL(url, 'http://_').pathname;
+  } catch {
+    return url.split('?')[0];
+  }
+}
+
+function decodeJwtTenantId(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.tenant_id || null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Request interceptor ─────────────────────────────────────
+// 1. Attach JWT
+// 2. Inject Idempotency-Key su POST/PATCH/DELETE (se non già presente)
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('gustopro_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  const method = (config.method || '').toUpperCase();
+  if (['POST', 'PATCH', 'DELETE'].includes(method) && !config.headers['Idempotency-Key']) {
+    config.headers['Idempotency-Key'] = uuidv4();
+  }
   return config;
 });
 
-// Auto-logout on 401
+// ─── Response interceptor ────────────────────────────────────
+// 1. Auto-logout on 401
+// 2. Offline detection: se errore di rete su endpoint offline-aware,
+//    enqueue azione in IndexedDB e ritorna 202 sintetico (il caller
+//    può rilevare _offline=true nella response.data e mostrare un
+//    toast "Salvato offline").
 api.interceptors.response.use(
   (r) => r,
-  (err) => {
+  async (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('gustopro_token');
       localStorage.removeItem('gustopro_user');
       window.location.href = '/login';
+      return Promise.reject(err);
+    }
+
+    const config = err.config;
+    if (config && isOfflineError(err)) {
+      const method = (config.method || '').toUpperCase();
+      const path = pathOf(config.url);
+      const match = OFFLINE_AWARE_ENDPOINTS.find(
+        (e) => e.method === method && e.regex.test(path)
+      );
+      if (match) {
+        try {
+          const idempotencyKey = config.headers['Idempotency-Key'] || uuidv4();
+          const body = config.data
+            ? (typeof config.data === 'string' ? JSON.parse(config.data) : config.data)
+            : null;
+          const token = localStorage.getItem('gustopro_token');
+          const tenantId = decodeJwtTenantId(token);
+
+          await enqueueAction({
+            kind: match.kind,
+            method,
+            endpoint: path,
+            body,
+            tenantId,
+            authToken: token,
+            idempotencyKey,
+          });
+
+          // Risposta sintetica 202: il caller la vede come success ma puo'
+          // rilevare _offline=true per mostrare feedback dedicato.
+          return {
+            status: 202,
+            statusText: 'Accepted (queued offline)',
+            data: {
+              _offline: true,
+              queued: true,
+              kind: match.kind,
+              idempotencyKey,
+              message: 'Salvato in coda offline. Sincronizzo al ripristino della rete.',
+            },
+            headers: {},
+            config,
+            request: null,
+          };
+        } catch (queueErr) {
+          console.error('[offline] enqueue failed:', queueErr);
+          // se la coda fallisce, propaga errore originale
+        }
+      }
     }
     return Promise.reject(err);
   }
@@ -239,5 +343,10 @@ export const superadminAPI = {
   createTenant:  (data)     => superadminApi.post('/superadmin/tenants', data),
   updateTenant:  (id, data) => superadminApi.patch(`/superadmin/tenants/${id}`, data),
 };
+
+// Debug helper opt-in (solo se localStorage.gustopro_dev_mode === '1')
+if (typeof window !== 'undefined' && localStorage.getItem('gustopro_dev_mode') === '1') {
+  window.gustoApi = api;
+}
 
 export default api;
