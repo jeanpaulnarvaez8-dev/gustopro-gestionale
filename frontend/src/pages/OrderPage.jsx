@@ -10,6 +10,7 @@ import { Clock, Zap, PackageCheck } from 'lucide-react'
 import { useToast } from '../context/ToastContext'
 import { menuAPI, ordersAPI, tablesAPI, comboAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
+import { AllergenBadges } from '../lib/allergens'
 
 // ─── Combo Course Selector Modal ─────────────────────────────
 
@@ -399,6 +400,7 @@ export default function OrderPage() {
                                 {item.description && (
                                   <span className="text-[#666] text-xs block mt-0.5 line-clamp-1">{item.description}</span>
                                 )}
+                                <AllergenBadges items={item.allergens} size="sm" />
                               </div>
                               <span className="text-[#D4AF37] font-bold text-[15px] shrink-0">
                                 {formatPrice(item.base_price)}{item.pricing_type === 'per_kg' ? '/kg' : ''}
@@ -458,6 +460,7 @@ export default function OrderPage() {
                     className="bg-[#2A2A2A] border border-[#3A3A3A] hover:border-[#D4AF37]/50 rounded-xl p-4 text-left transition flex flex-col gap-2">
                     <span className="text-[#F5F5DC] text-sm font-semibold">{item.name}</span>
                     {item.description && <span className="text-[#555] text-xs line-clamp-2">{item.description}</span>}
+                    <AllergenBadges items={item.allergens} size="xs" />
                     <div className="flex items-center justify-between mt-auto pt-1">
                       <span className="text-[#D4AF37] font-semibold text-sm">
                         {formatPrice(item.base_price)}{item.pricing_type === 'per_kg' ? '/kg' : ''}
