@@ -78,10 +78,11 @@ async function updateUser(req, res, next) {
 async function deleteUser(req, res, next) {
   try {
     const { id } = req.params;
-    await pool.query(
+    const result = await pool.query(
       'UPDATE users SET is_active=false WHERE id=$1 AND tenant_id=$2',
       [id, TENANT(req)]
     );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Utente non trovato' });
     res.status(204).end();
   } catch (err) { next(err); }
 }

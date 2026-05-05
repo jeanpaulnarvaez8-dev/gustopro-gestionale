@@ -67,10 +67,11 @@ async function deleteTable(req, res, next) {
     if (rows[0].status === 'occupied') {
       return res.status(400).json({ error: 'Impossibile eliminare un tavolo occupato.' });
     }
-    await pool.query(
+    const result = await pool.query(
       'DELETE FROM tables WHERE id=$1 AND tenant_id=$2',
       [id, TENANT(req)]
     );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Tavolo non trovato' });
     res.status(204).end();
   } catch (err) { next(err); }
 }

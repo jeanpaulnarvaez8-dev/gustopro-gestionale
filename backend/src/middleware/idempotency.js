@@ -63,12 +63,14 @@ async function idempotencyMiddleware(req, res, next) {
   res.json = (body) => {
     const status = res.statusCode || 200;
     // Salva in background — non blocca la risposta.
+    // req.originalUrl e' il path completo (es. /api/orders) — req.path
+    // dentro un sub-router e' relativo (era "/" per /api/orders).
     pool.query(
       `INSERT INTO idempotency_keys
          (tenant_id, key, method, path, response_status, response_body, user_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (tenant_id, key) DO NOTHING`,
-      [tenantId, key, method, req.path, status, body, req.user?.id ?? null]
+      [tenantId, key, method, req.originalUrl || req.path, status, body, req.user?.id ?? null]
     ).catch((err) => {
       console.error('[idempotency] save failed:', err.message);
     });

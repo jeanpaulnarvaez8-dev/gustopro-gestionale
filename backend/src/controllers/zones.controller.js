@@ -58,10 +58,11 @@ async function deleteZone(req, res, next) {
     if (parseInt(rows[0].count) > 0) {
       return res.status(400).json({ error: 'La zona ha tavoli attivi. Sposta i tavoli prima di eliminarla.' });
     }
-    await pool.query(
+    const result = await pool.query(
       'DELETE FROM zones WHERE id=$1 AND tenant_id=$2',
       [id, TENANT(req)]
     );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Zona non trovata' });
     res.status(204).end();
   } catch (err) { next(err); }
 }

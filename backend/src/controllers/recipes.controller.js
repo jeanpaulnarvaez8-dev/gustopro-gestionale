@@ -41,10 +41,11 @@ async function upsertRecipeItem(req, res, next) {
 async function removeRecipeItem(req, res, next) {
   try {
     const { recipeId } = req.params;
-    await pool.query(
+    const result = await pool.query(
       'DELETE FROM recipes WHERE id=$1 AND tenant_id=$2',
       [recipeId, TENANT(req)]
     );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Voce ricetta non trovata' });
     res.status(204).end();
   } catch (err) { next(err); }
 }

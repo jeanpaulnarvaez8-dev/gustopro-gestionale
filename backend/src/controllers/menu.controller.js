@@ -115,10 +115,11 @@ async function updateCategory(req, res, next) {
 async function deleteCategory(req, res, next) {
   try {
     const { id } = req.params;
-    await pool.query(
+    const result = await pool.query(
       'UPDATE categories SET is_active=false WHERE id=$1 AND tenant_id=$2',
       [id, TENANT(req)]
     );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Categoria non trovata' });
     res.status(204).end();
   } catch (err) { next(err); }
 }
@@ -166,10 +167,11 @@ async function updateItem(req, res, next) {
 async function deleteItem(req, res, next) {
   try {
     const { id } = req.params;
-    await pool.query(
+    const result = await pool.query(
       'UPDATE menu_items SET is_available=false WHERE id=$1 AND tenant_id=$2',
       [id, TENANT(req)]
     );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Item non trovato' });
     res.status(204).end();
   } catch (err) { next(err); }
 }

@@ -103,10 +103,11 @@ async function updateCombo(req, res, next) {
 async function deleteCombo(req, res, next) {
   try {
     const { id } = req.params;
-    await pool.query(
+    const result = await pool.query(
       `UPDATE combo_menus SET is_active=false WHERE id=$1 AND tenant_id=$2`,
       [id, TENANT(req)]
     );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Combo non trovata' });
     res.status(204).end();
   } catch (err) { next(err); }
 }
@@ -137,10 +138,11 @@ async function addCourse(req, res, next) {
 async function removeCourse(req, res, next) {
   try {
     const { courseId } = req.params;
-    await pool.query(
+    const result = await pool.query(
       'DELETE FROM combo_courses WHERE id=$1 AND tenant_id=$2',
       [courseId, TENANT(req)]
     );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Portata non trovata' });
     res.status(204).end();
   } catch (err) { next(err); }
 }
@@ -169,10 +171,11 @@ async function addCourseItem(req, res, next) {
 async function removeCourseItem(req, res, next) {
   try {
     const { itemId } = req.params;
-    await pool.query(
+    const result = await pool.query(
       'DELETE FROM combo_course_items WHERE id=$1 AND tenant_id=$2',
       [itemId, TENANT(req)]
     );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Item portata non trovato' });
     res.status(204).end();
   } catch (err) { next(err); }
 }
