@@ -104,10 +104,12 @@ export default function KDSPage() {
         kdsAPI.pending(),
         workflowAPI.getCrossmatches().catch(() => ({ data: [] })),
       ])
-      setOrders(Array.isArray(ordersRes.data) ? ordersRes.data : [])
-      // DEBUG: log crossmatches shape per diagnose React #31
+      // DEBUG temporaneo per diagnose React #31 con menu_item_id
       // eslint-disable-next-line no-console
-      console.log('[KDS] crossmatches payload:', crossRes.data)
+      console.log('[KDS] orders[0]:', ordersRes.data?.[0])
+      // eslint-disable-next-line no-console
+      console.log('[KDS] orders[0].items[0]:', ordersRes.data?.[0]?.items?.[0])
+      setOrders(Array.isArray(ordersRes.data) ? ordersRes.data : [])
       setCrossmatches(Array.isArray(crossRes.data) ? crossRes.data : [])
     } catch (err) {
       // eslint-disable-next-line no-console
