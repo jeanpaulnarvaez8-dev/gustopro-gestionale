@@ -24,14 +24,15 @@ services:
     container_name: gestionale-backend
     restart: unless-stopped
     ports:
-      - "3011:3001"
+      - "${BACKEND_PORT:-3011}:3001"
     environment:
       NODE_ENV: production
       PORT: 3001
       DATABASE_URL: postgresql://gustopro:${POSTGRES_PASSWORD}@postgres:5432/gustopro
       DB_SSL: "false"
       JWT_SECRET: ${JWT_SECRET}
-      ALLOWED_ORIGINS: http://gestione.gustopro.it,https://gestione.gustopro.it
+      SUPERADMIN_API_KEY: ${SUPERADMIN_API_KEY:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://gestione.gustopro.it,https://gestione.gustopro.it}
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,7 +46,7 @@ services:
     container_name: gestionale-frontend
     restart: unless-stopped
     ports:
-      - "3012:80"
+      - "${FRONTEND_PORT:-3012}:80"
     depends_on:
       - backend
 
