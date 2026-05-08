@@ -3,14 +3,29 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Package, Plus, Pencil, RefreshCw, Check, X,
-  ArrowUp, ArrowDown, AlertTriangle, TrendingDown, History,
+  ArrowUp, AlertTriangle, TrendingDown, History,
 } from 'lucide-react'
 import { ingredientsAPI, inventoryAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { Card, Badge, Button, Modal } from '../components/v2'
 
 const UNITS = ['kg', 'g', 'lt', 'ml', 'pz', 'bt', 'sc']
 
-// ─── Stock Adjust Modal ───────────────────────────────────────
+const inputCls = 'bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-3 py-2 text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-3)] outline-none transition'
+
+const ADJUST_TYPES = [
+  { v: 'in',         l: 'Carico',    tone: 'ok'   },
+  { v: 'out',        l: 'Scarico',   tone: 'err'  },
+  { v: 'adjustment', l: 'Rettifica', tone: 'sea'  },
+]
+
+const TONE_BTN = {
+  ok:  'border-[var(--color-ok)]/40   text-[var(--color-ok)]   bg-[var(--color-ok-soft)]',
+  err: 'border-[var(--color-err)]/40  text-[var(--color-err)]  bg-[var(--color-err-soft)]',
+  sea: 'border-[var(--color-sea)]/40  text-[var(--color-sea)]  bg-[var(--color-sea-soft)]',
+}
+
+// ─── Stock Adjust Modal ─────────────────────────────────────────────────────
 function AdjustModal({ ingredient, onClose, onDone }) {
   const { toast } = useToast()
   const [type, setType]   = useState('in')
@@ -30,39 +45,67 @@ function AdjustModal({ ingredient, onClose, onDone }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-[#222] border border-[#3A3A3A] rounded-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-[#3A3A3A]">
-          <Package size={15} className="text-[#D4AF37]" />
-          <p className="text-[#F5F5DC] font-semibold text-sm flex-1">{ingredient.name}</p>
-          <p className="text-[#555] text-xs">Stock: {parseFloat(ingredient.current_stock).toFixed(3)} {ingredient.unit}</p>
-          <button onClick={onClose} className="text-[#444] hover:text-[#888]"><X size={15} /></button>
+    <Modal
+      open
+      onClose={onClose}
+      size="sm"
+      title={ingredient.name}
+      description={
+        <span className="text-[var(--color-text-2)] text-sm">
+          Stock attuale: <span className="text-[var(--color-text)] font-bold tnum">{parseFloat(ingredient.current_stock).toFixed(3)} {ingredient.unit}</span>
+        </span>
+      }
+      footer={
+        <Button
+          fullWidth
+          size="lg"
+          loading={saving}
+          disabled={!qty}
+          leftIcon={<Check size={14} />}
+          onClick={handle}
+        >
+          Conferma
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-3 gap-2">
+          {ADJUST_TYPES.map(({ v, l, tone }) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setType(v)}
+              className={`py-2.5 rounded-lg border text-xs font-semibold transition ${
+                type === v
+                  ? TONE_BTN[tone]
+                  : 'border-[var(--color-border-strong)] text-[var(--color-text-3)] hover:text-[var(--color-text-2)]'
+              }`}
+            >
+              {l}
+            </button>
+          ))}
         </div>
-        <div className="p-5 flex flex-col gap-3">
-          <div className="grid grid-cols-3 gap-2">
-            {[['in', 'Carico', 'text-emerald-400'], ['out', 'Scarico', 'text-red-400'], ['adjustment', 'Rettifica', 'text-blue-400']].map(([v, l, c]) => (
-              <button key={v} onClick={() => setType(v)}
-                className={`py-2 rounded-lg border text-xs font-semibold transition ${type === v ? `border-current ${c} bg-current/10` : 'border-[#3A3A3A] text-[#555] hover:border-[#555]'}`}>
-                {l}
-              </button>
-            ))}
-          </div>
-          <input type="number" step="0.001" value={qty} onChange={e => setQty(e.target.value)}
-            placeholder={`Quantità (${ingredient.unit})`} autoFocus
-            className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
-          <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Note (opz.)"
-            className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
-          <button onClick={handle} disabled={saving || !qty}
-            className="py-2 rounded-lg bg-[#D4AF37] text-[#1A1A1A] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-[#c9a42e] transition">
-            {saving ? <RefreshCw size={13} className="animate-spin" /> : <><Check size={13} /> Conferma</>}
-          </button>
-        </div>
+        <input
+          type="number"
+          step="0.001"
+          value={qty}
+          onChange={e => setQty(e.target.value)}
+          placeholder={`Quantità (${ingredient.unit})`}
+          autoFocus
+          className={`${inputCls} tnum`}
+        />
+        <input
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder="Note (opz.)"
+          className={inputCls}
+        />
       </div>
-    </div>
+    </Modal>
   )
 }
 
-// ─── Movements Modal ──────────────────────────────────────────
+// ─── Movements Modal ─────────────────────────────────────────────────────────
 function MovementsModal({ ingredient, onClose }) {
   const [movements, setMovements] = useState([])
   const [loading, setLoading]     = useState(true)
@@ -73,42 +116,43 @@ function MovementsModal({ ingredient, onClose }) {
       .finally(() => setLoading(false))
   }, [ingredient.id])
 
-  const typeColor = { in: 'text-emerald-400', out: 'text-red-400', adjustment: 'text-blue-400' }
+  const typeColor = { in: 'text-[var(--color-ok)]', out: 'text-[var(--color-err)]', adjustment: 'text-[var(--color-sea)]' }
   const typeLabel = { in: 'Carico', out: 'Scarico', adjustment: 'Rettifica' }
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-[#222] border border-[#3A3A3A] rounded-2xl w-full max-w-md max-h-[75vh] flex flex-col"
-        onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-[#3A3A3A]">
-          <History size={15} className="text-[#D4AF37]" />
-          <p className="text-[#F5F5DC] font-semibold text-sm flex-1">Movimenti: {ingredient.name}</p>
-          <button onClick={onClose} className="text-[#444] hover:text-[#888]"><X size={15} /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
-          {loading ? (
-            <div className="flex justify-center py-8"><RefreshCw size={16} className="animate-spin text-[#555]" /></div>
-          ) : movements.length === 0 ? (
-            <p className="text-[#555] text-xs text-center py-8">Nessun movimento registrato</p>
-          ) : movements.map(m => (
-            <div key={m.id} className="flex items-center gap-3 bg-[#1A1A1A] rounded-lg px-3 py-2">
-              <span className={`text-xs font-semibold w-16 ${typeColor[m.type]}`}>{typeLabel[m.type]}</span>
-              <span className={`text-sm font-mono ${m.type === 'out' ? 'text-red-400' : 'text-emerald-400'}`}>
-                {m.type === 'out' ? '-' : '+'}{Math.abs(m.quantity)} {ingredient.unit}
-              </span>
-              <div className="flex-1 text-right">
-                <p className="text-[#555] text-xs">{m.created_by_name ?? 'Sistema'}</p>
-                <p className="text-[#444] text-xs">{new Date(m.created_at).toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</p>
-              </div>
+    <Modal
+      open
+      onClose={onClose}
+      size="md"
+      title={`Movimenti: ${ingredient.name}`}
+    >
+      <div className="flex flex-col gap-2 max-h-[55vh] overflow-y-auto">
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <RefreshCw size={18} className="animate-spin text-[var(--color-gold)]" />
+          </div>
+        ) : movements.length === 0 ? (
+          <p className="text-[var(--color-text-3)] text-sm text-center py-8">Nessun movimento registrato</p>
+        ) : movements.map(m => (
+          <div key={m.id} className="flex items-center gap-3 bg-[var(--color-surface-2)] rounded-lg px-3 py-2.5">
+            <span className={`text-xs font-bold w-20 ${typeColor[m.type]}`}>{typeLabel[m.type]}</span>
+            <span className={`text-sm font-bold tnum ${m.type === 'out' ? 'text-[var(--color-err)]' : 'text-[var(--color-ok)]'}`}>
+              {m.type === 'out' ? '-' : '+'}{Math.abs(m.quantity)} {ingredient.unit}
+            </span>
+            <div className="flex-1 text-right">
+              <p className="text-[var(--color-text-2)] text-xs font-medium">{m.created_by_name ?? 'Sistema'}</p>
+              <p className="text-[var(--color-text-3)] text-[10px] tnum">
+                {new Date(m.created_at).toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
+              </p>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-    </div>
+    </Modal>
   )
 }
 
-// ─── Ingredient Row ───────────────────────────────────────────
+// ─── Ingredient Row ──────────────────────────────────────────────────────────
 function IngredientRow({ ingr, suppliers, onRefresh }) {
   const { toast } = useToast()
   const [editing, setEditing]     = useState(false)
@@ -123,6 +167,7 @@ function IngredientRow({ ingr, suppliers, onRefresh }) {
 
   const isLow = ingr.low_stock
   const pct   = ingr.min_stock > 0 ? Math.min(100, (ingr.current_stock / ingr.min_stock) * 100) : 100
+  const barColor = pct < 50 ? 'bg-[var(--color-err)]' : pct < 100 ? 'bg-[var(--color-warn)]' : 'bg-[var(--color-ok)]'
 
   const handleSave = async () => {
     setSaving(true)
@@ -143,80 +188,84 @@ function IngredientRow({ ingr, suppliers, onRefresh }) {
       {adjusting && <AdjustModal ingredient={ingr} onClose={() => setAdjusting(false)} onDone={() => { setAdjusting(false); onRefresh() }} />}
       {history && <MovementsModal ingredient={ingr} onClose={() => setHistory(false)} />}
 
-      <div className={`bg-[#222] border rounded-xl overflow-hidden ${isLow ? 'border-amber-500/40' : 'border-[#3A3A3A]'}`}>
+      <Card padding="none" className={`overflow-hidden ${isLow ? 'border-[var(--color-warn)]/40' : ''}`}>
         {!editing ? (
           <div className="px-4 py-3">
             <div className="flex items-center gap-3">
-              {isLow && <AlertTriangle size={14} className="text-amber-400 shrink-0" />}
+              {isLow && <AlertTriangle size={14} className="text-[var(--color-warn)] shrink-0" />}
               <div className="flex-1 min-w-0">
-                <span className="text-[#F5F5DC] text-sm font-medium">{ingr.name}</span>
-                {ingr.supplier_name && <span className="text-[#555] text-xs ml-2">{ingr.supplier_name}</span>}
+                <span className="text-[var(--color-text)] text-sm font-semibold">{ingr.name}</span>
+                {ingr.supplier_name && <span className="text-[var(--color-text-3)] text-xs ml-2">{ingr.supplier_name}</span>}
               </div>
               <div className="text-right shrink-0">
-                <p className={`text-sm font-bold ${isLow ? 'text-amber-400' : 'text-emerald-400'}`}>
+                <p className={`text-sm font-bold tnum ${isLow ? 'text-[var(--color-warn)]' : 'text-[var(--color-ok)]'}`}>
                   {parseFloat(ingr.current_stock).toFixed(3)} {ingr.unit}
                 </p>
                 {ingr.min_stock > 0 && (
-                  <p className="text-[#555] text-xs">min: {parseFloat(ingr.min_stock).toFixed(3)}</p>
+                  <p className="text-[var(--color-text-3)] text-xs tnum">min: {parseFloat(ingr.min_stock).toFixed(3)}</p>
                 )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <button onClick={() => setHistory(true)} className="text-[#444] hover:text-[#888] transition p-1" title="Movimenti">
+                <button
+                  onClick={() => setHistory(true)}
+                  className="text-[var(--color-text-3)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] transition p-1.5 rounded-lg"
+                  title="Movimenti"
+                >
                   <History size={13} />
                 </button>
-                <button onClick={() => setAdjusting(true)} className="text-[#444] hover:text-emerald-400 transition p-1" title="Aggiusta stock">
+                <button
+                  onClick={() => setAdjusting(true)}
+                  className="text-[var(--color-text-3)] hover:text-[var(--color-ok)] hover:bg-[var(--color-ok-soft)] transition p-1.5 rounded-lg"
+                  title="Aggiusta stock"
+                >
                   <ArrowUp size={13} />
                 </button>
-                <button onClick={() => setEditing(true)} className="text-[#444] hover:text-[#D4AF37] transition p-1">
+                <button
+                  onClick={() => setEditing(true)}
+                  className="text-[var(--color-text-3)] hover:text-[var(--color-gold)] hover:bg-[var(--color-gold-soft)] transition p-1.5 rounded-lg"
+                  title="Modifica"
+                >
                   <Pencil size={13} />
                 </button>
               </div>
             </div>
             {ingr.min_stock > 0 && (
-              <div className="mt-2 h-1 bg-[#2A2A2A] rounded-full overflow-hidden">
+              <div className="mt-2 h-1 bg-[var(--color-surface-2)] rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${pct < 50 ? 'bg-red-500' : pct < 100 ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                  className={`h-full rounded-full transition-all ${barColor}`}
                   style={{ width: `${pct}%` }}
                 />
               </div>
             )}
           </div>
         ) : (
-          <div className="px-4 py-3 bg-[#1E1E1E] flex flex-col gap-2">
+          <div className="px-4 py-3 bg-[var(--color-surface-2)] flex flex-col gap-2">
             <div className="grid grid-cols-2 gap-2">
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome"
-                className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-1.5 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
-              <select value={unit} onChange={e => setUnit(e.target.value)}
-                className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-1.5 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60">
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome" className={inputCls} />
+              <select value={unit} onChange={e => setUnit(e.target.value)} className={inputCls}>
                 {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <input type="number" step="0.001" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="Stock minimo"
-                className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-1.5 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
-              <input type="number" step="0.01" value={cost} onChange={e => setCost(e.target.value)} placeholder="Costo/unità €"
-                className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-1.5 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
+              <input type="number" step="0.001" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="Stock minimo" className={`${inputCls} tnum`} />
+              <input type="number" step="0.01" value={cost} onChange={e => setCost(e.target.value)} placeholder="Costo/unità €" className={`${inputCls} tnum`} />
             </div>
-            <select value={suppId} onChange={e => setSuppId(e.target.value)}
-              className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-1.5 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60">
+            <select value={suppId} onChange={e => setSuppId(e.target.value)} className={inputCls}>
               <option value="">Nessun fornitore</option>
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <div className="flex gap-2">
-              <button onClick={() => setEditing(false)} className="flex-1 py-1.5 rounded-lg border border-[#3A3A3A] text-[#555] text-xs hover:text-[#888] transition">Annulla</button>
-              <button onClick={handleSave} disabled={saving}
-                className="flex-1 py-1.5 rounded-lg bg-[#D4AF37] text-[#1A1A1A] font-bold text-xs flex items-center justify-center gap-1 disabled:opacity-40 hover:bg-[#c9a42e] transition">
-                {saving ? <RefreshCw size={11} className="animate-spin" /> : <><Check size={11} /> Salva</>}
-              </button>
+              <Button variant="secondary" size="sm" fullWidth onClick={() => setEditing(false)}>Annulla</Button>
+              <Button size="sm" fullWidth loading={saving} leftIcon={<Check size={11} />} onClick={handleSave}>Salva</Button>
             </div>
           </div>
         )}
-      </div>
+      </Card>
     </>
   )
 }
 
-// ─── Page ─────────────────────────────────────────────────────
+// ─── Page ────────────────────────────────────────────────────────────────────
 export default function IngredientsPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -224,7 +273,7 @@ export default function IngredientsPage() {
   const [suppliers, setSuppliers]     = useState([])
   const [loading, setLoading]         = useState(true)
   const [adding, setAdding]           = useState(false)
-  const [filter, setFilter]           = useState('all') // all | low
+  const [filter, setFilter]           = useState('all')
   const [newName, setNewName]         = useState('')
   const [newUnit, setNewUnit]         = useState('kg')
   const [newStock, setNewStock]       = useState('')
@@ -243,7 +292,7 @@ export default function IngredientsPage() {
       setSuppliers(supp.data)
     } catch { toast({ type: 'error', title: 'Errore caricamento' }) }
     finally { setLoading(false) }
-  }, [])
+  }, []) // eslint-disable-line
 
   useEffect(() => { load() }, [load])
 
@@ -272,76 +321,99 @@ export default function IngredientsPage() {
   const lowCount = ingredients.filter(i => i.low_stock).length
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A] flex flex-col">
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-5 py-3 flex items-center gap-4">
-        <button onClick={() => navigate('/dashboard')} className="text-[#888] hover:text-[#F5F5DC] transition">
+    <div className="min-h-screen flex flex-col">
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 sm:px-5 py-3 flex items-center gap-3 flex-wrap sticky top-0 z-20">
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
+          aria-label="Indietro"
+        >
           <ArrowLeft size={18} />
         </button>
-        <Package size={17} className="text-[#D4AF37]" />
-        <span className="text-[#F5F5DC] font-bold">Ingredienti</span>
+        <Package size={18} className="text-[var(--color-gold)]" />
+        <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">Ingredienti</h1>
         {lowCount > 0 && (
-          <span className="flex items-center gap-1 text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
-            <AlertTriangle size={11} /> {lowCount} sotto scorta
-          </span>
+          <Badge tone="warn" size="sm" leftIcon={<AlertTriangle size={11} />}>
+            {lowCount} sotto scorta
+          </Badge>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => setFilter(f => f === 'low' ? 'all' : 'low')}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${filter === 'low' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'border border-[#3A3A3A] text-[#555] hover:text-[#888]'}`}>
+          <button
+            onClick={() => setFilter(f => f === 'low' ? 'all' : 'low')}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              filter === 'low'
+                ? 'bg-[var(--color-warn-soft)] text-[var(--color-warn)] border border-[var(--color-warn)]/30'
+                : 'border border-[var(--color-border-strong)] text-[var(--color-text-2)] hover:text-[var(--color-text)]'
+            }`}
+          >
             <TrendingDown size={12} /> Sotto scorta
           </button>
-          <button onClick={() => setAdding(p => !p)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#D4AF37] text-[#1A1A1A] rounded-lg text-xs font-semibold hover:bg-[#c9a42e] transition">
-            {adding ? <X size={13} /> : <Plus size={13} />} {adding ? 'Chiudi' : 'Nuovo'}
-          </button>
+          <Button
+            size="sm"
+            leftIcon={adding ? <X size={13} /> : <Plus size={13} />}
+            onClick={() => setAdding(p => !p)}
+          >
+            {adding ? 'Chiudi' : 'Nuovo'}
+          </Button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-3 max-w-3xl mx-auto w-full">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-3 max-w-3xl mx-auto w-full">
         {loading ? (
-          <div className="flex justify-center py-16"><RefreshCw size={18} className="animate-spin text-[#555]" /></div>
+          <div className="flex justify-center py-16 gap-2 text-[var(--color-text-2)]">
+            <RefreshCw size={18} className="animate-spin text-[var(--color-gold)]" />
+            <span className="text-sm">Caricamento ingredienti…</span>
+          </div>
         ) : (
           <>
             <AnimatePresence>
               {adding && (
-                <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-                  className="bg-[#222] border border-[#D4AF37]/30 rounded-2xl p-4 flex flex-col gap-2">
-                  <p className="text-[#888] text-xs font-semibold">Nuovo ingrediente</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome *" autoFocus
-                      onKeyDown={e => e.key === 'Enter' && handleCreate()}
-                      className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
-                    <select value={newUnit} onChange={e => setNewUnit(e.target.value)}
-                      className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60">
-                      {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <input type="number" step="0.001" value={newStock} onChange={e => setNewStock(e.target.value)} placeholder="Stock iniziale"
-                      className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
-                    <input type="number" step="0.001" value={newMin} onChange={e => setNewMin(e.target.value)} placeholder="Stock minimo"
-                      className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
-                    <input type="number" step="0.01" value={newCost} onChange={e => setNewCost(e.target.value)} placeholder="Costo €/unità"
-                      className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm outline-none focus:border-[#D4AF37]/60" />
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setAdding(false)} className="flex-1 py-2 rounded-lg border border-[#3A3A3A] text-[#555] text-xs hover:text-[#888] transition">Annulla</button>
-                    <button onClick={handleCreate} disabled={saving || !newName.trim()}
-                      className="flex-1 py-2 rounded-lg bg-[#D4AF37] text-[#1A1A1A] font-bold text-sm flex items-center justify-center gap-1.5 disabled:opacity-40 hover:bg-[#c9a42e] transition">
-                      {saving ? <RefreshCw size={13} className="animate-spin" /> : <><Check size={13} /> Crea</>}
-                    </button>
-                  </div>
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                >
+                  <Card padding="md" className="border-[var(--color-gold-ring)] flex flex-col gap-2">
+                    <p className="text-[var(--color-text-2)] text-xs font-semibold uppercase tracking-wider">Nuovo ingrediente</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        value={newName}
+                        onChange={e => setNewName(e.target.value)}
+                        placeholder="Nome *"
+                        autoFocus
+                        onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                        className={inputCls}
+                      />
+                      <select value={newUnit} onChange={e => setNewUnit(e.target.value)} className={inputCls}>
+                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <input type="number" step="0.001" value={newStock} onChange={e => setNewStock(e.target.value)} placeholder="Stock iniziale" className={`${inputCls} tnum`} />
+                      <input type="number" step="0.001" value={newMin} onChange={e => setNewMin(e.target.value)} placeholder="Stock minimo" className={`${inputCls} tnum`} />
+                      <input type="number" step="0.01" value={newCost} onChange={e => setNewCost(e.target.value)} placeholder="Costo €/unità" className={`${inputCls} tnum`} />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="secondary" fullWidth onClick={() => setAdding(false)}>Annulla</Button>
+                      <Button fullWidth loading={saving} disabled={!newName.trim()} leftIcon={<Check size={13} />} onClick={handleCreate}>
+                        Crea
+                      </Button>
+                    </div>
+                  </Card>
                 </motion.div>
               )}
             </AnimatePresence>
 
             {visible.length === 0 && (
-              <div className="flex flex-col items-center gap-3 py-20">
-                <Package size={40} className="text-[#333]" />
-                <p className="text-[#555] text-sm">
+              <div className="flex flex-col items-center gap-3 py-20 text-[var(--color-text-3)]">
+                <Package size={48} className="text-[var(--color-text-3)]/40" />
+                <p className="serif text-[var(--color-text-2)] text-base font-bold">
                   {filter === 'low' ? 'Nessun ingrediente sotto scorta' : 'Nessun ingrediente ancora'}
                 </p>
                 {filter === 'all' && (
-                  <button onClick={() => setAdding(true)} className="text-[#D4AF37] text-sm hover:underline">Aggiungi il primo</button>
+                  <button onClick={() => setAdding(true)} className="text-[var(--color-gold)] text-sm hover:underline font-semibold">
+                    Aggiungi il primo
+                  </button>
                 )}
               </div>
             )}
