@@ -1,17 +1,74 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────────
+   GustoPro Gestionale — Riva Beach Salento
+   Palette mediterranea serale: notte sul mare + ottone caldo
+   Tokens estratti dal redesign Claude Design (2026-05-08)
+   ───────────────────────────────────────────────────────────────── */
+
 @theme {
+  /* — Surfaces — */
+  --color-bg: #13181C;
+  --color-surface: #1C2228;
+  --color-surface-2: #181D22;
+  --color-canvas: #0B0E11;
+
+  /* — Borders (warm white tints) — */
+  --color-border-soft: rgba(232, 219, 180, 0.08);
+  --color-border-strong: rgba(232, 219, 180, 0.16);
+
+  /* — Gold (signature Riva) — */
+  --color-gold: #D4AF37;
+  --color-gold-light: #E8C76B;
+  --color-gold-soft: rgba(212, 175, 55, 0.12);
+  --color-gold-ring: rgba(212, 175, 55, 0.45);
+
+  /* — Mediterranean accents — */
+  --color-sea: #3E7A93;
+  --color-sea-soft: rgba(62, 122, 147, 0.14);
+  --color-pine: #4A7A5C;
+  --color-pine-soft: rgba(74, 122, 92, 0.14);
+  --color-sand: #C9A96E;
+  --color-sand-soft: rgba(201, 169, 110, 0.12);
+  --color-terracotta: #B85C3C;
+  --color-terracotta-soft: rgba(184, 92, 60, 0.14);
+
+  /* — Text (warm ivory) — */
+  --color-text: #F0E9D2;
+  --color-text-2: rgba(240, 233, 210, 0.7);
+  --color-text-3: rgba(240, 233, 210, 0.42);
+
+  /* — Status (state machines) — */
+  --color-ok: #22C55E;
+  --color-err: #EF4444;
+  --color-info: #3B82F6;
+  --color-warn: #EAB308;
+  --color-park: #A855F7;
+  --color-ok-soft: rgba(34, 197, 94, 0.14);
+  --color-err-soft: rgba(239, 68, 68, 0.14);
+  --color-info-soft: rgba(59, 130, 246, 0.14);
+  --color-warn-soft: rgba(234, 179, 8, 0.14);
+  --color-park-soft: rgba(168, 85, 247, 0.14);
+
+  /* — Legacy tokens (mantenuti per il codice esistente; saranno
+        rimossi dopo la migrazione progressiva delle pagine) — */
   --color-bordeaux: #8B0000;
   --color-bordeaux-dark: #5C0000;
   --color-bordeaux-light: #B22222;
-  --color-gold: #D4AF37;
   --color-gold-dark: #A68B00;
-  --color-gold-light: #F0D060;
-  --color-cream: #F5F5DC;
+  --color-cream: #F0E9D2;        /* allineato a --color-text */
   --color-cream-dark: #E8E8C8;
-  --color-dark: #1A1A1A;
-  --color-dark-2: #2A2A2A;
-  --color-dark-3: #3A3A3A;
+  --color-dark: #13181C;          /* allineato a --color-bg */
+  --color-dark-2: #1C2228;        /* allineato a --color-surface */
+  --color-dark-3: #181D22;        /* allineato a --color-surface-2 */
+
+  /* — Typography — */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif: 'Fraunces', ui-serif, Georgia, serif;
+
+  /* — Tap targets (mobile-first) — */
+  --tap: 44px;
+  --tap-lg: 56px;
 }
 
 * {
@@ -20,27 +77,77 @@
 
 body {
   margin: 0;
-  background-color: var(--color-dark);
-  color: var(--color-cream);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+
+  /* Notte sul Salento: gradient di mare in alto-sx + tocco oro in basso-dx */
+  background-color: var(--color-bg);
+  background-image:
+    radial-gradient(ellipse at 12% 0%, rgba(62, 122, 147, 0.10), transparent 55%),
+    radial-gradient(ellipse at 100% 100%, rgba(212, 175, 55, 0.06), transparent 50%);
+  background-attachment: fixed;
 }
 
-/* Safe area per iPhone notch/home indicator */
+/* Helper classes per tipografia display (titoli, brand, hero) */
+.serif {
+  font-family: var(--font-serif);
+  font-feature-settings: "ss01", "ss02";
+  letter-spacing: -0.01em;
+}
+.serif-italic {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-feature-settings: "ss01";
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Safe area iPhone (notch/home indicator) */
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-/* Fix altezza su mobile (100vh include la barra browser) */
+/* Altezza viewport mobile-friendly (100vh include barra browser su iOS) */
 html, body, #root { height: 100%; }
 @supports (height: 100dvh) {
   html, body, #root { height: 100dvh; }
 }
 
-/* Scrollbar */
+/* Scrollbar (fine, oro al hover) */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--color-dark-2); }
-::-webkit-scrollbar-thumb { background: var(--color-dark-3); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-gold-dark); }
+::-webkit-scrollbar-track { background: var(--color-surface); }
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-gold); }
+
+/* ─────────────────────────────────────────────────────────────────
+   Animation library (importata dal redesign)
+   ───────────────────────────────────────────────────────────────── */
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0 var(--color-gold-ring); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+@keyframes pulse-err {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+  50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+@keyframes slide-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes flash-gold {
+  0% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
+  20% { box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.6); }
+  100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
+}

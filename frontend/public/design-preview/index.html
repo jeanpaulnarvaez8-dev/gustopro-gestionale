@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>GustoPro Gestionale — Riva Beach Salento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* Riva Beach Salento — palette serale mediterranea: notte sul mare + ottone caldo */
+    --bg:#13181C; --surface:#1C2228; --surface-2:#181D22; --canvas:#0B0E11;
+    --border:rgba(232,219,180,0.08); --border-2:rgba(232,219,180,0.16);
+    --gold:#D4AF37; --gold-2:#E8C76B; --gold-soft:rgba(212,175,55,0.12); --gold-ring:rgba(212,175,55,0.45);
+    --sea:#3E7A93; --sea-soft:rgba(62,122,147,0.14);
+    --pine:#4A7A5C; --pine-soft:rgba(74,122,92,0.14);
+    --sand:#C9A96E; --sand-soft:rgba(201,169,110,0.12);
+    --terracotta:#B85C3C; --terracotta-soft:rgba(184,92,60,0.14);
+    --text:#F0E9D2; --text-2:rgba(240,233,210,0.7); --text-3:rgba(240,233,210,0.42);
+    --ok:#22C55E; --err:#EF4444; --info:#3B82F6; --warn:#EAB308; --park:#A855F7;
+    --ok-soft:rgba(34,197,94,0.14); --err-soft:rgba(239,68,68,0.14);
+    --info-soft:rgba(59,130,246,0.14); --warn-soft:rgba(234,179,8,0.14);
+    --park-soft:rgba(168,85,247,0.14);
+    --serif:'Fraunces',ui-serif,Georgia,serif;
+    --sans:'Inter',system-ui,-apple-system,Segoe UI,sans-serif;
+    --tap:44px; --tap-lg:56px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;font-feature-settings:"cv11","ss01";}
+  body{overflow:hidden;height:100vh;
+    background:
+      radial-gradient(ellipse at 12% 0%, rgba(62,122,147,0.10), transparent 55%),
+      radial-gradient(ellipse at 100% 100%, rgba(212,175,55,0.06), transparent 50%),
+      var(--bg);
+  }
+  .serif{font-family:var(--serif);font-feature-settings:"ss01","ss02";letter-spacing:-0.01em}
+  .serif-italic{font-family:var(--serif);font-style:italic;font-feature-settings:"ss01"}
+  button{font-family:inherit}
+  .tnum{font-variant-numeric:tabular-nums}
+  .scrollbar::-webkit-scrollbar{width:8px;height:8px}
+  .scrollbar::-webkit-scrollbar-track{background:transparent}
+  .scrollbar::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:8px}
+  .scrollbar::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.16)}
+
+  /* No-select on UI chrome */
+  .noselect{user-select:none;-webkit-user-select:none}
+
+  /* Animations */
+  @keyframes pulse-gold {
+    0%,100%{box-shadow:0 0 0 0 var(--gold-ring)}
+    50%{box-shadow:0 0 0 6px transparent}
+  }
+  @keyframes pulse-err {
+    0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.6)}
+    50%{box-shadow:0 0 0 8px rgba(239,68,68,0)}
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes slide-up{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
+  @keyframes fade-in{from{opacity:0}to{opacity:1}}
+  *[style*="fade-in"],*[style*="slide-up"]{animation-fill-mode:forwards!important}
+  @keyframes flash-gold{
+    0%{box-shadow:0 0 0 0 rgba(212,175,55,0)}
+    20%{box-shadow:0 0 0 4px rgba(212,175,55,0.6)}
+    100%{box-shadow:0 0 0 0 rgba(212,175,55,0)}
+  }
+
+  /* Tweaks panel local override (already does this) */
+</style>
+
+<script type="application/json" id="speaker-notes">[]</script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="src/icons.jsx"></script>
+  <script type="text/babel" src="src/allergens.jsx"></script>
+  <script type="text/babel" src="src/state.jsx"></script>
+  <script type="text/babel" src="src/ui.jsx"></script>
+  <script type="text/babel" src="src/floor-plan.jsx"></script>
+  <script type="text/babel" src="src/floor-plan-mobile.jsx"></script>
+  <script type="text/babel" src="src/floor-plan-editor.jsx"></script>
+  <script type="text/babel" src="src/dashboard.jsx"></script>
+  <script type="text/babel" src="src/reservations.jsx"></script>
+  <script type="text/babel" src="src/inventory.jsx"></script>
+  <script type="text/babel" src="src/order-history.jsx"></script>
+  <script type="text/babel" src="src/close-day.jsx"></script>
+  <script type="text/babel" src="src/staff.jsx"></script>
+  <script type="text/babel" src="src/onboarding.jsx"></script>
+  <script type="text/babel" src="src/order-extras.jsx"></script>
+  <script type="text/babel" src="src/order-page.jsx"></script>
+  <script type="text/babel" src="src/kds.jsx"></script>
+  <script type="text/babel" src="src/checkout.jsx"></script>
+  <script type="text/babel" src="src/login.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="src/app.jsx"></script>
+</body>
+</html>
