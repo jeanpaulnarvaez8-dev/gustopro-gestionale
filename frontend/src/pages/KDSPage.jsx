@@ -104,20 +104,39 @@ export default function KDSPage() {
         kdsAPI.pending(),
         workflowAPI.getCrossmatches().catch(() => ({ data: [] })),
       ])
-      // DEBUG temporaneo per diagnose React #31 con menu_item_id
-      // eslint-disable-next-line no-console
-      console.log('[KDS] orders[0] JSON:', JSON.stringify(ordersRes.data?.[0]))
-      // eslint-disable-next-line no-console
-      console.log('[KDS] orders[0].items[0] JSON:', JSON.stringify(ordersRes.data?.[0]?.items?.[0]))
       setOrders(Array.isArray(ordersRes.data) ? ordersRes.data : [])
       setCrossmatches(Array.isArray(crossRes.data) ? crossRes.data : [])
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[KDS] loadOrders failed:', err)
+    } catch {
+      // keep existing data
     } finally {
       setLoading(false)
     }
   }, [])
+
+  // Render-safe combo selections: gestisce sia format nuovo {course: name|names[]}
+  // che format legacy [{menu_item_id: "..."}] (pre-Phase 2).
+  const formatComboSelections = (sel) => {
+    if (!sel) return []
+    // Legacy: array di {menu_item_id} senza nomi → mostriamo il count
+    if (Array.isArray(sel)) {
+      const valid = sel.filter(s => s && typeof s === 'object')
+      if (valid.length === 0) return []
+      return [{ course: 'Selezione menù', label: `${valid.length} portate (legacy)` }]
+    }
+    // Nuovo: { courseName: itemName | [itemNames] }
+    if (typeof sel === 'object') {
+      return Object.entries(sel).map(([course, value]) => {
+        let label = '—'
+        if (Array.isArray(value)) {
+          label = value.map(v => typeof v === 'string' ? v : '').filter(Boolean).join(', ')
+        } else if (typeof value === 'string' || typeof value === 'number') {
+          label = String(value)
+        }
+        return { course: String(course), label }
+      })
+    }
+    return []
+  }
 
   useEffect(() => {
     if (!loadedRef.current) { loadedRef.current = true; loadOrders() }
@@ -324,8 +343,7 @@ export default function KDSPage() {
           </Card>
         )}
 
-        {/* DEBUG: bisezione — se /kds carica disabilitando questo, il bug è qui */}
-        {false && !loading && orders.length > 0 && (
+        {!loading && orders.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             <AnimatePresence>
               {orders.map(order => {
@@ -447,10 +465,10 @@ export default function KDSPage() {
                                 </div>
                                 {item.is_combo && item.combo_selections && (
                                   <div className="mt-1 flex flex-col gap-0.5">
-                                    {Object.entries(item.combo_selections).map(([course, selection]) => (
-                                      <p key={course} className="text-[var(--color-text-2)] text-xs">
-                                        <span className="text-[var(--color-text-3)]">{course}:</span>{' '}
-                                        {Array.isArray(selection) ? selection.join(', ') : selection}
+                                    {formatComboSelections(item.combo_selections).map((c, i) => (
+                                      <p key={`${c.course}-${i}`} className="text-[var(--color-text-2)] text-xs">
+                                        <span className="text-[var(--color-text-3)]">{c.course}:</span>{' '}
+                                        {c.label}
                                       </p>
                                     ))}
                                   </div>

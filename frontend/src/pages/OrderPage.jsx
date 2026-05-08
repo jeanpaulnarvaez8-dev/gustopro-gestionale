@@ -573,15 +573,31 @@ export default function OrderPage() {
                             <span className="text-[var(--color-text-2)] text-[9px] ml-1 tnum">{ci.weight_g}g</span>
                           )}
                         </span>
-                        {ci.item.is_combo && ci.combo_selections && (
-                          <div className="mt-0.5">
-                            {Object.entries(ci.combo_selections).map(([course, sel]) => (
-                              <p key={course} className="text-[var(--color-text-3)] text-[9px] truncate">
-                                {course}: {Array.isArray(sel) ? sel.join(', ') : sel}
-                              </p>
-                            ))}
-                          </div>
-                        )}
+                        {ci.item.is_combo && ci.combo_selections && (() => {
+                          // Render-safe: gestisce format legacy [{menu_item_id}]
+                          const sel = ci.combo_selections
+                          let entries = []
+                          if (Array.isArray(sel)) {
+                            const valid = sel.filter(s => s && typeof s === 'object')
+                            if (valid.length > 0) entries = [['Selezione', `${valid.length} portate (legacy)`]]
+                          } else if (typeof sel === 'object') {
+                            entries = Object.entries(sel).map(([k, v]) => [
+                              String(k),
+                              Array.isArray(v) ? v.map(x => typeof x === 'string' ? x : '').filter(Boolean).join(', ')
+                                : (typeof v === 'string' || typeof v === 'number') ? String(v) : ''
+                            ]).filter(([, label]) => label)
+                          }
+                          if (entries.length === 0) return null
+                          return (
+                            <div className="mt-0.5">
+                              {entries.map(([course, label], i) => (
+                                <p key={`${course}-${i}`} className="text-[var(--color-text-3)] text-[9px] truncate">
+                                  {course}: {label}
+                                </p>
+                              ))}
+                            </div>
+                          )
+                        })()}
                       </div>
                       <button
                         onClick={() => removeItem(ci._key)}
