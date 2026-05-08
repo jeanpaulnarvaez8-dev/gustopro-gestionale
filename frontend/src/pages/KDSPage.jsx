@@ -1,23 +1,54 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock, LayoutDashboard, Package, LogOut } from 'lucide-react'
+import {
+  ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock,
+  LayoutDashboard, Package, LogOut,
+} from 'lucide-react'
 import { useSocket } from '../context/SocketContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { kdsAPI, workflowAPI } from '../lib/api'
 import { formatElapsed, elapsedMinutes } from '../lib/utils'
+import { Card, Badge } from '../components/v2'
 
+// ─── Status config (tokens Riva) ─────────────────────────────────────────────
+// pending=warn (giallo), cooking=terracotta (arancio caldo), ready=ok (verde)
 const ITEM_STATUS = {
-  pending: { label: 'In attesa',       bg: 'bg-amber-900/40',  border: 'border-amber-500/50',  text: 'text-amber-400',  next: 'cooking', nextLabel: 'Inizia' },
-  cooking: { label: 'In preparazione', bg: 'bg-orange-900/40', border: 'border-orange-500/50', text: 'text-orange-400', next: 'ready',   nextLabel: 'Pronto' },
-  ready:   { label: 'Pronto',          bg: 'bg-emerald-900/40',border: 'border-emerald-500/50',text: 'text-emerald-400',next: null,      nextLabel: null },
+  pending: {
+    label: 'In attesa',
+    bg: 'bg-[var(--color-warn-soft)]',
+    border: 'border-[var(--color-warn)]/50',
+    text: 'text-[var(--color-warn)]',
+    next: 'cooking',
+    nextLabel: 'Inizia',
+    nextBtn: 'bg-[var(--color-terracotta)] hover:brightness-110 text-white',
+  },
+  cooking: {
+    label: 'In preparazione',
+    bg: 'bg-[var(--color-terracotta-soft)]',
+    border: 'border-[var(--color-terracotta)]/50',
+    text: 'text-[var(--color-terracotta)]',
+    next: 'ready',
+    nextLabel: 'Pronto',
+    nextBtn: 'bg-[var(--color-ok)] hover:brightness-110 text-white',
+  },
+  ready: {
+    label: 'Pronto',
+    bg: 'bg-[var(--color-ok-soft)]',
+    border: 'border-[var(--color-ok)]/50',
+    text: 'text-[var(--color-ok)]',
+    next: null,
+    nextLabel: null,
+    nextBtn: null,
+  },
 }
 
-function elapsedColor(minutes) {
-  if (minutes < 10) return 'text-emerald-400'
-  if (minutes < 20) return 'text-amber-400'
-  return 'text-red-400'
+// Soglie tempo: <10 min ok, 10-20 warn, >20 err
+function elapsedTone(minutes) {
+  if (minutes < 10) return 'ok'
+  if (minutes < 20) return 'warn'
+  return 'err'
 }
 
 function ElapsedTick({ sentAt }) {
@@ -27,10 +58,31 @@ function ElapsedTick({ sentAt }) {
     return () => clearInterval(id)
   }, [])
   const mins = elapsedMinutes(sentAt)
+  const tone = elapsedTone(mins)
   return (
-    <span className={`text-xs flex items-center gap-1 ${elapsedColor(mins)}`}>
-      <Clock size={10} /> {formatElapsed(sentAt)}
+    <span className={`text-xs flex items-center gap-1 tnum font-semibold ${
+      tone === 'ok'   ? 'text-[var(--color-ok)]'   :
+      tone === 'warn' ? 'text-[var(--color-warn)]' :
+                        'text-[var(--color-err)]'
+    }`}>
+      <Clock size={11} /> {formatElapsed(sentAt)}
     </span>
+  )
+}
+
+// Header nav button (riusa pattern)
+function NavButton({ icon: Icon, label, onClick, hoverColor = 'gold' }) {
+  const HOVER = {
+    gold: 'hover:text-[var(--color-gold)]',
+    warn: 'hover:text-[var(--color-warn)]',
+  }
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 text-[var(--color-text-2)] ${HOVER[hoverColor]} hover:bg-[rgba(255,255,255,0.04)] transition text-xs px-2 py-1.5 rounded-lg`}
+    >
+      <Icon size={13} /> {label}
+    </button>
   )
 }
 
@@ -42,7 +94,7 @@ export default function KDSPage() {
   const [orders, setOrders] = useState([])
   const [crossmatches, setCrossmatches] = useState([])
   const [loading, setLoading] = useState(true)
-  const [updating, setUpdating] = useState({}) // itemId → true
+  const [updating, setUpdating] = useState({})
   const loadedRef = useRef(false)
   const updatingRef = useRef({})
 
@@ -55,7 +107,7 @@ export default function KDSPage() {
       setOrders(ordersRes.data)
       setCrossmatches(crossRes.data)
     } catch {
-      // keep existing data on error
+      // keep existing data
     } finally {
       setLoading(false)
     }
@@ -79,7 +131,6 @@ export default function KDSPage() {
           const newItems = order.items.map(it =>
             it.id === itemId ? { ...it, status } : it
           )
-          // Remove order if all items are ready/served/cancelled
           const active = newItems.filter(it => it.status === 'pending' || it.status === 'cooking')
           if (active.length === 0) return null
           return { ...order, items: newItems }
@@ -96,7 +147,6 @@ export default function KDSPage() {
     socket.on('workflow-status-changed', onWorkflowChanged)
     socket.on('item-released-to-production', onWorkflowChanged)
 
-    // Ricarica quando il socket si riconnette (dopo disconnessione mobile)
     const onReconnect = () => loadOrders()
     socket.on('connect', onReconnect)
 
@@ -110,7 +160,7 @@ export default function KDSPage() {
     }
   }, [socket, loadOrders])
 
-  // Fallback polling ogni 15s — salta se c'è un aggiornamento in corso
+  // Fallback polling 15s
   useEffect(() => {
     const interval = setInterval(() => {
       if (Object.keys(updatingRef.current).length === 0) loadOrders()
@@ -122,7 +172,7 @@ export default function KDSPage() {
     if (!nextStatus) return
     setUpdating(prev => { const n = { ...prev, [itemId]: true }; updatingRef.current = n; return n })
 
-    // Optimistic update — don't wait for socket (works even when offline)
+    // Optimistic update
     setOrders(prev => {
       const updated = prev.map(order => {
         const newItems = order.items.map(it => it.id === itemId ? { ...it, status: nextStatus } : it)
@@ -137,7 +187,7 @@ export default function KDSPage() {
       await kdsAPI.updateItemStatus(itemId, nextStatus)
     } catch {
       toast({ type: 'error', title: 'Errore aggiornamento stato' })
-      loadOrders() // revert to true DB state on failure
+      loadOrders()
     } finally {
       setUpdating(prev => { const n = { ...prev }; delete n[itemId]; updatingRef.current = n; return n })
     }
@@ -149,93 +199,112 @@ export default function KDSPage() {
     sum + o.items.filter(i => i.status === 'cooking').length, 0)
 
   return (
-    <div className="min-h-screen bg-[#111] flex flex-col">
+    <div className="min-h-screen flex flex-col bg-[var(--color-canvas)]">
 
-      {/* Header */}
-      <header className="bg-[#1A1A1A] border-b border-[#2A2A2A] px-5 py-3 flex items-center gap-4">
+      {/* ─── Header ─────────────────────────────────────────── */}
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 sm:px-5 py-3 flex items-center gap-3 flex-wrap sticky top-0 z-20">
         {user?.role !== 'kitchen' && (
-          <button onClick={() => navigate('/tables')}
-            className="text-[#555] hover:text-[#888] transition">
+          <button
+            onClick={() => navigate('/tables')}
+            className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
+            aria-label="Indietro"
+          >
             <ArrowLeft size={18} />
           </button>
         )}
-        <ChefHat size={20} className="text-[#D4AF37]" />
-        <span className="text-[#F5F5DC] font-bold text-base tracking-wide">KDS CUCINA</span>
+        <ChefHat size={20} className="text-[var(--color-gold)]" />
+        <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">
+          KDS Cucina
+        </h1>
 
-        <div className="flex items-center gap-4 ml-4 text-xs">
-          <span className="text-amber-400">{pendingCount} in attesa</span>
-          <span className="text-orange-400">{cookingCount} in prep.</span>
-          <span className="text-[#555]">{orders.length} ordini</span>
+        {/* Stats live */}
+        <div className="flex items-center gap-2 text-xs ml-2">
+          <Badge tone="warn" size="sm">{pendingCount} in attesa</Badge>
+          <Badge tone="terracotta" size="sm">{cookingCount} in prep.</Badge>
+          <span className="text-[var(--color-text-3)] text-[11px] tnum">
+            {orders.length} ordini
+          </span>
         </div>
 
-        <div className="ml-auto flex items-center gap-4">
-          <button onClick={() => navigate('/waiting-monitor')}
-            className="flex items-center gap-1.5 text-[#555] hover:text-amber-400 transition text-xs">
-            <Clock size={13} /> Attese
-          </button>
+        {/* Right cluster */}
+        <div className="ml-auto flex items-center gap-2">
+          <NavButton icon={Clock} label="Attese" hoverColor="warn" onClick={() => navigate('/waiting-monitor')} />
           {['admin', 'manager'].includes(user?.role) && (
-            <button onClick={() => navigate('/dashboard')}
-              className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
-              <LayoutDashboard size={13} /> Dashboard
-            </button>
+            <>
+              <NavButton icon={LayoutDashboard} label="Dashboard" onClick={() => navigate('/dashboard')} />
+              <NavButton icon={Package} label="Inventario" onClick={() => navigate('/inventory')} />
+            </>
           )}
-          {['admin', 'manager'].includes(user?.role) && (
-            <button onClick={() => navigate('/inventory')}
-              className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
-              <Package size={13} /> Inventario
-            </button>
-          )}
-          <button onClick={loadOrders} className="text-[#555] hover:text-[#888] transition">
+          <button
+            onClick={loadOrders}
+            className="text-[var(--color-text-2)] hover:text-[var(--color-gold)] transition p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.04)]"
+            aria-label="Ricarica"
+          >
             <RefreshCw size={14} />
           </button>
-          <div className={`flex items-center gap-1 text-xs ${isConnected ? 'text-emerald-400' : 'text-red-400'}`}>
-            {isConnected ? <Wifi size={12} /> : <WifiOff size={12} />}
-            <span>{isConnected ? 'Live' : 'Offline'}</span>
-          </div>
+          <Badge
+            tone={isConnected ? 'ok' : 'err'}
+            size="sm"
+            leftIcon={isConnected ? <Wifi size={11} /> : <WifiOff size={11} />}
+          >
+            {isConnected ? 'Live' : 'Offline'}
+          </Badge>
           {user?.role === 'kitchen' && (
-            <button onClick={logout} className="text-[#555] hover:text-red-400 transition p-1">
+            <button
+              onClick={logout}
+              title="Logout"
+              className="text-[var(--color-text-3)] hover:text-[var(--color-err)] hover:bg-[rgba(239,68,68,0.08)] rounded-lg p-2 transition"
+            >
               <LogOut size={15} />
             </button>
           )}
         </div>
       </header>
 
-      {/* Content */}
+      {/* ─── Content ─────────────────────────────────────────── */}
       <div className="flex-1 p-4 overflow-auto">
 
         {loading && (
-          <div className="flex items-center justify-center h-64">
-            <RefreshCw size={20} className="animate-spin text-[#555]" />
+          <div className="flex items-center justify-center h-64 gap-2 text-[var(--color-text-2)]">
+            <RefreshCw size={20} className="animate-spin text-[var(--color-gold)]" />
+            <span className="text-sm">Caricamento ordini cucina…</span>
           </div>
         )}
 
         {!loading && orders.length === 0 && (
           <div className="flex flex-col items-center justify-center h-64 gap-3">
-            <CheckCircle2 size={48} className="text-emerald-500/40" />
-            <p className="text-[#555] text-sm">Nessun ordine in coda</p>
+            <CheckCircle2 size={56} className="text-[var(--color-ok)]/40" />
+            <p className="serif text-[var(--color-text-2)] text-lg font-bold">Nessun ordine in coda</p>
+            <p className="text-[var(--color-text-3)] text-xs">La cucina è in pari · ottimo lavoro!</p>
           </div>
         )}
 
-        {/* Incroci: piatti uguali su piu' tavoli */}
+        {/* Incroci: piatti uguali su più tavoli */}
         {!loading && crossmatches.length > 0 && (
-          <div className="mb-4 bg-[#1A1A1A] border border-purple-500/30 rounded-xl p-4">
+          <Card variant="elevated" padding="md" className="mb-4 border-[var(--color-park)]/40">
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-purple-400 font-bold text-sm">INCROCI</span>
-              <span className="text-[#555] text-xs">Piatti uguali su piu' tavoli - ottimizza la produzione</span>
+              <Badge tone="park" solid>INCROCI</Badge>
+              <span className="text-[var(--color-text-3)] text-xs">
+                Piatti uguali su più tavoli — ottimizza la produzione
+              </span>
             </div>
             <div className="flex flex-wrap gap-2">
               {crossmatches.map(cm => (
-                <div key={cm.menu_item_id}
-                  className="bg-purple-900/20 border border-purple-500/30 rounded-lg px-3 py-2 flex items-center gap-2">
-                  <span className="text-[#F5F5DC] text-sm font-semibold">{cm.item_name}</span>
-                  <span className="text-purple-400 text-xs font-bold">{cm.total_quantity}x</span>
-                  <span className="text-[#555] text-[10px]">
+                <div
+                  key={cm.menu_item_id}
+                  className="bg-[var(--color-park-soft)] border border-[var(--color-park)]/30 rounded-lg px-3 py-2 flex items-center gap-2"
+                >
+                  <span className="text-[var(--color-text)] text-sm font-bold">{cm.item_name}</span>
+                  <span className="text-[var(--color-park)] text-xs font-bold tnum">
+                    {cm.total_quantity}×
+                  </span>
+                  <span className="text-[var(--color-text-3)] text-[10px]">
                     ({cm.orders.map(o => o.table_number).join(', ')})
                   </span>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         )}
 
         {!loading && orders.length > 0 && (
@@ -245,142 +314,162 @@ export default function KDSPage() {
                 const oldest = order.items.reduce((min, it) =>
                   !min || new Date(it.sent_at) < new Date(min) ? it.sent_at : min, null)
                 const mins = elapsedMinutes(oldest)
+                const urgency = elapsedTone(mins) // ok | warn | err
 
                 return (
-                  <motion.div key={order.order_id}
+                  <motion.div
+                    key={order.order_id}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.2 }}
-                    className={`bg-[#1A1A1A] rounded-xl border-2 flex flex-col overflow-hidden ${
-                      mins >= 20 ? 'border-red-500/60' :
-                      mins >= 10 ? 'border-amber-500/40' :
-                                   'border-[#2A2A2A]'
-                    }`}>
+                    className={`bg-[var(--color-surface)] rounded-xl border-2 flex flex-col overflow-hidden ${
+                      urgency === 'err'  ? 'border-[var(--color-err)]/60 animate-[pulse-err_2.4s_ease-in-out_infinite]' :
+                      urgency === 'warn' ? 'border-[var(--color-warn)]/40' :
+                                            'border-[var(--color-border-soft)]'
+                    }`}
+                  >
 
-                    {/* Order header */}
+                    {/* Order header (urgency tinted) */}
                     <div className={`px-4 py-3 flex items-center justify-between ${
-                      mins >= 20 ? 'bg-red-900/20' :
-                      mins >= 10 ? 'bg-amber-900/20' :
-                                   'bg-[#222]'
+                      urgency === 'err'  ? 'bg-[var(--color-err-soft)]'  :
+                      urgency === 'warn' ? 'bg-[var(--color-warn-soft)]' :
+                                            'bg-[var(--color-surface-2)]'
                     }`}>
                       <div className="flex items-center gap-2 min-w-0">
                         {order.order_type === 'takeaway' ? (
                           <div className="flex flex-col min-w-0">
-                            <span className="text-amber-400 font-bold text-sm tracking-wide">ASPORTO</span>
+                            <Badge tone="warn" size="sm">ASPORTO</Badge>
                             {order.order_customer_name && (
-                              <span className="text-[#888] text-xs truncate">{order.order_customer_name}</span>
+                              <span className="text-[var(--color-text-2)] text-xs truncate mt-1">
+                                {order.order_customer_name}
+                              </span>
                             )}
                             {order.pickup_time && (
-                              <span className="text-[#D4AF37] text-xs">⏱ {order.pickup_time.slice(0,5)}</span>
+                              <span className="text-[var(--color-gold)] text-xs font-semibold tnum">
+                                ⏱ {order.pickup_time.slice(0, 5)}
+                              </span>
                             )}
                           </div>
                         ) : (
                           <>
-                            <span className="text-[#F5F5DC] font-bold text-xl">{order.table_number}</span>
-                            <span className="text-[#555] text-xs">{order.zone_name}</span>
+                            <span className="serif text-[var(--color-text)] font-bold text-2xl tnum">
+                              {order.table_number}
+                            </span>
+                            <span className="text-[var(--color-text-3)] text-xs">{order.zone_name}</span>
                           </>
                         )}
                       </div>
                       <ElapsedTick sentAt={oldest} />
                     </div>
 
-                    {/* Items — gerarchia visiva: active > waiting (A) > delivered (c) */}
+                    {/* Items: gerarchia visiva active > waiting > delivered */}
                     <div className="flex-1 p-3 flex flex-col gap-1.5">
                       {order.items.map(item => {
                         const cfg = ITEM_STATUS[item.status] ?? ITEM_STATUS.pending
                         const isUpdating = updating[item.id]
                         const ds = item.display_status || 'active'
 
-                        // === DELIVERED (c) — minimo impatto visivo ===
+                        // ── DELIVERED (c) — minimo impatto visivo ──
                         if (ds === 'delivered') {
                           return (
-                            <div key={item.id} className="flex items-center gap-2 px-2 py-0.5 opacity-30">
-                              <span className="text-[9px] font-mono text-[#555]">c</span>
-                              <span className="text-[#555] text-[10px] line-through">
+                            <div
+                              key={item.id}
+                              className="flex items-center gap-2 px-2 py-0.5 opacity-30"
+                            >
+                              <span className="text-[9px] font-mono text-[var(--color-text-3)]">c</span>
+                              <span className="text-[var(--color-text-3)] text-[10px] line-through">
                                 {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
                               </span>
                             </div>
                           )
                         }
 
-                        // === WAITING (A) — visibile ma secondario ===
+                        // ── WAITING (A) — secondario ──
                         if (ds === 'waiting') {
                           return (
-                            <div key={item.id} className="flex items-center gap-2 px-2 py-1 rounded border border-[#333] bg-[#1A1A1A]/50 opacity-60">
-                              <span className="text-xs font-bold text-amber-500 w-4">A</span>
-                              <span className="text-[#888] text-xs">
+                            <div
+                              key={item.id}
+                              className="flex items-center gap-2 px-2 py-1 rounded border border-[var(--color-border-strong)] bg-[var(--color-surface-2)]/50 opacity-60"
+                            >
+                              <span className="text-xs font-bold text-[var(--color-warn)] w-4">A</span>
+                              <span className="text-[var(--color-text-2)] text-xs">
                                 {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
                               </span>
                               {item.course_type && (
-                                <span className="ml-auto text-[9px] text-[#555] italic">{item.course_type}</span>
+                                <span className="ml-auto text-[9px] text-[var(--color-text-3)] italic">
+                                  {item.course_type}
+                                </span>
                               )}
                             </div>
                           )
                         }
 
-                        // === ACTIVE — da eseguire ORA (grassetto, grande, dominante) ===
+                        // ── ACTIVE — da eseguire ORA (grande, dominante) ──
                         return (
-                          <div key={item.id}
-                            className={`rounded-lg border p-3 flex flex-col gap-2 ${cfg.bg} ${cfg.border}`}>
-
+                          <div
+                            key={item.id}
+                            className={`rounded-lg border p-3 flex flex-col gap-2 ${cfg.bg} ${cfg.border}`}
+                          >
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[#F5F5DC] font-bold text-base uppercase tracking-wide">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[var(--color-text)] font-bold text-base uppercase tracking-wide">
                                     {item.quantity > 1 && (
-                                      <span className="text-[#D4AF37] mr-1">×{item.quantity}</span>
+                                      <span className="text-[var(--color-gold)] mr-1 tnum">×{item.quantity}</span>
                                     )}
                                     {item.name}
                                   </span>
                                   {item.is_combo && (
-                                    <span className="text-[9px] font-bold bg-[#D4AF37]/20 text-[#D4AF37] px-1.5 py-0.5 rounded-full">MENU</span>
+                                    <Badge tone="gold" size="sm">MENU</Badge>
                                   )}
                                   {item.course_type && item.course_type !== 'altro' && (
-                                    <span className="text-[9px] font-medium bg-[#333] text-[#888] px-1.5 py-0.5 rounded">{item.course_type}</span>
+                                    <Badge tone="neutral" size="sm">{item.course_type}</Badge>
                                   )}
                                 </div>
                                 {item.is_combo && item.combo_selections && (
                                   <div className="mt-1 flex flex-col gap-0.5">
                                     {Object.entries(item.combo_selections).map(([course, selection]) => (
-                                      <p key={course} className="text-[#888] text-xs">
-                                        <span className="text-[#555]">{course}:</span> {Array.isArray(selection) ? selection.join(', ') : selection}
+                                      <p key={course} className="text-[var(--color-text-2)] text-xs">
+                                        <span className="text-[var(--color-text-3)]">{course}:</span>{' '}
+                                        {Array.isArray(selection) ? selection.join(', ') : selection}
                                       </p>
                                     ))}
                                   </div>
                                 )}
                                 {!item.is_combo && item.modifiers?.length > 0 && (
-                                  <p className="text-[#888] text-xs mt-0.5">
+                                  <p className="text-[var(--color-text-2)] text-xs mt-0.5">
                                     {item.modifiers.join(', ')}
                                   </p>
                                 )}
                                 {item.notes && (
-                                  <p className="text-amber-300 text-xs mt-0.5 italic">
+                                  <p className="text-[var(--color-warn)] text-xs mt-0.5 italic font-semibold">
                                     ⚠ {item.notes}
                                   </p>
                                 )}
                               </div>
-                              <span className={`text-xs font-medium whitespace-nowrap ${cfg.text}`}>
+                              <span className={`text-xs font-semibold whitespace-nowrap ${cfg.text}`}>
                                 {cfg.label}
                               </span>
                             </div>
 
                             {(() => {
-                              // Bevande: skip "Inizia", vai diretto a "Pronto" (non si preparano)
+                              // Bevande: skip "Inizia" → diretto a "Pronto"
                               const isBev = item.course_type === 'bevanda'
                               const nextStatus = isBev && cfg.next === 'cooking' ? 'ready' : cfg.next
                               const nextLabel = isBev && cfg.next === 'cooking' ? 'Pronto' : cfg.nextLabel
                               const btnColor = nextStatus === 'ready'
-                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                                : 'bg-orange-600 hover:bg-orange-500 text-white'
+                                ? 'bg-[var(--color-ok)] hover:brightness-110 text-white'
+                                : 'bg-[var(--color-terracotta)] hover:brightness-110 text-white'
 
                               return nextStatus && (
                                 <button
                                   onClick={() => handleAdvance(item.id, nextStatus)}
                                   disabled={isUpdating}
-                                  className={`w-full py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 ${btnColor} disabled:opacity-50`}>
+                                  className={`w-full py-2 rounded-lg text-sm font-bold transition flex items-center justify-center gap-1 ${btnColor} disabled:opacity-50 min-h-[40px]`}
+                                >
                                   {isUpdating
-                                    ? <RefreshCw size={12} className="animate-spin" />
+                                    ? <RefreshCw size={14} className="animate-spin" />
                                     : nextLabel
                                   }
                                 </button>

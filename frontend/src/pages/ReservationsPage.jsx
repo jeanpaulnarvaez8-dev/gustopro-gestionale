@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, CalendarDays, Plus, ChevronLeft, ChevronRight,
   X, Check, RefreshCw, Phone, Users, Clock, Pencil,
@@ -8,35 +8,27 @@ import {
 } from 'lucide-react'
 import { reservationsAPI, tablesAPI, customersAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { Badge, Button, Modal } from '../components/v2'
 
-// ─── Helpers ────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
+function dateStr(d)         { return d.toISOString().slice(0, 10) }
+function addDays(d, n)      { const r = new Date(d); r.setDate(r.getDate() + n); return r }
+function fmtDate(str)       { return new Date(str + 'T00:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }) }
+function fmtTime(t)         { return t?.slice(0, 5) ?? '' }
 
-function dateStr(d) {
-  return d.toISOString().slice(0, 10)
-}
-function addDays(d, n) {
-  const r = new Date(d); r.setDate(r.getDate() + n); return r
-}
-function fmtDate(str) {
-  return new Date(str + 'T00:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
-}
-function fmtTime(t) {
-  return t?.slice(0, 5) ?? ''
-}
-
+// Tone tokens per stati prenotazione
 const STATUS_CFG = {
-  confirmed: { label: 'Confermata', color: 'text-blue-400',    bg: 'bg-blue-900/20',    border: 'border-blue-500/30' },
-  seated:    { label: 'Al tavolo',  color: 'text-emerald-400', bg: 'bg-emerald-900/20', border: 'border-emerald-500/30' },
-  cancelled: { label: 'Cancellata', color: 'text-[#555]',      bg: 'bg-[#2A2A2A]',      border: 'border-[#3A3A3A]' },
-  no_show:   { label: 'No show',    color: 'text-red-400',     bg: 'bg-red-900/20',     border: 'border-red-500/30' },
+  confirmed: { label: 'Confermata', tone: 'sea',     bg: 'bg-[var(--color-sea-soft)]',     border: 'border-[var(--color-sea)]/30',     color: 'text-[var(--color-sea)]'    },
+  seated:    { label: 'Al tavolo',  tone: 'ok',      bg: 'bg-[var(--color-ok-soft)]',      border: 'border-[var(--color-ok)]/30',      color: 'text-[var(--color-ok)]'     },
+  cancelled: { label: 'Cancellata', tone: 'neutral', bg: 'bg-[var(--color-surface-2)]',    border: 'border-[var(--color-border-strong)]', color: 'text-[var(--color-text-3)]' },
+  no_show:   { label: 'No show',    tone: 'err',     bg: 'bg-[var(--color-err-soft)]',     border: 'border-[var(--color-err)]/30',     color: 'text-[var(--color-err)]'    },
 }
 
-// ─── Reservation Form Modal ──────────────────────────────────
-
+// ─── Reservation Form (Modal v2) ─────────────────────────────────────────────
 function ReservationForm({ initial, tables, onClose, onSaved }) {
   const { toast } = useToast()
   const isEdit = !!initial
-  const today  = dateStr(new Date())
+  const today = dateStr(new Date())
 
   const [form, setForm] = useState({
     customer_name:  initial?.customer_name  ?? '',
@@ -51,7 +43,6 @@ function ReservationForm({ initial, tables, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   const up = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  // Autocomplete customer name
   const searchCustomers = async (q) => {
     if (q.length < 2) { setCustomerSuggestions([]); return }
     try {
@@ -74,7 +65,7 @@ function ReservationForm({ initial, tables, onClose, onSaved }) {
     try {
       const payload = {
         ...form,
-        table_id:   form.table_id   || null,
+        table_id: form.table_id || null,
         party_size: parseInt(form.party_size),
       }
       if (isEdit) {
@@ -92,164 +83,207 @@ function ReservationForm({ initial, tables, onClose, onSaved }) {
 
   const freeTables = tables.filter(t => t.status === 'free' || t.status === 'reserved' || t.id === initial?.table_id)
 
+  // Stile input riusabile (sintetizzo classes nel JSX direttamente)
+  const inputCls = 'bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-3 py-2.5 text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-3)] outline-none transition'
+  const labelCls = 'text-[var(--color-text-2)] text-xs font-semibold uppercase tracking-wider flex items-center gap-1'
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}
-        className="bg-[#222] border border-[#3A3A3A] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#3A3A3A] sticky top-0 bg-[#222]">
-          <h3 className="text-[#F5F5DC] font-semibold">{isEdit ? 'Modifica prenotazione' : 'Nuova prenotazione'}</h3>
-          <button onClick={onClose} className="text-[#555] hover:text-[#888]"><X size={18} /></button>
+    <Modal
+      open
+      onClose={onClose}
+      size="md"
+      title={isEdit ? 'Modifica prenotazione' : 'Nuova prenotazione'}
+      footer={
+        <Button
+          fullWidth
+          size="lg"
+          loading={saving}
+          leftIcon={<Check size={16} />}
+          onClick={submit}
+        >
+          {isEdit ? 'Salva modifiche' : 'Crea prenotazione'}
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {/* Customer name with autocomplete */}
+        <div className="flex flex-col gap-1.5 relative">
+          <label className={labelCls}>Cliente *</label>
+          <input
+            value={form.customer_name}
+            onChange={e => { up('customer_name', e.target.value); searchCustomers(e.target.value) }}
+            placeholder="Nome cliente (digita per cercare)"
+            className={inputCls}
+          />
+          {customerSuggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--color-surface)] border border-[var(--color-border-strong)] rounded-lg overflow-hidden z-10 shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+              {customerSuggestions.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => selectCustomer(c)}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-[rgba(255,255,255,0.04)] transition flex items-center justify-between"
+                >
+                  <span className="text-[var(--color-text)]">{c.name}</span>
+                  {c.phone && <span className="text-[var(--color-text-3)] text-xs tnum">{c.phone}</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="p-5 flex flex-col gap-4">
-          {/* Customer name with autocomplete */}
-          <div className="flex flex-col gap-1.5 relative">
-            <label className="text-[#888] text-xs">Cliente *</label>
+        {/* Phone */}
+        <div className="flex flex-col gap-1.5">
+          <label className={labelCls}><Phone size={11} /> Telefono</label>
+          <input
+            value={form.customer_phone}
+            onChange={e => up('customer_phone', e.target.value)}
+            placeholder="+39 …"
+            className={`${inputCls} tnum`}
+          />
+        </div>
+
+        {/* Date + Time */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label className={labelCls}><CalendarDays size={11} /> Data *</label>
             <input
-              value={form.customer_name}
-              onChange={e => { up('customer_name', e.target.value); searchCustomers(e.target.value) }}
-              placeholder="Nome cliente (digita per cercare)"
-              className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm placeholder-[#555]"
+              type="date"
+              value={form.reserved_date}
+              onChange={e => up('reserved_date', e.target.value)}
+              min={today}
+              className={inputCls}
             />
-            {customerSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg overflow-hidden z-10 shadow-xl">
-                {customerSuggestions.map(c => (
-                  <button key={c.id} onClick={() => selectCustomer(c)}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-[#3A3A3A] transition flex items-center justify-between">
-                    <span className="text-[#F5F5DC]">{c.name}</span>
-                    {c.phone && <span className="text-[#555] text-xs">{c.phone}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
-
-          {/* Phone */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[#888] text-xs flex items-center gap-1"><Phone size={11} /> Telefono</label>
-            <input value={form.customer_phone} onChange={e => up('customer_phone', e.target.value)}
-              placeholder="+39 …"
-              className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm placeholder-[#555]" />
+            <label className={labelCls}><Clock size={11} /> Ora *</label>
+            <input
+              type="time"
+              value={form.reserved_time}
+              onChange={e => up('reserved_time', e.target.value)}
+              className={`${inputCls} tnum`}
+            />
           </div>
-
-          {/* Date + Time */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[#888] text-xs flex items-center gap-1"><CalendarDays size={11} /> Data *</label>
-              <input type="date" value={form.reserved_date} onChange={e => up('reserved_date', e.target.value)}
-                min={today}
-                className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[#888] text-xs flex items-center gap-1"><Clock size={11} /> Ora *</label>
-              <input type="time" value={form.reserved_time} onChange={e => up('reserved_time', e.target.value)}
-                className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm" />
-            </div>
-          </div>
-
-          {/* Coperti + Tavolo */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[#888] text-xs flex items-center gap-1"><Users size={11} /> Coperti</label>
-              <input type="number" min={1} max={30} value={form.party_size}
-                onChange={e => up('party_size', e.target.value)}
-                className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[#888] text-xs">Tavolo (opzionale)</label>
-              <select value={form.table_id} onChange={e => up('table_id', e.target.value)}
-                className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm">
-                <option value="">— Da assegnare —</option>
-                {freeTables.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.table_number} ({t.seats} posti)
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[#888] text-xs">Note</label>
-            <textarea value={form.notes} onChange={e => up('notes', e.target.value)}
-              rows={2} placeholder="Allergie, occasioni speciali, richieste…"
-              className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm placeholder-[#555] resize-none" />
-          </div>
-
-          <button onClick={submit} disabled={saving}
-            className="w-full py-2.5 rounded-xl bg-[#D4AF37] text-[#1A1A1A] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-[#c9a42e] transition mt-1">
-            {saving ? <RefreshCw size={14} className="animate-spin" /> : <><Check size={14} /> {isEdit ? 'Salva modifiche' : 'Crea prenotazione'}</>}
-          </button>
         </div>
-      </motion.div>
-    </motion.div>
+
+        {/* Coperti + Tavolo */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label className={labelCls}><Users size={11} /> Coperti</label>
+            <input
+              type="number"
+              min={1}
+              max={30}
+              value={form.party_size}
+              onChange={e => up('party_size', e.target.value)}
+              className={`${inputCls} tnum`}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className={labelCls}>Tavolo (opzionale)</label>
+            <select
+              value={form.table_id}
+              onChange={e => up('table_id', e.target.value)}
+              className={inputCls}
+            >
+              <option value="">— Da assegnare —</option>
+              {freeTables.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.table_number} ({t.seats} posti)
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div className="flex flex-col gap-1.5">
+          <label className={labelCls}>Note</label>
+          <textarea
+            value={form.notes}
+            onChange={e => up('notes', e.target.value)}
+            rows={2}
+            placeholder="Allergie, occasioni speciali, richieste…"
+            className={`${inputCls} resize-none`}
+          />
+        </div>
+      </div>
+    </Modal>
   )
 }
 
-// ─── Reservation Card ────────────────────────────────────────
-
+// ─── Reservation Card ────────────────────────────────────────────────────────
 function ResCard({ r, onEdit, onStatus }) {
   const cfg = STATUS_CFG[r.status] ?? STATUS_CFG.confirmed
   const isActive = r.status === 'confirmed'
+
   return (
     <div className={`rounded-xl border p-4 flex flex-col gap-3 ${cfg.bg} ${cfg.border}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[#F5F5DC] font-semibold">{r.customer_name}</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cfg.color} ${cfg.bg} border ${cfg.border}`}>
-              {cfg.label}
-            </span>
+            <span className="text-[var(--color-text)] font-bold text-base">{r.customer_name}</span>
+            <Badge tone={cfg.tone} size="sm">{cfg.label}</Badge>
           </div>
-          <div className="flex items-center gap-3 mt-1 flex-wrap">
-            <span className="text-[#888] text-xs flex items-center gap-1">
-              <Clock size={10} /> {fmtTime(r.reserved_time)}
+          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+            <span className="text-[var(--color-text-2)] text-xs flex items-center gap-1 tnum font-semibold">
+              <Clock size={11} /> {fmtTime(r.reserved_time)}
             </span>
-            <span className="text-[#888] text-xs flex items-center gap-1">
-              <Users size={10} /> {r.party_size} coperti
+            <span className="text-[var(--color-text-2)] text-xs flex items-center gap-1">
+              <Users size={11} /> <span className="tnum">{r.party_size}</span> coperti
             </span>
             {r.table_number && (
-              <span className="text-[#D4AF37] text-xs font-semibold">
+              <span className="text-[var(--color-gold)] text-xs font-bold tnum">
                 Tavolo {r.table_number}
               </span>
             )}
             {r.customer_phone && (
-              <a href={`tel:${r.customer_phone}`} className="text-[#888] text-xs flex items-center gap-1 hover:text-[#D4AF37]">
-                <Phone size={10} /> {r.customer_phone}
+              <a
+                href={`tel:${r.customer_phone}`}
+                className="text-[var(--color-text-2)] text-xs flex items-center gap-1 hover:text-[var(--color-gold)] transition tnum"
+              >
+                <Phone size={11} /> {r.customer_phone}
               </a>
             )}
           </div>
           {r.notes && (
-            <p className="text-amber-300 text-xs mt-1 italic truncate">⚠ {r.notes}</p>
+            <p className="text-[var(--color-warn)] text-xs mt-1.5 italic truncate font-semibold">
+              ⚠ {r.notes}
+            </p>
           )}
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
           {isActive && (
             <>
-              <button onClick={() => onStatus(r.id, 'seated')}
+              <button
+                onClick={() => onStatus(r.id, 'seated')}
                 title="Segna al tavolo"
-                className="p-1.5 rounded-lg text-[#555] hover:text-emerald-400 hover:bg-[#2A2A2A] transition">
+                className="p-1.5 rounded-lg text-[var(--color-text-3)] hover:text-[var(--color-ok)] hover:bg-[var(--color-ok-soft)] transition"
+              >
                 <UserCheck size={15} />
               </button>
-              <button onClick={() => onStatus(r.id, 'no_show')}
+              <button
+                onClick={() => onStatus(r.id, 'no_show')}
                 title="No show"
-                className="p-1.5 rounded-lg text-[#555] hover:text-red-400 hover:bg-[#2A2A2A] transition">
+                className="p-1.5 rounded-lg text-[var(--color-text-3)] hover:text-[var(--color-err)] hover:bg-[var(--color-err-soft)] transition"
+              >
                 <UserX size={15} />
               </button>
             </>
           )}
-          <button onClick={() => onEdit(r)}
-            className="p-1.5 rounded-lg text-[#555] hover:text-[#D4AF37] hover:bg-[#2A2A2A] transition">
+          <button
+            onClick={() => onEdit(r)}
+            title="Modifica"
+            className="p-1.5 rounded-lg text-[var(--color-text-3)] hover:text-[var(--color-gold)] hover:bg-[var(--color-gold-soft)] transition"
+          >
             <Pencil size={14} />
           </button>
           {isActive && (
-            <button onClick={() => onStatus(r.id, 'cancelled')}
+            <button
+              onClick={() => onStatus(r.id, 'cancelled')}
               title="Cancella"
-              className="p-1.5 rounded-lg text-[#555] hover:text-red-400 hover:bg-[#2A2A2A] transition">
+              className="p-1.5 rounded-lg text-[var(--color-text-3)] hover:text-[var(--color-err)] hover:bg-[var(--color-err-soft)] transition"
+            >
               <X size={14} />
             </button>
           )}
@@ -259,8 +293,7 @@ function ResCard({ r, onEdit, onStatus }) {
   )
 }
 
-// ─── Page ───────────────────────────────────────────────────
-
+// ─── Page ────────────────────────────────────────────────────────────────────
 export default function ReservationsPage() {
   const navigate  = useNavigate()
   const { toast } = useToast()
@@ -268,7 +301,7 @@ export default function ReservationsPage() {
   const [reservations, setReservations] = useState([])
   const [tables, setTables]             = useState([])
   const [loading, setLoading]           = useState(true)
-  const [editing, setEditing]           = useState(null)  // 'new' | reservation obj
+  const [editing, setEditing]           = useState(null)
 
   const load = useCallback(async (d = currentDate) => {
     setLoading(true)
@@ -308,66 +341,94 @@ export default function ReservationsPage() {
   const isToday   = dateStr(currentDate) === dateStr(new Date())
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A] flex flex-col">
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-5 py-3 flex items-center gap-4">
-        <button onClick={() => navigate('/tables')} className="text-[#888] hover:text-[#F5F5DC] transition">
+    <div className="min-h-screen flex flex-col">
+      {/* ─── Header ─────────────────────────────────────────── */}
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 sm:px-5 py-3 flex items-center gap-3 flex-wrap sticky top-0 z-20">
+        <button
+          onClick={() => navigate('/tables')}
+          className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
+          aria-label="Indietro"
+        >
           <ArrowLeft size={18} />
         </button>
-        <CalendarDays size={18} className="text-[#D4AF37]" />
-        <span className="text-[#F5F5DC] font-bold">Prenotazioni</span>
+        <CalendarDays size={18} className="text-[var(--color-gold)]" />
+        <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">
+          Prenotazioni
+        </h1>
 
         {/* Date navigator */}
-        <div className="flex items-center gap-2 ml-2">
-          <button onClick={() => changeDate(-1)} className="text-[#555] hover:text-[#888] transition p-1">
+        <div className="flex items-center gap-1 ml-1 bg-[var(--color-surface-2)] rounded-lg border border-[var(--color-border-strong)] overflow-hidden">
+          <button
+            onClick={() => changeDate(-1)}
+            className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] transition p-2"
+            aria-label="Giorno precedente"
+          >
             <ChevronLeft size={16} />
           </button>
-          <button onClick={() => setCurrentDate(new Date())}
-            className={`text-sm font-medium transition ${isToday ? 'text-[#D4AF37]' : 'text-[#F5F5DC] hover:text-[#D4AF37]'}`}>
-            {isToday ? 'Oggi' : currentDate.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}
+          <button
+            onClick={() => setCurrentDate(new Date())}
+            className={`text-sm font-semibold transition px-3 ${
+              isToday ? 'text-[var(--color-gold)]' : 'text-[var(--color-text)] hover:text-[var(--color-gold)]'
+            }`}
+          >
+            {isToday
+              ? 'Oggi'
+              : currentDate.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })
+            }
           </button>
-          <button onClick={() => changeDate(1)} className="text-[#555] hover:text-[#888] transition p-1">
+          <button
+            onClick={() => changeDate(1)}
+            className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] transition p-2"
+            aria-label="Giorno successivo"
+          >
             <ChevronRight size={16} />
           </button>
         </div>
 
-        <div className="flex items-center gap-3 text-xs ml-2">
-          <span className="text-blue-400">{active.length} conferm.</span>
-          <span className="text-emerald-400">{seated.length} al tavolo</span>
+        {/* Stats live */}
+        <div className="flex items-center gap-2 text-xs ml-2">
+          <Badge tone="sea" size="sm">{active.length} conferm.</Badge>
+          <Badge tone="ok" size="sm">{seated.length} al tavolo</Badge>
         </div>
 
-        <div className="ml-auto flex items-center gap-3">
-          <button onClick={() => load(currentDate)} disabled={loading}
-            className="text-[#555] hover:text-[#888] transition disabled:opacity-40">
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => load(currentDate)}
+            disabled={loading}
+            className="text-[var(--color-text-2)] hover:text-[var(--color-gold)] transition disabled:opacity-40 p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.04)]"
+            aria-label="Aggiorna"
+          >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button onClick={() => setEditing('new')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#D4AF37] text-[#1A1A1A] rounded-lg text-xs font-semibold hover:bg-[#c9a42e] transition">
-            <Plus size={13} /> Nuova
-          </button>
+          <Button size="sm" leftIcon={<Plus size={13} />} onClick={() => setEditing('new')}>
+            Nuova
+          </Button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5">
-        <p className="text-[#555] text-xs mb-4 capitalize">{fmtDate(dateStr(currentDate))}</p>
+      <div className="flex-1 overflow-y-auto p-4 sm:p-5 max-w-3xl mx-auto w-full">
+        <p className="text-[var(--color-text-3)] text-xs mb-4 capitalize tnum">{fmtDate(dateStr(currentDate))}</p>
 
         {loading ? (
-          <div className="flex justify-center py-16">
-            <RefreshCw size={18} className="animate-spin text-[#555]" />
+          <div className="flex justify-center py-16 gap-2 text-[var(--color-text-2)]">
+            <RefreshCw size={18} className="animate-spin text-[var(--color-gold)]" />
+            <span className="text-sm">Caricamento prenotazioni…</span>
           </div>
         ) : reservations.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-20">
-            <CalendarDays size={40} className="text-[#333]" />
-            <p className="text-[#555] text-sm">Nessuna prenotazione per questo giorno</p>
-            <button onClick={() => setEditing('new')}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[#D4AF37] text-[#1A1A1A] rounded-lg text-sm font-semibold hover:bg-[#c9a42e] transition mt-2">
-              <Plus size={14} /> Aggiungi prenotazione
-            </button>
+            <CalendarDays size={48} className="text-[var(--color-text-3)]/40" />
+            <p className="serif text-[var(--color-text-2)] text-base font-semibold">
+              Nessuna prenotazione per questo giorno
+            </p>
+            <Button leftIcon={<Plus size={14} />} onClick={() => setEditing('new')}>
+              Aggiungi prenotazione
+            </Button>
           </div>
         ) : (
           <div className="flex flex-col gap-6">
             {active.length > 0 && (
               <section>
-                <h3 className="text-[#555] text-xs uppercase tracking-wider font-medium mb-3 flex items-center gap-1.5">
+                <h3 className="text-[var(--color-text-2)] text-xs uppercase tracking-wider font-semibold mb-3 flex items-center gap-1.5">
                   <AlertCircle size={11} /> Confermate ({active.length})
                 </h3>
                 <div className="flex flex-col gap-2">
@@ -379,7 +440,7 @@ export default function ReservationsPage() {
             )}
             {seated.length > 0 && (
               <section>
-                <h3 className="text-[#555] text-xs uppercase tracking-wider font-medium mb-3">
+                <h3 className="text-[var(--color-text-2)] text-xs uppercase tracking-wider font-semibold mb-3">
                   Al tavolo ({seated.length})
                 </h3>
                 <div className="flex flex-col gap-2">
@@ -391,7 +452,7 @@ export default function ReservationsPage() {
             )}
             {cancelled.length > 0 && (
               <section>
-                <h3 className="text-[#555] text-xs uppercase tracking-wider font-medium mb-3">
+                <h3 className="text-[var(--color-text-2)] text-xs uppercase tracking-wider font-semibold mb-3">
                   Cancellate / No show ({cancelled.length})
                 </h3>
                 <div className="flex flex-col gap-2 opacity-60">
@@ -418,3 +479,4 @@ export default function ReservationsPage() {
     </div>
   )
 }
+
