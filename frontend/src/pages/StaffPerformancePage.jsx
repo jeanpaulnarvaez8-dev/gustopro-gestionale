@@ -31,6 +31,11 @@ export default function StaffPerformancePage() {
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState('today')
 
+  // NB: NON includere `toast` nella dep array. Anche con `toast` memoizzato
+  // a monte (ToastContext adapter + Toast provider v2), eventuali rerender
+  // causati da altri context (Socket, Cart) potrebbero invalidare la closure
+  // → useEffect rifire → infinite loop di fetch. La closure cattura `toast`
+  // attuale, e' sufficiente. Lint disabled di proposito.
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -39,7 +44,8 @@ export default function StaffPerformancePage() {
     } catch {
       toast({ type: 'error', title: 'Errore caricamento performance' })
     } finally { setLoading(false) }
-  }, [period, toast])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period])
 
   useEffect(() => { load() }, [load])
 
