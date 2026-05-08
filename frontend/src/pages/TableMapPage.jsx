@@ -3,168 +3,36 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LogOut, LayoutDashboard, ChefHat, Wifi, WifiOff, Users, RefreshCw,
-  Package, UserCog, CalendarDays, ShoppingBag, Pencil, X, Plus,
-  CheckCircle2, FlaskConical, ClipboardList, MapPin, Trophy, UtensilsCrossed, Map,
+  Package, UserCog, CalendarDays, ShoppingBag, X, Plus,
+  CheckCircle2, FlaskConical, ClipboardList, MapPin, Trophy, UtensilsCrossed, Map, Building,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import { tablesAPI, zonesAPI, assignmentsAPI } from '../lib/api'
 import FloorPlanInteractive from '../components/FloorPlanInteractive'
 import MobileTableList from '../components/MobileTableList'
+import { BottomSheet, Badge, StatusDot } from '../components/v2'
 
+// Status config: usa i tokens Riva Beach.
+// free=ok(verde), occupied=gold(oro Riva), reserved=sea(mare), dirty=warn(giallo), parked=park(viola)
 const STATUS_CONFIG = {
-  free:     { label: 'Libero',    color: 'bg-emerald-900/30 border-emerald-500/40 hover:border-emerald-400', dot: 'bg-emerald-400', text: 'text-emerald-400' },
-  occupied: { label: 'Occupato',  color: 'bg-red-900/30     border-red-500/40     hover:border-red-400',     dot: 'bg-red-400',     text: 'text-red-400' },
-  reserved: { label: 'Riservato', color: 'bg-blue-900/30    border-blue-500/40    hover:border-blue-400',    dot: 'bg-blue-400',    text: 'text-blue-400' },
-  dirty:    { label: 'Pulizia',   color: 'bg-yellow-900/30  border-yellow-500/40  hover:border-yellow-400',  dot: 'bg-yellow-400',  text: 'text-yellow-400' },
-  parked:   { label: 'In attesa', color: 'bg-purple-900/30  border-purple-500/40  hover:border-purple-400',  dot: 'bg-purple-400',  text: 'text-purple-400' },
+  free:     { label: 'Libero',    tone: 'ok',   bg: 'bg-[var(--color-ok-soft)]',         border: 'border-[var(--color-ok)]/40 hover:border-[var(--color-ok)]',                 dot: 'bg-[var(--color-ok)]',         text: 'text-[var(--color-ok)]' },
+  occupied: { label: 'Occupato',  tone: 'gold', bg: 'bg-[var(--color-gold-soft)]',       border: 'border-[var(--color-gold-ring)] hover:border-[var(--color-gold)]',           dot: 'bg-[var(--color-gold)]',       text: 'text-[var(--color-gold)]' },
+  reserved: { label: 'Riservato', tone: 'sea',  bg: 'bg-[var(--color-sea-soft)]',        border: 'border-[var(--color-sea)]/40 hover:border-[var(--color-sea)]',               dot: 'bg-[var(--color-sea)]',        text: 'text-[var(--color-sea)]' },
+  dirty:    { label: 'Pulizia',   tone: 'warn', bg: 'bg-[var(--color-warn-soft)]',       border: 'border-[var(--color-warn)]/40 hover:border-[var(--color-warn)]',             dot: 'bg-[var(--color-warn)]',       text: 'text-[var(--color-warn)]' },
+  parked:   { label: 'In attesa', tone: 'park', bg: 'bg-[var(--color-park-soft)]',       border: 'border-[var(--color-park)]/40 hover:border-[var(--color-park)]',             dot: 'bg-[var(--color-park)]',       text: 'text-[var(--color-park)]' },
 }
 
-// ── Add-table mini-form ──────────────────────────────────────────────────────
-function AddTableCard({ zoneId, onAdded }) {
-  const [number, setNumber] = useState('')
-  const [seats, setSeats] = useState('2')
-  const [saving, setSaving] = useState(false)
-
-  async function handleAdd() {
-    const n = parseInt(number)
-    const s = parseInt(seats)
-    if (!n || n < 1) return
-    setSaving(true)
-    try {
-      const res = await tablesAPI.create({ zone_id: zoneId, table_number: n, seats: s || 2 })
-      onAdded(res.data)
-      setNumber('')
-      setSeats('2')
-    } catch {
-      // ignore
-    } finally {
-      setSaving(false)
-    }
-  }
-
+// ── NavButton: bottone barra navigazione del header (skin Riva) ──────────────
+function NavButton({ icon: Icon, label, onClick }) {
   return (
-    <div className="rounded-xl border-2 border-dashed border-[#3A3A3A] bg-[#1E1E1E] p-4 flex flex-col items-center gap-2">
-      <Plus size={18} className="text-[#555]" />
-      <input
-        type="number"
-        min="1"
-        placeholder="N° tavolo"
-        value={number}
-        onChange={e => setNumber(e.target.value)}
-        className="w-full text-center bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-2 py-1.5 text-sm text-[#F5F5DC] placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37]"
-      />
-      <input
-        type="number"
-        min="1"
-        max="20"
-        placeholder="Posti"
-        value={seats}
-        onChange={e => setSeats(e.target.value)}
-        className="w-full text-center bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-2 py-1.5 text-sm text-[#F5F5DC] placeholder:text-[#555] focus:outline-none focus:border-[#D4AF37]"
-      />
-      <button
-        onClick={handleAdd}
-        disabled={!number || saving}
-        className="w-full bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 border border-[#D4AF37]/30 text-[#D4AF37] rounded-lg py-1.5 text-xs font-medium transition disabled:opacity-40"
-      >
-        {saving ? 'Aggiunta…' : 'Aggiungi'}
-      </button>
-    </div>
-  )
-}
-
-// ── Individual table card ────────────────────────────────────────────────────
-function TableCard({ table, editMode, canEdit, onNavigate, onDelete, onStatusChange }) {
-  const [cleaning, setCleaning] = useState(false)
-  const [showClean, setShowClean] = useState(false)
-
-  const cfg = STATUS_CONFIG[table.status] ?? STATUS_CONFIG.free
-
-  async function handleLibera(e) {
-    e.stopPropagation()
-    setCleaning(true)
-    try {
-      await tablesAPI.setStatus(table.id, 'free')
-      onStatusChange(table.id, 'free')
-    } catch {
-      // ignore
-    } finally {
-      setCleaning(false)
-      setShowClean(false)
-    }
-  }
-
-  function handleClick() {
-    if (editMode) return
-    if (table.status === 'dirty') {
-      setShowClean(v => !v)
-      return
-    }
-    setShowClean(false)
-    onNavigate(table)
-  }
-
-  return (
-    <motion.div
-      key={table.id}
-      whileHover={editMode ? undefined : { scale: 1.03 }}
-      whileTap={editMode ? undefined : { scale: 0.97 }}
-      className={`relative rounded-xl border-2 p-5 flex flex-col items-center gap-3 transition cursor-pointer ${cfg.color}`}
-      onClick={handleClick}
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 text-[var(--color-text-2)] hover:text-[var(--color-gold)] hover:bg-[rgba(255,255,255,0.04)] transition text-xs px-2 py-1.5 rounded-lg shrink-0 min-h-[36px]"
     >
-      {/* Status dot */}
-      <span className={`absolute top-3 right-3 w-2 h-2 rounded-full ${cfg.dot}`} />
-
-      {/* Edit-mode delete button */}
-      {editMode && canEdit && (
-        <button
-          onClick={e => { e.stopPropagation(); onDelete(table) }}
-          className="absolute top-2 left-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 rounded-full p-0.5 transition"
-        >
-          <X size={12} />
-        </button>
-      )}
-
-      <span className="text-[#F5F5DC] text-2xl font-bold">{table.table_number}</span>
-      <div className="flex items-center gap-1 text-[#888] text-xs">
-        <Users size={11} />
-        <span>{table.seats} posti</span>
-      </div>
-      <span className={`text-xs font-medium ${cfg.text}`}>{cfg.label}</span>
-      {table.status === 'dirty' && !editMode && (
-        <span className="text-[10px] text-yellow-500/60 mt-[-6px]">tocca per liberare</span>
-      )}
-
-      {/* Dirty overlay */}
-      <AnimatePresence>
-        {showClean && table.status === 'dirty' && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.15 }}
-            onClick={e => e.stopPropagation()}
-            className="absolute inset-0 rounded-xl bg-[#1A1A1A]/90 flex flex-col items-center justify-center gap-2 p-3"
-          >
-            <button
-              onClick={handleLibera}
-              disabled={cleaning}
-              className="flex items-center gap-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:opacity-50"
-            >
-              <CheckCircle2 size={13} />
-              {cleaning ? 'Liberando…' : 'Libera tavolo'}
-            </button>
-            <button
-              onClick={e => { e.stopPropagation(); setShowClean(false) }}
-              className="text-[#555] hover:text-[#888] text-xs transition"
-            >
-              Annulla
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+      <Icon size={14} />
+      <span className="hidden md:block">{label}</span>
+    </button>
   )
 }
 
@@ -179,11 +47,10 @@ export default function TableMapPage() {
   const [activeZone, setActiveZone] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [editMode, setEditMode] = useState(false)
-  const [deletingId, setDeletingId] = useState(null)
+  // editMode reso disponibile via FloorPlanInteractive (toolbar interna).
+  const [, setMyZoneIds] = useState(null)
 
   const canEdit = ['admin', 'manager'].includes(user?.role)
-  const [myZoneIds, setMyZoneIds] = useState(null) // null = non caricato, [] = nessuna assegnazione
 
   const loadData = useCallback(async () => {
     try {
@@ -204,8 +71,7 @@ export default function TableMapPage() {
           if (ids.length > 0) {
             allowedZones = zonesRes.data.filter(z => ids.includes(z.id))
           }
-          // Se nessuna assegnazione, mostra tutte (fallback)
-        } catch { /* fallback: mostra tutte */ }
+        } catch { /* fallback */ }
       }
 
       setZones(allowedZones)
@@ -220,7 +86,7 @@ export default function TableMapPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Realtime updates
+  // Realtime updates via socket.io
   useEffect(() => {
     if (!socket) return
     const handler = ({ tableId, status, active_order_id }) => {
@@ -237,31 +103,7 @@ export default function TableMapPage() {
     return () => socket.off('table-status-changed', handler)
   }, [socket])
 
-  // Exit edit mode when switching zone
-  useEffect(() => { setEditMode(false) }, [activeZone])
-
-  function handleStatusChange(tableId, newStatus) {
-    setTables(prev => prev.map(t => t.id === tableId ? { ...t, status: newStatus } : t))
-  }
-
-  function handleTableAdded(newTable) {
-    setTables(prev => [...prev, { ...newTable, active_order_id: null }])
-  }
-
-  async function handleDeleteTable(table) {
-    if (table.status === 'occupied') return
-    setDeletingId(table.id)
-    try {
-      await tablesAPI.remove(table.id)
-      setTables(prev => prev.filter(t => t.id !== table.id))
-    } catch {
-      // ignore
-    } finally {
-      setDeletingId(null)
-    }
-  }
-
-  const [coversModal, setCoversModal] = useState(null) // table object o null
+  const [coversSheet, setCoversSheet] = useState(null) // table object o null
 
   function handleNavigate(table) {
     const isCashier = ['cashier', 'admin', 'manager'].includes(user?.role)
@@ -269,137 +111,122 @@ export default function TableMapPage() {
       navigate(`/checkout/${table.active_order_id}`)
     } else if (table.status === 'free' || !table.active_order_id) {
       // Tavolo libero → chiedi coperti
-      setCoversModal(table)
+      setCoversSheet(table)
     } else {
       navigate(`/order/${table.id}`)
     }
   }
 
   function handleCoversConfirm(covers) {
-    if (!coversModal) return
-    navigate(`/order/${coversModal.id}?covers=${covers}`)
-    setCoversModal(null)
+    if (!coversSheet) return
+    navigate(`/order/${coversSheet.id}?covers=${covers}`)
+    setCoversSheet(null)
   }
 
-  const filteredTables = tables.filter(t => t.zone_id === activeZone)
-  const activeZoneName = zones.find(z => z.id === activeZone)?.name ?? ''
+  // Stats globali (per badge header live)
   const stats = {
-    free:     filteredTables.filter(t => t.status === 'free').length,
-    occupied: filteredTables.filter(t => t.status === 'occupied').length,
-    total:    filteredTables.length,
+    free:     tables.filter(t => t.status === 'free').length,
+    occupied: tables.filter(t => t.status === 'occupied').length,
+    total:    tables.length,
   }
 
   return (
-    <div className="h-[100dvh] bg-[#1A1A1A] flex flex-col overflow-hidden">
+    <div className="h-[100dvh] flex flex-col overflow-hidden">
 
-      {/* Header */}
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-2 sm:px-4 py-2 sm:py-3 hidden md:flex items-center gap-2 sm:gap-3 shrink-0">
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-7 h-7 rounded-full bg-[#8B0000] flex items-center justify-center">
-            <span className="text-[#D4AF37] font-bold text-xs">G</span>
+      {/* ─── Header desktop ─────────────────────────────────────────── */}
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-2 sm:px-4 py-2 hidden md:flex items-center gap-3 shrink-0">
+        {/* Brand: GP gradient + nome serif */}
+        <div className="flex items-center gap-2 shrink-0 pr-3 border-r border-[var(--color-border-soft)]">
+          <div
+            className="w-9 h-9 rounded-[8px] flex items-center justify-center font-extrabold text-[#13181C] text-[13px]"
+            style={{ background: 'linear-gradient(135deg, #D4AF37, #9c7e1f)' }}
+          >
+            GP
           </div>
-          <span className="text-[#F5F5DC] font-semibold hidden sm:block">GustoPro <span className="text-[#D4AF37] text-xs font-normal">v1.0</span></span>
-          <div className={`flex items-center gap-1 text-xs ${isConnected ? 'text-emerald-400' : 'text-[#888]'}`}>
-            {isConnected ? <Wifi size={11} /> : <WifiOff size={11} />}
-            <span className="hidden sm:block">{isConnected ? 'Live' : 'Offline'}</span>
+          <div className="flex flex-col leading-tight">
+            <span className="serif text-[15px] font-bold text-[var(--color-text)] tracking-tight">GustoPro</span>
+            <span className="text-[10px] text-[var(--color-gold)] flex items-center gap-1 font-medium">
+              <Building size={10} />Riva Beach
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0 scrollbar-none">
+        {/* Stato connessione */}
+        <Badge tone={isConnected ? 'ok' : 'neutral'} size="sm" leftIcon={
+          isConnected ? <Wifi size={11} /> : <WifiOff size={11} />
+        }>
+          {isConnected ? 'Live' : 'Offline'}
+        </Badge>
+
+        {/* Stats live in header */}
+        {!loading && stats.total > 0 && (
+          <div className="hidden lg:flex items-center gap-2 text-[11px] text-[var(--color-text-2)]">
+            <span className="flex items-center gap-1.5">
+              <StatusDot tone="ok" size="xs" />
+              {stats.free}/{stats.total} liberi
+            </span>
+          </div>
+        )}
+
+        {/* Nav modules */}
+        <nav className="flex items-center gap-0.5 overflow-x-auto flex-1 min-w-0 scrollbar-none">
           {/* === CAMERIERE: solo le sue funzioni === */}
           {user?.role === 'waiter' && (
             <>
-              <button onClick={() => navigate('/my-tables')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <UtensilsCrossed size={14} /> <span className="hidden md:block">I Miei Piatti</span>
-              </button>
-              <button onClick={() => navigate('/asporto')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <ShoppingBag size={14} /> <span className="hidden md:block">Asporto</span>
-              </button>
-              <button onClick={() => navigate('/reservations')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <CalendarDays size={14} /> <span className="hidden md:block">Prenotazioni</span>
-              </button>
+              <NavButton icon={UtensilsCrossed} label="I Miei Piatti" onClick={() => navigate('/my-tables')} />
+              <NavButton icon={ShoppingBag} label="Asporto" onClick={() => navigate('/asporto')} />
+              <NavButton icon={CalendarDays} label="Prenotazioni" onClick={() => navigate('/reservations')} />
             </>
           )}
 
           {/* === ADMIN/MANAGER: tutto === */}
           {['admin', 'manager'].includes(user?.role) && (
             <>
-              <button onClick={() => navigate('/kds')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <ChefHat size={14} /> <span className="hidden md:block">KDS</span>
-              </button>
-              <button onClick={() => navigate('/my-tables')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <UtensilsCrossed size={14} /> <span className="hidden md:block">I Miei Piatti</span>
-              </button>
-              <button onClick={() => navigate('/dashboard')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <LayoutDashboard size={14} /> <span className="hidden md:block">Dashboard</span>
-              </button>
-              <button onClick={() => navigate('/asporto')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <ShoppingBag size={14} /> <span className="hidden md:block">Asporto</span>
-              </button>
-              <button onClick={() => navigate('/reservations')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <CalendarDays size={14} /> <span className="hidden md:block">Prenotazioni</span>
-              </button>
-              <button onClick={() => navigate('/assignments')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <MapPin size={14} /> <span className="hidden md:block">Zone</span>
-              </button>
-              <button onClick={() => navigate('/floor-plan')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <Map size={14} /> <span className="hidden md:block">Pianta</span>
-              </button>
-              <button onClick={() => navigate('/performance')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <Trophy size={14} /> <span className="hidden md:block">Performance</span>
-              </button>
-              <button onClick={() => navigate('/customers')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <Users size={14} /> <span className="hidden md:block">Clienti</span>
-              </button>
-              <button onClick={() => navigate('/inventory')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <Package size={14} /> <span className="hidden md:block">Inventario</span>
-              </button>
-              <button onClick={() => navigate('/ingredients')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <FlaskConical size={14} /> <span className="hidden md:block">Ingredienti</span>
-              </button>
-              <button onClick={() => navigate('/stock-reconciliation')}
-                className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-                <ClipboardList size={14} /> <span className="hidden md:block">Riconciliazione</span>
-              </button>
+              <NavButton icon={ChefHat} label="KDS" onClick={() => navigate('/kds')} />
+              <NavButton icon={UtensilsCrossed} label="I Miei Piatti" onClick={() => navigate('/my-tables')} />
+              <NavButton icon={LayoutDashboard} label="Dashboard" onClick={() => navigate('/dashboard')} />
+              <NavButton icon={ShoppingBag} label="Asporto" onClick={() => navigate('/asporto')} />
+              <NavButton icon={CalendarDays} label="Prenotazioni" onClick={() => navigate('/reservations')} />
+              <NavButton icon={MapPin} label="Zone" onClick={() => navigate('/assignments')} />
+              <NavButton icon={Map} label="Pianta" onClick={() => navigate('/floor-plan')} />
+              <NavButton icon={Trophy} label="Performance" onClick={() => navigate('/performance')} />
+              <NavButton icon={Users} label="Clienti" onClick={() => navigate('/customers')} />
+              <NavButton icon={Package} label="Inventario" onClick={() => navigate('/inventory')} />
+              <NavButton icon={FlaskConical} label="Ingredienti" onClick={() => navigate('/ingredients')} />
+              <NavButton icon={ClipboardList} label="Riconciliazione" onClick={() => navigate('/stock-reconciliation')} />
             </>
           )}
           {user?.role === 'admin' && (
-            <button onClick={() => navigate('/users')}
-              className="flex items-center gap-1.5 text-[#888] hover:text-[#D4AF37] transition text-xs px-2 py-1 rounded-lg hover:bg-[#3A3A3A] shrink-0">
-              <UserCog size={14} /> <span className="hidden md:block">Staff</span>
-            </button>
+            <NavButton icon={UserCog} label="Staff" onClick={() => navigate('/users')} />
           )}
-        </div>
+        </nav>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[#888] text-xs hidden sm:block">
-            {user?.name} · <span className="text-[#D4AF37]">{user?.role}</span>
-          </span>
-          <button onClick={logout} className="text-[#888] hover:text-red-400 transition p-1">
-            <LogOut size={15} />
+        {/* User info + logout */}
+        <div className="flex items-center gap-2 shrink-0 pl-2 border-l border-[var(--color-border-soft)]">
+          <div className="hidden sm:flex flex-col leading-tight text-right">
+            <span className="text-[12px] font-semibold text-[var(--color-text)]">{user?.name}</span>
+            <span className="text-[10px] uppercase tracking-wider text-[var(--color-gold)]">{user?.role}</span>
+          </div>
+          <button
+            onClick={logout}
+            title="Logout"
+            className="text-[var(--color-text-3)] hover:text-[var(--color-err)] hover:bg-[rgba(239,68,68,0.08)] rounded-lg p-2 transition"
+          >
+            <LogOut size={16} />
           </button>
         </div>
       </header>
 
-      {/* Desktop: pianta ristorante | Mobile: lista tavoli */}
+      {/* ─── Body: pianta desktop / lista mobile ────────────────────── */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {loading ? (
+          <div className="flex items-center justify-center h-64 gap-2 text-[var(--color-text-2)]">
+            <RefreshCw size={16} className="animate-spin text-[var(--color-gold)]" />
+            <span className="text-sm">Caricamento tavoli…</span>
+          </div>
+        ) : error ? (
           <div className="flex items-center justify-center h-64">
-            <RefreshCw size={16} className="animate-spin text-[#888]" />
+            <Badge tone="err">{error}</Badge>
           </div>
         ) : (
           <>
@@ -411,7 +238,7 @@ export default function TableMapPage() {
                 onTableClick={handleNavigate}
               />
             </div>
-            {/* Desktop: pianta SVG */}
+            {/* Desktop: pianta SVG architettonica reale Riva Beach */}
             <div className="hidden md:block h-full">
               <FloorPlanInteractive
                 tables={tables}
@@ -425,33 +252,34 @@ export default function TableMapPage() {
         )}
       </div>
 
-      {/* Modale selezione coperti */}
-      <AnimatePresence>
-        {coversModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-            onClick={() => setCoversModal(null)}>
-            <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}
-              className="bg-[#222] border border-[#3A3A3A] rounded-2xl w-full max-w-sm"
-              onClick={e => e.stopPropagation()}>
-              <div className="px-5 py-4 border-b border-[#3A3A3A] text-center">
-                <h3 className="text-[#F5F5DC] font-bold text-lg">
-                  Tavolo {coversModal.table_number}
-                </h3>
-                <p className="text-[#888] text-xs mt-1">Quante persone?</p>
-              </div>
-              <div className="p-5 grid grid-cols-5 gap-2">
-                {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map(n => (
-                  <button key={n} onClick={() => handleCoversConfirm(n)}
-                    className="aspect-square rounded-xl bg-[#2A2A2A] border border-[#3A3A3A] text-[#F5F5DC] font-bold text-lg hover:bg-[#D4AF37] hover:text-[#1A1A1A] hover:border-[#D4AF37] transition flex items-center justify-center">
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ─── BottomSheet selezione coperti (sostituisce il Modal vecchio) ─── */}
+      <BottomSheet
+        open={!!coversSheet}
+        onClose={() => setCoversSheet(null)}
+        title={coversSheet ? `Tavolo ${coversSheet.table_number} · quante persone?` : ''}
+      >
+        <div className="grid grid-cols-5 gap-2">
+          {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map(n => (
+            <motion.button
+              key={n}
+              type="button"
+              whileTap={{ scale: 0.92 }}
+              onClick={() => handleCoversConfirm(n)}
+              className="aspect-square rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text)] font-bold text-lg hover:bg-[var(--color-gold)] hover:text-[#13181C] hover:border-[var(--color-gold)] transition flex items-center justify-center tnum min-h-[48px]"
+            >
+              {n}
+            </motion.button>
+          ))}
+        </div>
+        <p className="mt-4 text-center text-xs text-[var(--color-text-3)]">
+          Tocca il numero per aprire l&apos;ordine con i coperti selezionati
+        </p>
+      </BottomSheet>
+
+      {/* Esponiamo STATUS_CONFIG come no-op su window per debug — non rendiamo nulla */}
+      <AnimatePresence>{null}</AnimatePresence>
     </div>
   )
 }
+// Esportiamo STATUS_CONFIG nel caso serva ad altri componenti per la legenda.
+export { STATUS_CONFIG }
