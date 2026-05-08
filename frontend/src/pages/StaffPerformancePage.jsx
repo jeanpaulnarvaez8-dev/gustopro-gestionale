@@ -3,17 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Trophy, AlertTriangle, Clock, CheckCircle2, RefreshCw, TrendingUp } from 'lucide-react'
 import { adminAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { Card, Badge } from '../components/v2'
 
-function scoreColor(score) {
-  if (score >= 90) return 'text-emerald-400'
-  if (score >= 70) return 'text-amber-400'
-  return 'text-red-400'
+function scoreTone(score) {
+  if (score >= 90) return 'ok'
+  if (score >= 70) return 'warn'
+  return 'err'
 }
 
-function scoreBg(score) {
-  if (score >= 90) return 'bg-emerald-500'
-  if (score >= 70) return 'bg-amber-500'
-  return 'bg-red-500'
+function scoreColor(score) {
+  if (score >= 90) return 'var(--color-ok)'
+  if (score >= 70) return 'var(--color-warn)'
+  return 'var(--color-err)'
 }
 
 function medal(index) {
@@ -43,68 +44,82 @@ export default function StaffPerformancePage() {
   useEffect(() => { load() }, [load])
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A] flex flex-col">
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-5 py-3 flex items-center gap-4">
-        <button onClick={() => navigate('/tables')} className="text-[#888] hover:text-[#F5F5DC] transition">
+    <div className="min-h-screen flex flex-col">
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 sm:px-5 py-3 flex items-center gap-3 sticky top-0 z-20">
+        <button
+          onClick={() => navigate('/tables')}
+          className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
+          aria-label="Indietro"
+        >
           <ArrowLeft size={18} />
         </button>
-        <Trophy size={18} className="text-[#D4AF37]" />
-        <span className="text-[#F5F5DC] font-bold">Performance Staff</span>
-        <div className="ml-auto flex rounded-lg overflow-hidden border border-[#3A3A3A]">
+        <Trophy size={18} className="text-[var(--color-gold)]" />
+        <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">
+          Performance staff
+        </h1>
+        <div className="ml-auto flex rounded-lg overflow-hidden border border-[var(--color-border-strong)] bg-[var(--color-surface-2)]">
           {[['today','Oggi'],['week','Settimana'],['month','Mese']].map(([val, label]) => (
-            <button key={val} onClick={() => setPeriod(val)}
-              className={`px-3 py-1.5 text-xs transition ${
-                period === val ? 'bg-[#3A3A3A] text-[#F5F5DC]' : 'text-[#555] hover:text-[#888]'
-              }`}>
+            <button
+              key={val}
+              onClick={() => setPeriod(val)}
+              className={`px-3 py-1.5 text-xs font-semibold transition ${
+                period === val
+                  ? 'bg-[var(--color-gold-soft)] text-[var(--color-gold)]'
+                  : 'text-[var(--color-text-2)] hover:text-[var(--color-text)]'
+              }`}
+            >
               {label}
             </button>
           ))}
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-5 max-w-3xl mx-auto w-full">
         {loading ? (
-          <div className="flex justify-center py-16">
-            <RefreshCw size={18} className="animate-spin text-[#555]" />
+          <div className="flex justify-center py-16 gap-2 text-[var(--color-text-2)]">
+            <RefreshCw size={18} className="animate-spin text-[var(--color-gold)]" />
+            <span className="text-sm">Caricamento performance…</span>
           </div>
         ) : staff.length === 0 ? (
-          <p className="text-[#555] text-center py-12">Nessun dato disponibile</p>
+          <div className="flex flex-col items-center gap-3 py-20 text-[var(--color-text-3)]">
+            <Trophy size={48} className="text-[var(--color-text-3)]/40" />
+            <p className="serif text-[var(--color-text-2)] text-base font-bold">
+              Nessun dato disponibile
+            </p>
+          </div>
         ) : (
           <div className="space-y-3">
             {staff.map((s, i) => (
-              <div key={s.id}
-                className="bg-[#222] border border-[#3A3A3A] rounded-xl p-4 flex items-center gap-4">
-                {/* Posizione */}
-                <div className="text-xl w-8 text-center shrink-0">
+              <Card key={s.id} padding="md" className="flex items-center gap-4">
+                {/* Posizione / medaglia */}
+                <div className="text-2xl w-10 text-center shrink-0 tnum">
                   {medal(i)}
                 </div>
 
                 {/* Info cameriere */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#F5F5DC] font-semibold text-sm">{s.name}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="serif text-[var(--color-text)] font-bold text-base tracking-tight">{s.name}</span>
                     {s.sub_role && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-cyan-900/20 text-cyan-400 border border-cyan-500/30">
-                        {s.sub_role}
-                      </span>
+                      <Badge tone="info" size="sm">{s.sub_role}</Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-4 mt-1.5">
-                    <span className="flex items-center gap-1 text-[#888] text-xs">
-                      <CheckCircle2 size={11} className="text-emerald-400" />
+                  <div className="flex items-center gap-4 mt-1.5 flex-wrap">
+                    <span className="flex items-center gap-1 text-[var(--color-text-2)] text-xs tnum">
+                      <CheckCircle2 size={11} className="text-[var(--color-ok)]" />
                       {s.items_served} serviti
                     </span>
-                    <span className="flex items-center gap-1 text-[#888] text-xs">
-                      <Clock size={11} className="text-blue-400" />
+                    <span className="flex items-center gap-1 text-[var(--color-text-2)] text-xs tnum">
+                      <Clock size={11} className="text-[var(--color-sea)]" />
                       {s.avg_response_min}min media
                     </span>
-                    <span className="flex items-center gap-1 text-[#888] text-xs">
-                      <AlertTriangle size={11} className="text-amber-400" />
+                    <span className="flex items-center gap-1 text-[var(--color-text-2)] text-xs tnum">
+                      <AlertTriangle size={11} className="text-[var(--color-warn)]" />
                       {s.alerts_received} alert
                     </span>
                     {s.escalations > 0 && (
-                      <span className="flex items-center gap-1 text-[#888] text-xs">
-                        <TrendingUp size={11} className="text-red-400" />
+                      <span className="flex items-center gap-1 text-[var(--color-text-2)] text-xs tnum">
+                        <TrendingUp size={11} className="text-[var(--color-err)]" />
                         {s.escalations} esc.
                       </span>
                     )}
@@ -112,16 +127,22 @@ export default function StaffPerformancePage() {
                 </div>
 
                 {/* Score */}
-                <div className="shrink-0 flex flex-col items-center gap-1">
-                  <span className={`text-2xl font-bold ${scoreColor(s.avg_score)}`}>
+                <div className="shrink-0 flex flex-col items-center gap-1.5">
+                  <span className={`serif text-3xl font-bold tnum leading-none`} style={{ color: scoreColor(s.avg_score) }}>
                     {s.avg_score}
                   </span>
-                  <div className="w-16 h-1.5 rounded-full bg-[#3A3A3A] overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${scoreBg(s.avg_score)}`}
-                      style={{ width: `${s.avg_score}%` }} />
+                  <div className="w-20 h-1.5 rounded-full bg-[var(--color-surface-2)] overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${s.avg_score}%`,
+                        background: scoreColor(s.avg_score),
+                      }}
+                    />
                   </div>
+                  <Badge tone={scoreTone(s.avg_score)} size="sm">score</Badge>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         )}

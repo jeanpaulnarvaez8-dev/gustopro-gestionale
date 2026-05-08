@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, MapPin, UserPlus, X, Copy, RefreshCw, Trash2 } from 'lucide-react'
 import { assignmentsAPI, usersAPI, zonesAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { Card, Badge, Button } from '../components/v2'
 
 export default function ZoneAssignmentPage() {
   const navigate = useNavigate()
@@ -12,7 +13,7 @@ export default function ZoneAssignmentPage() {
   const [zones, setZones] = useState([])
   const [waiters, setWaiters] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showAdd, setShowAdd] = useState(null) // zone_id o null
+  const [showAdd, setShowAdd] = useState(null)
   const [selectedWaiter, setSelectedWaiter] = useState('')
 
   const load = useCallback(async () => {
@@ -71,64 +72,82 @@ export default function ZoneAssignmentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A] flex flex-col">
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-5 py-3 flex items-center gap-4">
-        <button onClick={() => navigate('/tables')} className="text-[#888] hover:text-[#F5F5DC] transition">
+    <div className="min-h-screen flex flex-col">
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 sm:px-5 py-3 flex items-center gap-3 sticky top-0 z-20">
+        <button
+          onClick={() => navigate('/tables')}
+          className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
+          aria-label="Indietro"
+        >
           <ArrowLeft size={18} />
         </button>
-        <MapPin size={18} className="text-[#D4AF37]" />
-        <span className="text-[#F5F5DC] font-bold">Assegnazione Zone</span>
-        <span className="text-[#555] text-xs">Oggi</span>
-        <button onClick={handleCopyYesterday}
-          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-[#2A2A2A] border border-[#3A3A3A] text-[#888] rounded-lg text-xs font-medium hover:text-[#F5F5DC] transition">
-          <Copy size={13} /> Copia da ieri
-        </button>
+        <MapPin size={18} className="text-[var(--color-gold)]" />
+        <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">
+          Assegnazione zone
+        </h1>
+        <Badge tone="neutral" size="sm">Oggi</Badge>
+
+        <Button
+          size="sm"
+          variant="secondary"
+          leftIcon={<Copy size={13} />}
+          onClick={handleCopyYesterday}
+          className="ml-auto"
+        >
+          Copia da ieri
+        </Button>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-5 max-w-3xl mx-auto w-full">
         {loading ? (
-          <div className="flex justify-center py-16">
-            <RefreshCw size={18} className="animate-spin text-[#555]" />
+          <div className="flex justify-center py-16 gap-2 text-[var(--color-text-2)]">
+            <RefreshCw size={18} className="animate-spin text-[var(--color-gold)]" />
+            <span className="text-sm">Caricamento zone…</span>
           </div>
         ) : (
           <div className="grid gap-4">
             {zones.map(zone => {
               const zoneAssignments = assignments.filter(a => a.zone_id === zone.id)
               return (
-                <div key={zone.id} className="bg-[#222] border border-[#3A3A3A] rounded-xl overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-3 border-b border-[#2E2E2E]">
+                <Card key={zone.id} padding="none" className="overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border-soft)] bg-[var(--color-surface-2)]">
                     <div className="flex items-center gap-2">
-                      <MapPin size={14} className="text-[#D4AF37]" />
-                      <span className="text-[#F5F5DC] font-semibold text-sm">{zone.name}</span>
-                      <span className="text-[#555] text-xs">({zoneAssignments.length} assegnati)</span>
+                      <MapPin size={14} className="text-[var(--color-gold)]" />
+                      <span className="serif text-[var(--color-text)] font-bold text-base tracking-tight">{zone.name}</span>
+                      <Badge tone="neutral" size="sm">{zoneAssignments.length} assegnati</Badge>
                     </div>
-                    <button onClick={() => { setShowAdd(zone.id); setSelectedWaiter('') }}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-[#D4AF37]/10 text-[#D4AF37] rounded-lg text-xs font-medium hover:bg-[#D4AF37]/20 transition">
+                    <button
+                      onClick={() => { setShowAdd(zone.id); setSelectedWaiter('') }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-[var(--color-gold-soft)] text-[var(--color-gold)] rounded-lg text-xs font-semibold hover:bg-[var(--color-gold)]/20 transition border border-[var(--color-gold-ring)]"
+                    >
                       <UserPlus size={12} /> Aggiungi
                     </button>
                   </div>
 
-                  <div className="divide-y divide-[#2A2A2A]">
+                  <div className="divide-y divide-[var(--color-border-soft)]">
                     {zoneAssignments.length === 0 ? (
-                      <p className="text-[#555] text-xs text-center py-6">Nessun cameriere assegnato</p>
+                      <p className="text-[var(--color-text-3)] text-sm text-center py-6">
+                        Nessun cameriere assegnato
+                      </p>
                     ) : (
                       zoneAssignments.map(a => (
                         <div key={a.id} className="flex items-center justify-between px-5 py-2.5">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-900/30 border border-blue-500/30 flex items-center justify-center text-blue-400 text-xs font-bold">
+                            <div className="w-9 h-9 rounded-full bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/30 flex items-center justify-center text-[var(--color-sea)] text-sm font-bold tnum">
                               {a.user_name?.charAt(0)}
                             </div>
                             <div>
-                              <span className="text-[#F5F5DC] text-sm font-medium">{a.user_name}</span>
+                              <span className="text-[var(--color-text)] text-sm font-semibold">{a.user_name}</span>
                               {a.sub_role && (
-                                <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-medium bg-cyan-900/20 text-cyan-400 border border-cyan-500/30">
-                                  {a.sub_role}
-                                </span>
+                                <Badge tone="info" size="sm" className="ml-2">{a.sub_role}</Badge>
                               )}
                             </div>
                           </div>
-                          <button onClick={() => handleRemove(a.id)}
-                            className="p-1.5 rounded-lg text-[#555] hover:text-red-400 hover:bg-[#2A2A2A] transition">
+                          <button
+                            onClick={() => handleRemove(a.id)}
+                            title="Rimuovi"
+                            className="p-1.5 rounded-lg text-[var(--color-text-3)] hover:text-[var(--color-err)] hover:bg-[var(--color-err-soft)] transition"
+                          >
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -139,31 +158,44 @@ export default function ZoneAssignmentPage() {
                   {/* Add waiter inline */}
                   <AnimatePresence>
                     {showAdd === zone.id && (
-                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden border-t border-[#3A3A3A]">
-                        <div className="px-5 py-3 flex items-center gap-3 bg-[#1E1E1E]">
-                          <select value={selectedWaiter} onChange={e => setSelectedWaiter(e.target.value)}
-                            className="flex-1 bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm">
-                            <option value="">Seleziona cameriere...</option>
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden border-t border-[var(--color-border-soft)]"
+                      >
+                        <div className="px-5 py-3 flex items-center gap-2 bg-[var(--color-surface-2)]">
+                          <select
+                            value={selectedWaiter}
+                            onChange={e => setSelectedWaiter(e.target.value)}
+                            className="flex-1 bg-[var(--color-surface)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-3 py-2 text-[var(--color-text)] text-sm outline-none transition"
+                          >
+                            <option value="">Seleziona cameriere…</option>
                             {availableWaiters(zone.id).map(w => (
                               <option key={w.id} value={w.id}>
                                 {w.name}{w.sub_role ? ` (${w.sub_role})` : ''}
                               </option>
                             ))}
                           </select>
-                          <button onClick={() => handleAssign(zone.id)}
+                          <Button
+                            size="sm"
                             disabled={!selectedWaiter}
-                            className="px-3 py-2 bg-[#D4AF37] text-[#1A1A1A] rounded-lg text-xs font-bold disabled:opacity-30 hover:bg-[#c9a42e] transition">
+                            onClick={() => handleAssign(zone.id)}
+                          >
                             Assegna
-                          </button>
-                          <button onClick={() => setShowAdd(null)} className="text-[#555] hover:text-[#888]">
+                          </Button>
+                          <button
+                            onClick={() => setShowAdd(null)}
+                            className="text-[var(--color-text-3)] hover:text-[var(--color-text)] p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.04)] transition"
+                            aria-label="Annulla"
+                          >
                             <X size={16} />
                           </button>
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </div>
+                </Card>
               )
             })}
           </div>

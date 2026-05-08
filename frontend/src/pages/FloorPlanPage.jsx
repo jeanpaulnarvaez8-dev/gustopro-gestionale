@@ -42,23 +42,36 @@ export default function FloorPlanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A] flex flex-col">
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-5 py-3 flex items-center gap-4 shrink-0">
-        <button onClick={() => navigate('/tables')} className="text-[#888] hover:text-[#F5F5DC] transition">
+    <div className="min-h-screen flex flex-col">
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 sm:px-5 py-3 flex items-center gap-3 shrink-0 sticky top-0 z-20">
+        <button
+          onClick={() => navigate('/tables')}
+          className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
+          aria-label="Indietro"
+        >
           <ArrowLeft size={18} />
         </button>
-        <Map size={18} className="text-[#D4AF37]" />
-        <span className="text-[#F5F5DC] font-bold">Pianta Locale</span>
-        <span className="text-[#555] text-xs">Trascina i tavoli per posizionarli</span>
-        <button onClick={load} className="ml-auto text-[#555] hover:text-[#888] transition">
+        <Map size={18} className="text-[var(--color-gold)]" />
+        <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">
+          Pianta locale
+        </h1>
+        <span className="hidden sm:inline text-[var(--color-text-3)] text-xs">
+          Trascina i tavoli per posizionarli
+        </span>
+        <button
+          onClick={load}
+          className="ml-auto text-[var(--color-text-2)] hover:text-[var(--color-gold)] transition p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.04)]"
+          aria-label="Ricarica"
+        >
           <RefreshCw size={14} />
         </button>
       </header>
 
       <div className="flex-1">
         {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <RefreshCw size={18} className="animate-spin text-[#555]" />
+          <div className="flex items-center justify-center h-64 gap-2 text-[var(--color-text-2)]">
+            <RefreshCw size={18} className="animate-spin text-[var(--color-gold)]" />
+            <span className="text-sm">Caricamento pianta…</span>
           </div>
         ) : (
           <FloorPlanEditor

@@ -1,16 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Users, Plus, Pencil, UserX, UserCheck, X, Check, RefreshCw, KeyRound } from 'lucide-react'
+import { AnimatePresence } from 'framer-motion'
+import { ArrowLeft, Users, Plus, Pencil, UserX, UserCheck, Check, RefreshCw, KeyRound } from 'lucide-react'
 import { usersAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { Card, Badge, Button, Modal } from '../components/v2'
 
 const ROLES = [
-  { id: 'admin',   label: 'Admin',    color: 'text-red-400    bg-red-900/20    border-red-500/30' },
-  { id: 'manager', label: 'Manager',  color: 'text-amber-400  bg-amber-900/20  border-amber-500/30' },
-  { id: 'waiter',  label: 'Cameriere',color: 'text-blue-400   bg-blue-900/20   border-blue-500/30' },
-  { id: 'cashier', label: 'Cassiere', color: 'text-purple-400 bg-purple-900/20 border-purple-500/30' },
-  { id: 'kitchen', label: 'Cucina',   color: 'text-emerald-400 bg-emerald-900/20 border-emerald-500/30' },
+  { id: 'admin',   label: 'Admin',     tone: 'err'   },
+  { id: 'manager', label: 'Manager',   tone: 'warn'  },
+  { id: 'waiter',  label: 'Cameriere', tone: 'sea'   },
+  { id: 'cashier', label: 'Cassiere',  tone: 'park'  },
+  { id: 'kitchen', label: 'Cucina',    tone: 'ok'    },
 ]
 
 const SUB_ROLES = [
@@ -20,11 +21,12 @@ const SUB_ROLES = [
   { id: 'comi',          label: 'Comì' },
 ]
 
-function roleBadge(role) {
-  const r = ROLES.find(x => x.id === role)
-  return r
-    ? <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${r.color}`}>{r.label}</span>
-    : <span className="text-[#555] text-xs">{role}</span>
+const TONE_BTN = {
+  err:  'border-[var(--color-err)]/40   text-[var(--color-err)]  bg-[var(--color-err-soft)]',
+  warn: 'border-[var(--color-warn)]/40  text-[var(--color-warn)] bg-[var(--color-warn-soft)]',
+  sea:  'border-[var(--color-sea)]/40   text-[var(--color-sea)]  bg-[var(--color-sea-soft)]',
+  park: 'border-[var(--color-park)]/40  text-[var(--color-park)] bg-[var(--color-park-soft)]',
+  ok:   'border-[var(--color-ok)]/40    text-[var(--color-ok)]   bg-[var(--color-ok-soft)]',
 }
 
 function UserForm({ initial, onClose, onSaved }) {
@@ -43,7 +45,7 @@ function UserForm({ initial, onClose, onSaved }) {
 
   const submit = async () => {
     if (!form.name.trim()) { toast({ type: 'warning', title: 'Nome obbligatorio' }); return }
-    if (!isEdit && !form.pin)  { toast({ type: 'warning', title: 'PIN obbligatorio per nuovo utente' }); return }
+    if (!isEdit && !form.pin) { toast({ type: 'warning', title: 'PIN obbligatorio per nuovo utente' }); return }
     if (form.pin && !/^\d{4,6}$/.test(form.pin)) { toast({ type: 'warning', title: 'PIN deve essere 4-6 cifre' }); return }
     if (form.pin && form.pin !== form.pinConfirm) { toast({ type: 'warning', title: 'I PIN non coincidono' }); return }
 
@@ -67,88 +69,110 @@ function UserForm({ initial, onClose, onSaved }) {
     }
   }
 
+  const inputCls = 'bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-3 py-2.5 text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-3)] outline-none transition tnum'
+  const labelCls = 'text-[var(--color-text-2)] text-xs font-semibold uppercase tracking-wider flex items-center gap-1'
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}
-        className="bg-[#222] border border-[#3A3A3A] rounded-2xl w-full max-w-sm">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#3A3A3A]">
-          <h3 className="text-[#F5F5DC] font-semibold">
-            {isEdit ? `Modifica ${initial.name}` : 'Nuovo utente'}
-          </h3>
-          <button onClick={onClose} className="text-[#555] hover:text-[#888]"><X size={18} /></button>
+    <Modal
+      open
+      onClose={onClose}
+      size="sm"
+      title={isEdit ? `Modifica ${initial.name}` : 'Nuovo utente'}
+      footer={
+        <Button
+          fullWidth
+          size="lg"
+          loading={saving}
+          leftIcon={<Check size={16} />}
+          onClick={submit}
+        >
+          {isEdit ? 'Salva modifiche' : 'Crea utente'}
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {/* Name */}
+        <div className="flex flex-col gap-1.5">
+          <label className={labelCls}>Nome *</label>
+          <input
+            value={form.name}
+            onChange={e => update('name', e.target.value)}
+            placeholder="Nome completo"
+            className={inputCls.replace(' tnum', '')}
+          />
         </div>
 
-        <div className="p-5 flex flex-col gap-4">
-          {/* Name */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[#888] text-xs">Nome *</label>
-            <input value={form.name} onChange={e => update('name', e.target.value)}
-              placeholder="Nome completo"
-              className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm placeholder-[#555]" />
+        {/* Role */}
+        <div className="flex flex-col gap-1.5">
+          <label className={labelCls}>Ruolo *</label>
+          <div className="grid grid-cols-3 gap-2">
+            {ROLES.map(r => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => update('role', r.id)}
+                className={`py-2 rounded-lg border text-xs font-semibold transition ${
+                  form.role === r.id
+                    ? TONE_BTN[r.tone]
+                    : 'border-[var(--color-border-strong)] text-[var(--color-text-3)] hover:text-[var(--color-text-2)]'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
           </div>
+        </div>
 
-          {/* Role */}
+        {/* Sub-role (solo per camerieri) */}
+        {form.role === 'waiter' && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-[#888] text-xs">Ruolo *</label>
-            <div className="grid grid-cols-3 gap-2">
-              {ROLES.map(r => (
-                <button key={r.id} onClick={() => update('role', r.id)}
-                  className={`py-1.5 rounded-lg border text-xs font-medium transition ${
-                    form.role === r.id ? r.color : 'border-[#3A3A3A] text-[#555] hover:text-[#888]'
-                  }`}>
-                  {r.label}
+            <label className={labelCls}>Sotto-ruolo</label>
+            <div className="grid grid-cols-2 gap-2">
+              {SUB_ROLES.map(sr => (
+                <button
+                  key={sr.id}
+                  type="button"
+                  onClick={() => update('sub_role', sr.id)}
+                  className={`py-1.5 rounded-lg border text-xs font-semibold transition ${
+                    form.sub_role === sr.id
+                      ? 'text-[var(--color-info)] bg-[var(--color-info-soft)] border-[var(--color-info)]/40'
+                      : 'border-[var(--color-border-strong)] text-[var(--color-text-3)] hover:text-[var(--color-text-2)]'
+                  }`}
+                >
+                  {sr.label}
                 </button>
               ))}
             </div>
           </div>
+        )}
 
-          {/* Sub-role (solo per camerieri) */}
-          {form.role === 'waiter' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[#888] text-xs">Sotto-ruolo</label>
-              <div className="grid grid-cols-2 gap-2">
-                {SUB_ROLES.map(sr => (
-                  <button key={sr.id} onClick={() => update('sub_role', sr.id)}
-                    className={`py-1.5 rounded-lg border text-xs font-medium transition ${
-                      form.sub_role === sr.id
-                        ? 'text-cyan-400 bg-cyan-900/20 border-cyan-500/30'
-                        : 'border-[#3A3A3A] text-[#555] hover:text-[#888]'
-                    }`}>
-                    {sr.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* PIN */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[#888] text-xs flex items-center gap-1">
-              <KeyRound size={11} />
-              {isEdit ? 'Nuovo PIN (lascia vuoto per non cambiare)' : 'PIN * (4-6 cifre)'}
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <input type="password" inputMode="numeric"
-                value={form.pin}
-                onChange={e => update('pin', e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="••••"
-                className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm placeholder-[#555]" />
-              <input type="password" inputMode="numeric"
-                value={form.pinConfirm}
-                onChange={e => update('pinConfirm', e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Conferma"
-                className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm placeholder-[#555]" />
-            </div>
+        {/* PIN */}
+        <div className="flex flex-col gap-1.5">
+          <label className={labelCls}>
+            <KeyRound size={11} />
+            {isEdit ? 'Nuovo PIN (lascia vuoto per non cambiare)' : 'PIN * (4-6 cifre)'}
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="password"
+              inputMode="numeric"
+              value={form.pin}
+              onChange={e => update('pin', e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="••••"
+              className={inputCls}
+            />
+            <input
+              type="password"
+              inputMode="numeric"
+              value={form.pinConfirm}
+              onChange={e => update('pinConfirm', e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="Conferma"
+              className={inputCls}
+            />
           </div>
-
-          <button onClick={submit} disabled={saving}
-            className="w-full py-2.5 rounded-xl bg-[#D4AF37] text-[#1A1A1A] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-[#c9a42e] transition mt-1">
-            {saving ? <RefreshCw size={14} className="animate-spin" /> : <><Check size={14} /> {isEdit ? 'Salva modifiche' : 'Crea utente'}</>}
-          </button>
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </Modal>
   )
 }
 
@@ -157,7 +181,7 @@ export default function UsersPage() {
   const { toast } = useToast()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState(null)   // user object or 'new'
+  const [editing, setEditing] = useState(null)
   const [filter, setFilter] = useState('all')
 
   const load = useCallback(() => {
@@ -187,91 +211,123 @@ export default function UsersPage() {
       : users.filter(u => !u.is_active)
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A] flex flex-col">
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-5 py-3 flex items-center gap-4">
-        <button onClick={() => navigate('/tables')} className="text-[#888] hover:text-[#F5F5DC] transition">
+    <div className="min-h-screen flex flex-col">
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 sm:px-5 py-3 flex items-center gap-3 sticky top-0 z-20">
+        <button
+          onClick={() => navigate('/tables')}
+          className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
+          aria-label="Indietro"
+        >
           <ArrowLeft size={18} />
         </button>
-        <Users size={18} className="text-[#D4AF37]" />
-        <span className="text-[#F5F5DC] font-bold">Gestione Staff</span>
+        <Users size={18} className="text-[var(--color-gold)]" />
+        <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">
+          Gestione staff
+        </h1>
+
         <div className="ml-auto flex items-center gap-3">
           {/* Filter */}
-          <div className="flex rounded-lg overflow-hidden border border-[#3A3A3A]">
+          <div className="flex rounded-lg overflow-hidden border border-[var(--color-border-strong)] bg-[var(--color-surface-2)]">
             {[['all','Tutti'],['active','Attivi'],['inactive','Inattivi']].map(([val, label]) => (
-              <button key={val} onClick={() => setFilter(val)}
-                className={`px-3 py-1.5 text-xs transition ${
-                  filter === val ? 'bg-[#3A3A3A] text-[#F5F5DC]' : 'text-[#555] hover:text-[#888]'
-                }`}>
+              <button
+                key={val}
+                onClick={() => setFilter(val)}
+                className={`px-3 py-1.5 text-xs font-semibold transition ${
+                  filter === val
+                    ? 'bg-[var(--color-gold-soft)] text-[var(--color-gold)]'
+                    : 'text-[var(--color-text-2)] hover:text-[var(--color-text)]'
+                }`}
+              >
                 {label}
               </button>
             ))}
           </div>
-          <button onClick={() => setEditing('new')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#D4AF37] text-[#1A1A1A] rounded-lg text-xs font-semibold hover:bg-[#c9a42e] transition">
-            <Plus size={13} /> Nuovo utente
-          </button>
+          <Button size="sm" leftIcon={<Plus size={13} />} onClick={() => setEditing('new')}>
+            Nuovo utente
+          </Button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-5 max-w-[1200px] mx-auto w-full">
         {loading ? (
-          <div className="flex justify-center py-16">
-            <RefreshCw size={18} className="animate-spin text-[#555]" />
+          <div className="flex justify-center py-16 gap-2 text-[var(--color-text-2)]">
+            <RefreshCw size={18} className="animate-spin text-[var(--color-gold)]" />
+            <span className="text-sm">Caricamento staff…</span>
           </div>
         ) : (
-          <div className="bg-[#222] rounded-xl border border-[#3A3A3A] overflow-hidden">
+          <Card padding="none" className="overflow-hidden">
             {filtered.length === 0 ? (
-              <p className="text-[#555] text-xs text-center py-12">Nessun utente</p>
+              <p className="text-[var(--color-text-3)] text-sm text-center py-12">Nessun utente</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[#2E2E2E]">
-                    <th className="text-left px-5 py-3 text-[#555] text-xs font-medium">Nome</th>
-                    <th className="text-left px-4 py-3 text-[#555] text-xs font-medium">Ruolo</th>
-                    <th className="text-center px-4 py-3 text-[#555] text-xs font-medium">Stato</th>
-                    <th className="text-right px-5 py-3 text-[#555] text-xs font-medium">Azioni</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((u, i) => (
-                    <tr key={u.id}
-                      className={`border-b border-[#2A2A2A] last:border-0 ${i % 2 === 0 ? '' : 'bg-[#1E1E1E]'} ${!u.is_active ? 'opacity-50' : ''}`}>
-                      <td className="px-5 py-3">
-                        <span className="text-[#F5F5DC] font-medium">{u.name}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {roleBadge(u.role)}
-                        {u.sub_role && (
-                          <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-cyan-900/20 text-cyan-400 border border-cyan-500/30">
-                            {u.sub_role}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`inline-block w-2 h-2 rounded-full ${u.is_active ? 'bg-emerald-400' : 'bg-[#555]'}`} />
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => setEditing(u)}
-                            className="p-1.5 rounded-lg text-[#555] hover:text-[#D4AF37] hover:bg-[#2A2A2A] transition">
-                            <Pencil size={14} />
-                          </button>
-                          <button onClick={() => toggleActive(u)}
-                            className={`p-1.5 rounded-lg transition ${
-                              u.is_active
-                                ? 'text-[#555] hover:text-red-400 hover:bg-[#2A2A2A]'
-                                : 'text-[#555] hover:text-emerald-400 hover:bg-[#2A2A2A]'
-                            }`}>
-                            {u.is_active ? <UserX size={14} /> : <UserCheck size={14} />}
-                          </button>
-                        </div>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border-soft)] bg-[var(--color-surface-2)]">
+                      <th className="text-left px-5 py-3 text-[var(--color-text-3)] text-[10px] font-semibold uppercase tracking-wider">Nome</th>
+                      <th className="text-left px-4 py-3 text-[var(--color-text-3)] text-[10px] font-semibold uppercase tracking-wider">Ruolo</th>
+                      <th className="text-center px-4 py-3 text-[var(--color-text-3)] text-[10px] font-semibold uppercase tracking-wider">Stato</th>
+                      <th className="text-right px-5 py-3 text-[var(--color-text-3)] text-[10px] font-semibold uppercase tracking-wider">Azioni</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filtered.map((u, i) => {
+                      const r = ROLES.find(x => x.id === u.role)
+                      return (
+                        <tr
+                          key={u.id}
+                          className={`border-b border-[var(--color-border-soft)] last:border-0 ${
+                            i % 2 === 0 ? '' : 'bg-[var(--color-surface-2)]/50'
+                          } ${!u.is_active ? 'opacity-50' : ''} hover:bg-[rgba(212,175,55,0.04)] transition`}
+                        >
+                          <td className="px-5 py-3">
+                            <span className="text-[var(--color-text)] font-semibold">{u.name}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {r
+                                ? <Badge tone={r.tone} size="sm">{r.label}</Badge>
+                                : <span className="text-[var(--color-text-3)] text-xs">{u.role}</span>
+                              }
+                              {u.sub_role && (
+                                <Badge tone="info" size="sm">{u.sub_role}</Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-block w-2.5 h-2.5 rounded-full ${
+                              u.is_active ? 'bg-[var(--color-ok)]' : 'bg-[var(--color-text-3)]'
+                            }`} />
+                          </td>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => setEditing(u)}
+                                title="Modifica"
+                                className="p-1.5 rounded-lg text-[var(--color-text-3)] hover:text-[var(--color-gold)] hover:bg-[var(--color-gold-soft)] transition"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                onClick={() => toggleActive(u)}
+                                title={u.is_active ? 'Disattiva' : 'Riattiva'}
+                                className={`p-1.5 rounded-lg transition ${
+                                  u.is_active
+                                    ? 'text-[var(--color-text-3)] hover:text-[var(--color-err)] hover:bg-[var(--color-err-soft)]'
+                                    : 'text-[var(--color-text-3)] hover:text-[var(--color-ok)] hover:bg-[var(--color-ok-soft)]'
+                                }`}
+                              >
+                                {u.is_active ? <UserX size={14} /> : <UserCheck size={14} />}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </div>
+          </Card>
         )}
       </div>
 
