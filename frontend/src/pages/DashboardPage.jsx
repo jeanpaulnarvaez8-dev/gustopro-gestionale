@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, Users, Receipt, TableProperties, BarChart3, Package, AlertTriangle, Trash2, LineChart, BookOpen, UtensilsCrossed, LayoutGrid, FileText } from 'lucide-react'
+import {
+  ArrowLeft, TrendingUp, TrendingDown, RefreshCw, Users, Receipt,
+  TableProperties, BarChart3, Package, AlertTriangle, Trash2, LineChart,
+  BookOpen, UtensilsCrossed, LayoutGrid, FileText,
+} from 'lucide-react'
 import { adminAPI, billingAPI, inventoryAPI } from '../lib/api'
 import { formatPrice, formatTime } from '../lib/utils'
+import { Card, Badge } from '../components/v2'
 
-// Simple inline SVG bar chart
+// ─── Hourly bar chart (SVG inline, riva style) ───────────────────────────────
 function HourlyChart({ data }) {
   if (!data?.length) return null
   const maxVal = Math.max(...data.map(d => d.revenue), 1)
@@ -27,14 +32,14 @@ function HourlyChart({ data }) {
                 y={H - h}
                 width={barW - 0.6}
                 height={h}
-                fill={d.revenue > 0 ? '#D4AF37' : '#2A2A2A'}
+                fill={d.revenue > 0 ? '#D4AF37' : 'rgba(232,219,180,0.06)'}
                 rx="0.5"
               />
             </g>
           )
         })}
       </svg>
-      <div className="flex justify-between text-[#555] text-xs px-0.5 mt-1">
+      <div className="flex justify-between text-[var(--color-text-3)] text-[10px] tnum px-0.5 mt-1">
         {[10, 12, 14, 16, 18, 20, 22, 24].map(h => (
           <span key={h}>{h}:00</span>
         ))}
@@ -43,24 +48,58 @@ function HourlyChart({ data }) {
   )
 }
 
-function KpiCard({ icon: Icon, label, value, sub, trend, color = 'text-[#D4AF37]' }) {
+// ─── KPI card v2 (usa Card primitive + token color names) ────────────────────
+function KpiCard({ icon: Icon, label, value, sub, trend, tone = 'gold' }) {
+  const TONES = {
+    gold: 'text-[var(--color-gold)]',
+    sea:  'text-[var(--color-sea)]',
+    pine: 'text-[var(--color-pine)]',
+    sand: 'text-[var(--color-sand)]',
+    terracotta: 'text-[var(--color-terracotta)]',
+    ok:   'text-[var(--color-ok)]',
+    err:  'text-[var(--color-err)]',
+    warn: 'text-[var(--color-warn)]',
+    park: 'text-[var(--color-park)]',
+    info: 'text-[var(--color-info)]',
+    text: 'text-[var(--color-text-2)]',
+  }
   return (
-    <div className="bg-[#222] rounded-xl border border-[#3A3A3A] p-4 flex flex-col gap-2">
+    <Card padding="md" className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-[#555] text-xs uppercase tracking-wide">{label}</span>
-        <Icon size={15} className="text-[#3A3A3A]" />
+        <span className="text-[var(--color-text-3)] text-[10px] uppercase tracking-wider font-semibold">
+          {label}
+        </span>
+        <Icon size={15} className="text-[var(--color-text-3)]" />
       </div>
-      <span className={`text-2xl font-bold ${color}`}>{value}</span>
+      <span className={`text-[26px] font-bold tnum leading-none ${TONES[tone] || TONES.gold}`}>
+        {value}
+      </span>
       {sub != null && (
         <div className="flex items-center gap-1 text-xs">
-          {trend === 'up'   && <TrendingUp   size={12} className="text-emerald-400" />}
-          {trend === 'down' && <TrendingDown  size={12} className="text-red-400" />}
-          <span className={trend === 'up' ? 'text-emerald-400' : trend === 'down' ? 'text-red-400' : 'text-[#555]'}>
+          {trend === 'up'   && <TrendingUp   size={12} className="text-[var(--color-ok)]" />}
+          {trend === 'down' && <TrendingDown size={12} className="text-[var(--color-err)]" />}
+          <span className={
+            trend === 'up' ? 'text-[var(--color-ok)] font-semibold' :
+            trend === 'down' ? 'text-[var(--color-err)] font-semibold' :
+            'text-[var(--color-text-3)]'
+          }>
             {sub}
           </span>
         </div>
       )}
-    </div>
+    </Card>
+  )
+}
+
+// ─── Header nav button (riutilizza pattern TableMap) ─────────────────────────
+function NavButton({ icon: Icon, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 text-[var(--color-text-2)] hover:text-[var(--color-gold)] hover:bg-[rgba(255,255,255,0.04)] transition text-xs px-2 py-1.5 rounded-lg shrink-0"
+    >
+      <Icon size={13} /> {label}
+    </button>
   )
 }
 
@@ -104,175 +143,200 @@ export default function DashboardPage() {
     : null
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A] flex flex-col">
+    <div className="min-h-screen flex flex-col">
 
-      {/* Header */}
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-5 py-3 flex items-center gap-4">
-        <button onClick={() => navigate('/tables')}
-          className="text-[#888] hover:text-[#F5F5DC] transition">
+      {/* ─── Header ─────────────────────────────────────────────── */}
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 sm:px-5 py-3 flex items-center gap-3 sticky top-0 z-20">
+        <button
+          onClick={() => navigate('/tables')}
+          className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
+          aria-label="Indietro"
+        >
           <ArrowLeft size={18} />
         </button>
-        <BarChart3 size={18} className="text-[#D4AF37]" />
-        <span className="text-[#F5F5DC] font-bold">Dashboard</span>
-        <span className="text-[#555] text-xs ml-1">
+        <div className="flex items-center gap-2">
+          <BarChart3 size={18} className="text-[var(--color-gold)]" />
+          <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">Dashboard</h1>
+        </div>
+        <span className="text-[var(--color-text-3)] text-xs hidden sm:block">
           {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
         </span>
-        <div className="ml-auto flex items-center gap-3">
-          <button onClick={() => navigate('/analytics')}
-            className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
-            <LineChart size={13} /> Analytics
-          </button>
-          <button onClick={() => navigate('/combos')}
-            className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
-            <BookOpen size={13} /> Menù Fissi
-          </button>
-          <button onClick={() => navigate('/menu-admin')}
-            className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
-            <UtensilsCrossed size={13} /> Menu
-          </button>
-          <button onClick={() => navigate('/venue')}
-            className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
-            <LayoutGrid size={13} /> Zone & Tavoli
-          </button>
-          <button onClick={() => navigate('/tax-report')}
-            className="flex items-center gap-1.5 text-[#555] hover:text-[#D4AF37] transition text-xs">
-            <FileText size={13} /> Fiscale
-          </button>
-          {lastRefresh && (
-            <span className="text-[#555] text-xs">
-              Aggiornato {formatTime(lastRefresh.toISOString())}
-            </span>
-          )}
-          <button onClick={loadAll} disabled={loading}
-            className="text-[#555] hover:text-[#888] transition disabled:opacity-40">
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </div>
+
+        <nav className="ml-auto flex items-center gap-0.5 overflow-x-auto scrollbar-none">
+          <NavButton icon={LineChart}        label="Analytics"    onClick={() => navigate('/analytics')} />
+          <NavButton icon={BookOpen}         label="Menù Fissi"   onClick={() => navigate('/combos')} />
+          <NavButton icon={UtensilsCrossed}  label="Menu"         onClick={() => navigate('/menu-admin')} />
+          <NavButton icon={LayoutGrid}       label="Zone"         onClick={() => navigate('/venue')} />
+          <NavButton icon={FileText}         label="Fiscale"      onClick={() => navigate('/tax-report')} />
+        </nav>
+
+        {lastRefresh && (
+          <span className="hidden lg:block text-[var(--color-text-3)] text-[11px] tnum">
+            agg. {formatTime(lastRefresh.toISOString())}
+          </span>
+        )}
+        <button
+          onClick={loadAll}
+          disabled={loading}
+          className="text-[var(--color-text-2)] hover:text-[var(--color-gold)] transition disabled:opacity-40 p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.04)]"
+          aria-label="Aggiorna"
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+        </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-6 max-w-[1400px] mx-auto w-full">
 
-        {/* KPI cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          <KpiCard
-            icon={TrendingUp}
-            label="Incasso oggi"
-            value={stats ? formatPrice(stats.revenue_today) : '—'}
-            sub={revSub}
-            trend={revTrend}
-          />
-          <KpiCard
-            icon={TrendingUp}
-            label="Ieri"
-            value={stats ? formatPrice(stats.revenue_yesterday) : '—'}
-            color="text-[#888]"
-          />
-          <KpiCard
-            icon={Receipt}
-            label="Scontrino medio"
-            value={stats ? formatPrice(stats.avg_ticket_today) : '—'}
-            color="text-blue-400"
-          />
-          <KpiCard
-            icon={Users}
-            label="Coperti oggi"
-            value={stats?.covers_today ?? '—'}
-            color="text-purple-400"
-          />
-          <KpiCard
-            icon={TableProperties}
-            label="Tavoli aperti"
-            value={stats?.tables_open ?? '—'}
-            color={stats?.tables_open > 0 ? 'text-amber-400' : 'text-emerald-400'}
-          />
-        </div>
+        {/* ─── KPI principali ───────────────────────────────────── */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[var(--color-text-2)] text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
+              <TrendingUp size={12} /> Servizio
+            </h2>
+            <Badge tone="gold" size="sm">live</Badge>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <KpiCard
+              icon={TrendingUp}
+              label="Incasso oggi"
+              value={stats ? formatPrice(stats.revenue_today) : '—'}
+              sub={revSub}
+              trend={revTrend}
+              tone="gold"
+            />
+            <KpiCard
+              icon={TrendingUp}
+              label="Ieri"
+              value={stats ? formatPrice(stats.revenue_yesterday) : '—'}
+              tone="text"
+            />
+            <KpiCard
+              icon={Receipt}
+              label="Scontrino medio"
+              value={stats ? formatPrice(stats.avg_ticket_today) : '—'}
+              tone="sea"
+            />
+            <KpiCard
+              icon={Users}
+              label="Coperti oggi"
+              value={stats?.covers_today ?? '—'}
+              tone="park"
+            />
+            <KpiCard
+              icon={TableProperties}
+              label="Tavoli aperti"
+              value={stats?.tables_open ?? '—'}
+              tone={stats?.tables_open > 0 ? 'warn' : 'ok'}
+            />
+          </div>
+        </section>
 
-        {/* Inventory KPIs */}
+        {/* ─── Inventory KPIs ───────────────────────────────────── */}
         {invKpis && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[#888] text-xs font-medium uppercase tracking-wider flex items-center gap-1.5">
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-[var(--color-text-2)] text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
                 <Package size={12} /> Inventario
-              </h3>
-              <button onClick={() => navigate('/inventory')}
-                className="text-[#D4AF37] text-xs hover:underline">Dettagli →</button>
+              </h2>
+              <button
+                onClick={() => navigate('/inventory')}
+                className="text-[var(--color-gold)] text-xs hover:underline font-medium"
+              >
+                Dettagli →
+              </button>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <KpiCard
                 icon={AlertTriangle}
                 label="Discrepanza media"
                 value={`${parseFloat(invKpis.avg_discrepancy_pct).toFixed(1)}%`}
-                color={invKpis.avg_discrepancy_pct > 5 ? 'text-red-400' : 'text-emerald-400'}
+                tone={invKpis.avg_discrepancy_pct > 5 ? 'err' : 'ok'}
               />
               <KpiCard
                 icon={TrendingDown}
                 label="Perdite settimana"
                 value={formatPrice(invKpis.loss_week)}
-                color="text-amber-400"
+                tone="warn"
               />
               <KpiCard
                 icon={Trash2}
                 label="Scarti oggi"
                 value={formatPrice(invKpis.spoilage_today)}
-                color="text-orange-400"
+                tone="terracotta"
               />
               <KpiCard
                 icon={Trash2}
                 label="Scarti settimana"
                 value={formatPrice(invKpis.spoilage_week)}
-                color="text-red-400"
+                tone="err"
               />
             </div>
-          </div>
+          </section>
         )}
 
-        {/* Hourly chart */}
-        <div className="bg-[#222] rounded-xl border border-[#3A3A3A] p-4">
+        {/* ─── Hourly chart ─────────────────────────────────────── */}
+        <Card padding="md">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[#F5F5DC] text-sm font-semibold">Incasso orario — oggi</h3>
-            <span className="text-[#555] text-xs">10:00 → 24:00</span>
+            <h3 className="serif text-[var(--color-text)] text-base font-bold tracking-tight">
+              Incasso orario — oggi
+            </h3>
+            <span className="text-[var(--color-text-3)] text-xs tnum">10:00 → 24:00</span>
           </div>
           {hourly.length > 0
             ? <HourlyChart data={hourly} />
-            : <p className="text-[#555] text-xs text-center py-8">Nessun dato per oggi</p>
+            : <p className="text-[var(--color-text-3)] text-xs text-center py-10">Nessun dato per oggi</p>
           }
-        </div>
+        </Card>
 
-        {/* Recent receipts */}
-        <div className="bg-[#222] rounded-xl border border-[#3A3A3A] overflow-hidden">
-          <div className="px-4 py-3 border-b border-[#3A3A3A] flex items-center justify-between">
-            <h3 className="text-[#F5F5DC] text-sm font-semibold">Ultimi scontrini</h3>
-            <span className="text-[#555] text-xs">{receipts.length} record</span>
+        {/* ─── Recent receipts ──────────────────────────────────── */}
+        <Card padding="none" className="overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--color-border-soft)] flex items-center justify-between">
+            <h3 className="serif text-[var(--color-text)] text-base font-bold tracking-tight">
+              Ultimi scontrini
+            </h3>
+            <Badge tone="neutral" size="sm">{receipts.length} record</Badge>
           </div>
 
           {receipts.length === 0 ? (
-            <p className="text-[#555] text-xs text-center py-8">Nessuno scontrino ancora</p>
+            <p className="text-[var(--color-text-3)] text-xs text-center py-10">
+              Nessuno scontrino ancora
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#2E2E2E]">
-                    <th className="text-left px-4 py-2 text-[#555] text-xs font-medium">Ora</th>
-                    <th className="text-left px-4 py-2 text-[#555] text-xs font-medium">Tavolo</th>
-                    <th className="text-left px-4 py-2 text-[#555] text-xs font-medium">Cassiere</th>
-                    <th className="text-right px-4 py-2 text-[#555] text-xs font-medium">Importo</th>
-                    <th className="text-center px-4 py-2 text-[#555] text-xs font-medium">Split</th>
+                  <tr className="border-b border-[var(--color-border-soft)]">
+                    <th className="text-left px-4 py-2.5 text-[var(--color-text-3)] text-[10px] font-semibold uppercase tracking-wider">Ora</th>
+                    <th className="text-left px-4 py-2.5 text-[var(--color-text-3)] text-[10px] font-semibold uppercase tracking-wider">Tavolo</th>
+                    <th className="text-left px-4 py-2.5 text-[var(--color-text-3)] text-[10px] font-semibold uppercase tracking-wider">Cassiere</th>
+                    <th className="text-right px-4 py-2.5 text-[var(--color-text-3)] text-[10px] font-semibold uppercase tracking-wider">Importo</th>
+                    <th className="text-center px-4 py-2.5 text-[var(--color-text-3)] text-[10px] font-semibold uppercase tracking-wider">Split</th>
                   </tr>
                 </thead>
                 <tbody>
                   {receipts.map((r, i) => (
-                    <tr key={r.id}
-                      className={`border-b border-[#2A2A2A] last:border-0 ${i % 2 === 0 ? '' : 'bg-[#1E1E1E]'}`}>
-                      <td className="px-4 py-2.5 text-[#888] text-xs">{formatTime(r.created_at)}</td>
-                      <td className="px-4 py-2.5 text-[#F5F5DC] font-medium">{r.table_number}</td>
-                      <td className="px-4 py-2.5 text-[#888] text-xs">{r.issued_by_name ?? '—'}</td>
-                      <td className="px-4 py-2.5 text-[#D4AF37] font-semibold text-right">
+                    <tr
+                      key={r.id}
+                      className={`border-b border-[var(--color-border-soft)] last:border-0 ${
+                        i % 2 === 0 ? '' : 'bg-[var(--color-surface-2)]/50'
+                      } hover:bg-[rgba(212,175,55,0.04)] transition`}
+                    >
+                      <td className="px-4 py-2.5 text-[var(--color-text-2)] text-xs tnum">
+                        {formatTime(r.created_at)}
+                      </td>
+                      <td className="px-4 py-2.5 text-[var(--color-text)] font-semibold tnum">
+                        {r.table_number}
+                      </td>
+                      <td className="px-4 py-2.5 text-[var(--color-text-2)] text-xs">
+                        {r.issued_by_name ?? '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-[var(--color-gold)] font-bold text-right tnum">
                         {formatPrice(r.total_amount)}
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         {r.is_split
-                          ? <span className="text-purple-400 text-xs">{r.split_index}/{r.split_total}</span>
-                          : <span className="text-[#3A3A3A] text-xs">—</span>
+                          ? <Badge tone="park" size="sm">{r.split_index}/{r.split_total}</Badge>
+                          : <span className="text-[var(--color-text-3)] text-xs">—</span>
                         }
                       </td>
                     </tr>
@@ -281,7 +345,7 @@ export default function DashboardPage() {
               </table>
             </div>
           )}
-        </div>
+        </Card>
 
       </div>
     </div>
