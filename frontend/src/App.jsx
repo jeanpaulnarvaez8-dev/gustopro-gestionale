@@ -40,6 +40,7 @@ import MobileBottomNav from './components/MobileBottomNav'
 import MandatoryAlertModal from './components/MandatoryAlertModal'
 import DirectDeliveredAlerts from './components/DirectDeliveredAlerts'
 import OfflineBanner from './components/OfflineBanner'
+import PWAUpdateBanner from './components/PWAUpdateBanner'
 import { StatusDot } from './components/v2'
 // NB: <ToastProvider> sta in main.jsx (sopra SocketProvider che lo usa).
 
@@ -92,6 +93,7 @@ export default function App() {
   return (
     <>
       <OfflineBanner />
+      <PWAUpdateBanner />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />

@@ -14,12 +14,26 @@ import './index.css'
 // useToast() per notificare service-alert / inventory:* in arrivo via WS.
 
 // PWA — registra il Service Worker generato da vite-plugin-pwa.
-// `autoUpdate` significa: ad ogni reload, se c'è una nuova versione
-// del SW disponibile la installa automaticamente. Con un toast per
-// notificare il refresh user-side lo aggiungeremo nel mini-step F.
+// `autoUpdate` mode: il SW viene rifreshato automaticamente al reload,
+// ma per i client PWA installati (mobile / standalone) un reload manuale
+// puo' non avvenire mai → restano bloccati su versioni vecchie.
+//
+// Soluzione: quando vite-plugin-pwa rileva una nuova versione del SW
+// (precache changed), invoca onNeedRefresh. Settiamo un flag globale
+// + dispatchamo un CustomEvent → un banner React (PWAUpdateBanner in
+// App.jsx) intercetta e mostra prompt "Aggiorna ora". Su click,
+// updateSW(true) → skipWaiting + reload pulito.
 import { registerSW } from 'virtual:pwa-register'
-registerSW({
+const updateSW = registerSW({
   immediate: true,
+  onNeedRefresh() {
+    console.info('[PWA] new version available')
+    window.__SW_UPDATE_AVAILABLE = true
+    window.dispatchEvent(new CustomEvent('pwa-need-refresh'))
+  },
+  onOfflineReady() {
+    console.info('[PWA] app ready offline')
+  },
   onRegisteredSW(swUrl) {
     console.info('[PWA] Service Worker registered:', swUrl)
   },
@@ -27,6 +41,8 @@ registerSW({
     console.error('[PWA] Service Worker registration failed:', error)
   },
 })
+// Espone updateSW al banner React. Argomento true = skipWaiting + reload.
+window.__SW_APPLY_UPDATE = () => updateSW(true)
 
 // Background sync della queue offline (mini-step D)
 import { startBackgroundSync } from './lib/offlineSync'
