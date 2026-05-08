@@ -1,42 +1,64 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import {
   DollarSign, Users, AlertTriangle, UtensilsCrossed, ChefHat, MapPin,
   UserCog, BookOpen, TrendingUp, RefreshCw, Clock, Check, Trophy,
-  Package, BarChart3, CalendarDays,
+  Package, BarChart3, CalendarDays, Building,
 } from 'lucide-react'
 import { adminAPI, assignmentsAPI, usersAPI, zonesAPI, serviceAPI } from '../lib/api'
 import { useSocket } from '../context/SocketContext'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
+import { Card, Badge, Button } from '../components/v2'
 
-function KpiCard({ icon: Icon, label, value, sub, color = 'text-[#D4AF37]' }) {
+const TONE_TEXT = {
+  gold: 'text-[var(--color-gold)]',
+  ok:   'text-[var(--color-ok)]',
+  err:  'text-[var(--color-err)]',
+  sea:  'text-[var(--color-sea)]',
+  warn: 'text-[var(--color-warn)]',
+  park: 'text-[var(--color-park)]',
+}
+
+function KpiCard({ icon: Icon, label, value, sub, tone = 'gold' }) {
   return (
-    <div className="bg-[#222] border border-[#333] rounded-xl p-4 flex items-center gap-3">
-      <div className={`w-10 h-10 rounded-lg bg-[#1A1A1A] flex items-center justify-center ${color}`}>
+    <Card padding="md" className="flex items-center gap-3">
+      <div className={`w-11 h-11 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-border-strong)] flex items-center justify-center ${TONE_TEXT[tone]}`}>
         <Icon size={18} />
       </div>
-      <div>
-        <p className={`text-xl font-bold ${color}`}>{value}</p>
-        <p className="text-[#888] text-[10px]">{label}</p>
-        {sub && <p className="text-[#555] text-[9px]">{sub}</p>}
+      <div className="min-w-0">
+        <p className={`serif text-xl font-bold tnum leading-none ${TONE_TEXT[tone]}`}>{value}</p>
+        <p className="text-[var(--color-text-2)] text-[10px] uppercase tracking-wider font-semibold mt-1">{label}</p>
+        {sub && <p className="text-[var(--color-text-3)] text-[10px] mt-0.5 tnum">{sub}</p>}
       </div>
-    </div>
+    </Card>
   )
 }
 
-function QuickButton({ icon: Icon, label, onClick, badge, color = 'text-[#D4AF37]' }) {
+function QuickButton({ icon: Icon, label, onClick, badge, tone = 'gold' }) {
   return (
-    <button onClick={onClick}
-      className="bg-[#222] border border-[#333] rounded-xl p-4 flex flex-col items-center gap-2 hover:border-[#D4AF37]/40 hover:bg-[#D4AF37]/5 transition relative active:scale-95">
-      <Icon size={22} className={color} />
-      <span className="text-[#F5F5DC] text-xs font-medium">{label}</span>
+    <button
+      onClick={onClick}
+      className="bg-[var(--color-surface)] border border-[var(--color-border-strong)] rounded-xl p-4 flex flex-col items-center gap-2 hover:border-[var(--color-gold-ring)] hover:bg-[var(--color-gold-soft)] transition relative active:scale-95 min-h-[88px]"
+    >
+      <Icon size={22} className={TONE_TEXT[tone]} />
+      <span className="text-[var(--color-text)] text-xs font-semibold">{label}</span>
       {badge > 0 && (
-        <span className="absolute top-2 right-2 w-5 h-5 bg-red-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center">
+        <span className="absolute top-2 right-2 min-w-[20px] h-5 bg-[var(--color-err)] rounded-full text-white text-[9px] font-bold flex items-center justify-center px-1.5 tnum animate-[pulse-err_1.6s_ease-in-out_infinite]">
           {badge}
         </span>
       )}
+    </button>
+  )
+}
+
+function NavButton({ icon: Icon, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-3 py-1.5 bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] rounded-lg text-xs text-[var(--color-text-2)] hover:text-[var(--color-gold)] hover:border-[var(--color-gold-ring)] flex items-center gap-1.5 transition shrink-0"
+    >
+      <Icon size={13} /> {label}
     </button>
   )
 }
@@ -92,89 +114,123 @@ export default function AdminHomePage() {
   }
 
   if (loading) return (
-    <div className="h-[100dvh] bg-[#1A1A1A] flex items-center justify-center">
-      <RefreshCw size={20} className="animate-spin text-[#555]" />
+    <div className="h-[100dvh] flex items-center justify-center gap-2 text-[var(--color-text-2)]">
+      <RefreshCw size={20} className="animate-spin text-[var(--color-gold)]" />
+      <span className="text-sm">Caricamento dashboard…</span>
     </div>
   )
 
   const formatPrice = v => `€${parseFloat(v || 0).toFixed(0)}`
   const alertCount = serviceAlerts?.length || 0
 
+  const selectCls = 'flex-1 bg-[var(--color-surface)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-2 py-1.5 text-[var(--color-text)] text-xs outline-none transition'
+
   return (
-    <div className="h-[100dvh] bg-[#1A1A1A] flex flex-col overflow-hidden">
-      {/* Header compatto */}
-      <header className="bg-[#222] border-b border-[#333] px-4 py-2.5 flex items-center gap-3 shrink-0">
-        <div className="w-8 h-8 rounded-full bg-[#8B0000] flex items-center justify-center">
-          <span className="text-[#D4AF37] font-bold text-sm">G</span>
+    <div className="h-[100dvh] flex flex-col overflow-hidden">
+
+      {/* ─── Header ─────────────────────────────────────────── */}
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-3 sm:px-4 py-2.5 flex items-center gap-3 shrink-0 sticky top-0 z-20">
+        <div
+          className="w-9 h-9 rounded-[8px] flex items-center justify-center font-extrabold text-[#13181C] text-[12px] shrink-0"
+          style={{ background: 'linear-gradient(135deg, #D4AF37, #9c7e1f)' }}
+        >
+          GP
         </div>
-        <span className="text-[#F5F5DC] font-bold">GustoPro</span>
-        <span className="text-[#555] text-xs">{user?.name}</span>
-        <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => navigate('/kds')} className="px-3 py-1.5 bg-[#2A2A2A] border border-[#333] rounded-lg text-xs text-[#888] hover:text-[#D4AF37] flex items-center gap-1.5 transition">
-            <ChefHat size={13} /> KDS
-          </button>
-          <button onClick={() => navigate('/assignments')} className="px-3 py-1.5 bg-[#2A2A2A] border border-[#333] rounded-lg text-xs text-[#888] hover:text-[#D4AF37] flex items-center gap-1.5 transition">
-            <MapPin size={13} /> Zone
-          </button>
-          <button onClick={() => navigate('/users')} className="px-3 py-1.5 bg-[#2A2A2A] border border-[#333] rounded-lg text-xs text-[#888] hover:text-[#D4AF37] flex items-center gap-1.5 transition">
-            <UserCog size={13} /> Staff
-          </button>
-          <button onClick={() => navigate('/menu-admin')} className="px-3 py-1.5 bg-[#2A2A2A] border border-[#333] rounded-lg text-xs text-[#888] hover:text-[#D4AF37] flex items-center gap-1.5 transition">
-            <BookOpen size={13} /> Menu
-          </button>
+        <div className="flex flex-col leading-tight">
+          <span className="serif text-[15px] font-bold text-[var(--color-text)] tracking-tight">GustoPro</span>
+          <span className="text-[10px] text-[var(--color-gold)] flex items-center gap-1 font-medium">
+            <Building size={10} />Riva Beach
+          </span>
         </div>
+        <span className="hidden sm:block text-[var(--color-text-3)] text-xs ml-2 truncate">
+          {user?.name} · <span className="text-[var(--color-gold)] uppercase tracking-wider">{user?.role}</span>
+        </span>
+
+        <nav className="ml-auto flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          <NavButton icon={ChefHat} label="KDS" onClick={() => navigate('/kds')} />
+          <NavButton icon={MapPin} label="Zone" onClick={() => navigate('/assignments')} />
+          <NavButton icon={UserCog} label="Staff" onClick={() => navigate('/users')} />
+          <NavButton icon={BookOpen} label="Menu" onClick={() => navigate('/menu-admin')} />
+        </nav>
       </header>
 
-      {/* Content scrollabile */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+      {/* ─── Content ─────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5 min-h-0 max-w-[1400px] mx-auto w-full">
 
-        {/* KPI Cards */}
+        {/* ─── KPI Cards ───────────────────────────────────── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard icon={DollarSign} label="Incasso oggi" value={formatPrice(stats?.revenue_today)} sub={`Ieri: ${formatPrice(stats?.revenue_yesterday)}`} />
-          <KpiCard icon={Users} label="Tavoli occupati" value={`${stats?.open_tables || 0}/${stats?.total_tables || 0}`} color="text-emerald-400" />
-          <KpiCard icon={AlertTriangle} label="Alert attivi" value={alertCount} color={alertCount > 0 ? 'text-red-400' : 'text-emerald-400'} />
-          <KpiCard icon={TrendingUp} label="Scontrino medio" value={formatPrice(stats?.avg_ticket)} color="text-blue-400" />
+          <KpiCard
+            icon={DollarSign}
+            label="Incasso oggi"
+            value={formatPrice(stats?.revenue_today)}
+            sub={`Ieri: ${formatPrice(stats?.revenue_yesterday)}`}
+            tone="gold"
+          />
+          <KpiCard
+            icon={Users}
+            label="Tavoli occupati"
+            value={`${stats?.open_tables || 0}/${stats?.total_tables || 0}`}
+            tone="ok"
+          />
+          <KpiCard
+            icon={AlertTriangle}
+            label="Alert attivi"
+            value={alertCount}
+            tone={alertCount > 0 ? 'err' : 'ok'}
+          />
+          <KpiCard
+            icon={TrendingUp}
+            label="Scontrino medio"
+            value={formatPrice(stats?.avg_ticket)}
+            tone="sea"
+          />
         </div>
 
-        {/* Azioni rapide */}
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-          <QuickButton icon={UtensilsCrossed} label="Tavoli" onClick={() => navigate('/tables')} />
-          <QuickButton icon={ChefHat} label="KDS" onClick={() => navigate('/kds')} badge={readyItems.length} />
-          <QuickButton icon={MapPin} label="Zone" onClick={() => navigate('/assignments')} />
-          <QuickButton icon={Trophy} label="Performance" onClick={() => navigate('/performance')} />
-          <QuickButton icon={CalendarDays} label="Prenotazioni" onClick={() => navigate('/reservations')} />
-          <QuickButton icon={Package} label="Inventario" onClick={() => navigate('/inventory')} />
-          <QuickButton icon={BarChart3} label="Analisi" onClick={() => navigate('/analytics')} />
-          <QuickButton icon={UserCog} label="Staff" onClick={() => navigate('/users')} />
+        {/* ─── Quick actions ───────────────────────────────── */}
+        <div>
+          <h2 className="text-[var(--color-text-2)] text-xs font-semibold uppercase tracking-wider mb-2">Azioni rapide</h2>
+          <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+            <QuickButton icon={UtensilsCrossed} label="Tavoli"       onClick={() => navigate('/tables')} />
+            <QuickButton icon={ChefHat}         label="KDS"          onClick={() => navigate('/kds')}          badge={readyItems.length} />
+            <QuickButton icon={MapPin}          label="Zone"         onClick={() => navigate('/assignments')} tone="sea" />
+            <QuickButton icon={Trophy}          label="Performance"  onClick={() => navigate('/performance')}  tone="park" />
+            <QuickButton icon={CalendarDays}    label="Prenotazioni" onClick={() => navigate('/reservations')} tone="sea" />
+            <QuickButton icon={Package}         label="Inventario"   onClick={() => navigate('/inventory')} />
+            <QuickButton icon={BarChart3}       label="Analisi"      onClick={() => navigate('/analytics')}    tone="park" />
+            <QuickButton icon={UserCog}         label="Staff"        onClick={() => navigate('/users')} />
+          </div>
         </div>
 
-        {/* Due colonne: Staff in servizio + Alert */}
+        {/* ─── Due colonne: Staff + Alert ───────────────────── */}
         <div className="grid md:grid-cols-2 gap-4">
 
           {/* Staff in servizio + assegnazione rapida */}
-          <div className="bg-[#222] border border-[#333] rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#2A2A2A] flex items-center justify-between">
-              <span className="text-[#F5F5DC] font-semibold text-sm flex items-center gap-2">
-                <Users size={14} className="text-[#D4AF37]" /> Staff in servizio
+          <Card padding="none" className="overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--color-border-soft)] flex items-center justify-between">
+              <span className="serif text-[var(--color-text)] font-bold text-base flex items-center gap-2 tracking-tight">
+                <Users size={15} className="text-[var(--color-gold)]" /> Staff in servizio
               </span>
-              <span className="text-[#555] text-xs">{assignments.length} assegnati</span>
+              <Badge tone="neutral" size="sm">{assignments.length} assegnati</Badge>
             </div>
 
-            {/* Lista assegnazioni attuali */}
-            <div className="divide-y divide-[#2A2A2A] max-h-48 overflow-y-auto">
+            <div className="divide-y divide-[var(--color-border-soft)] max-h-48 overflow-y-auto">
               {assignments.length === 0 ? (
-                <p className="text-[#555] text-xs text-center py-6">Nessun cameriere assegnato oggi</p>
+                <p className="text-[var(--color-text-3)] text-xs text-center py-6">
+                  Nessun cameriere assegnato oggi
+                </p>
               ) : (
                 assignments.map(a => (
                   <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
-                    <div className="w-8 h-8 rounded-full bg-blue-900/30 border border-blue-500/30 flex items-center justify-center text-blue-400 text-xs font-bold">
+                    <div className="w-8 h-8 rounded-full bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/30 flex items-center justify-center text-[var(--color-sea)] text-xs font-bold tnum">
                       {a.user_name?.charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="text-[#F5F5DC] text-sm font-medium">{a.user_name}</span>
-                      {a.sub_role && <span className="ml-1.5 text-cyan-400 text-[9px]">({a.sub_role})</span>}
+                      <span className="text-[var(--color-text)] text-sm font-semibold">{a.user_name}</span>
+                      {a.sub_role && (
+                        <span className="ml-1.5 text-[var(--color-info)] text-[10px] font-medium">({a.sub_role})</span>
+                      )}
                     </div>
-                    <span className="text-[#888] text-xs">{a.zone_name}</span>
+                    <span className="text-[var(--color-text-2)] text-xs font-medium">{a.zone_name}</span>
                   </div>
                 ))
               )}
@@ -182,45 +238,56 @@ export default function AdminHomePage() {
 
             {/* Assegnazione rapida */}
             {unassignedWaiters.length > 0 && (
-              <div className="border-t border-[#333] px-4 py-3 flex items-center gap-2 bg-[#1E1E1E]">
-                <select value={quickAssign.waiter} onChange={e => setQuickAssign(p => ({ ...p, waiter: e.target.value }))}
-                  className="flex-1 bg-[#2A2A2A] border border-[#333] rounded-lg px-2 py-1.5 text-[#F5F5DC] text-xs">
-                  <option value="">Cameriere...</option>
+              <div className="border-t border-[var(--color-border-soft)] px-4 py-3 flex items-center gap-2 bg-[var(--color-surface-2)]">
+                <select
+                  value={quickAssign.waiter}
+                  onChange={e => setQuickAssign(p => ({ ...p, waiter: e.target.value }))}
+                  className={selectCls}
+                >
+                  <option value="">Cameriere…</option>
                   {unassignedWaiters.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
-                <select value={quickAssign.zone} onChange={e => setQuickAssign(p => ({ ...p, zone: e.target.value }))}
-                  className="flex-1 bg-[#2A2A2A] border border-[#333] rounded-lg px-2 py-1.5 text-[#F5F5DC] text-xs">
-                  <option value="">Zona...</option>
+                <select
+                  value={quickAssign.zone}
+                  onChange={e => setQuickAssign(p => ({ ...p, zone: e.target.value }))}
+                  className={selectCls}
+                >
+                  <option value="">Zona…</option>
                   {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
                 </select>
-                <button onClick={handleQuickAssign} disabled={!quickAssign.waiter || !quickAssign.zone}
-                  className="px-3 py-1.5 bg-[#D4AF37] text-[#1A1A1A] rounded-lg text-xs font-bold disabled:opacity-30">
+                <Button
+                  size="sm"
+                  disabled={!quickAssign.waiter || !quickAssign.zone}
+                  onClick={handleQuickAssign}
+                >
                   Assegna
-                </button>
+                </Button>
               </div>
             )}
-          </div>
+          </Card>
 
-          {/* Alert attivi + piatti in attesa */}
-          <div className="bg-[#222] border border-[#333] rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#2A2A2A] flex items-center justify-between">
-              <span className="text-[#F5F5DC] font-semibold text-sm flex items-center gap-2">
-                <AlertTriangle size={14} className={alertCount > 0 ? 'text-red-400' : 'text-emerald-400'} />
-                {alertCount > 0 ? `${alertCount} Alert attivi` : 'Nessun alert'}
+          {/* Alert attivi + piatti pronti */}
+          <Card padding="none" className="overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--color-border-soft)] flex items-center justify-between">
+              <span className="serif text-[var(--color-text)] font-bold text-base flex items-center gap-2 tracking-tight">
+                <AlertTriangle size={15} className={alertCount > 0 ? 'text-[var(--color-err)]' : 'text-[var(--color-ok)]'} />
+                {alertCount > 0 ? `${alertCount} alert attivi` : 'Nessun alert'}
               </span>
-              <span className="text-[#555] text-xs">{readyItems.length} piatti pronti</span>
+              <Badge tone="ok" size="sm">{readyItems.length} pronti</Badge>
             </div>
-            <div className="divide-y divide-[#2A2A2A] max-h-64 overflow-y-auto">
+            <div className="divide-y divide-[var(--color-border-soft)] max-h-64 overflow-y-auto">
               {serviceAlerts?.length > 0 ? (
                 serviceAlerts.map(a => (
                   <div key={a.alertId} className="flex items-center gap-3 px-4 py-2.5">
-                    <div className="w-8 h-8 rounded-full bg-red-900/30 border border-red-500/30 flex items-center justify-center text-red-400 text-xs font-bold">
+                    <div className="w-8 h-8 rounded-full bg-[var(--color-err-soft)] border border-[var(--color-err)]/30 flex items-center justify-center text-[var(--color-err)] text-xs font-bold tnum">
                       {a.tableNumber}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="text-[#F5F5DC] text-sm">{a.quantity}× {a.itemName}</span>
-                      <p className="text-red-400 text-[10px] flex items-center gap-1">
-                        <Clock size={9} /> {a.elapsedMinutes}min in attesa
+                      <span className="text-[var(--color-text)] text-sm">
+                        <span className="text-[var(--color-gold)] tnum">{a.quantity}×</span> {a.itemName}
+                      </span>
+                      <p className="text-[var(--color-err)] text-[10px] flex items-center gap-1 font-semibold tnum">
+                        <Clock size={10} /> {a.elapsedMinutes}min in attesa
                       </p>
                     </div>
                   </div>
@@ -228,23 +295,25 @@ export default function AdminHomePage() {
               ) : readyItems.length > 0 ? (
                 readyItems.map(item => (
                   <div key={item.item_id} className="flex items-center gap-3 px-4 py-2.5">
-                    <div className="w-8 h-8 rounded-full bg-emerald-900/30 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs font-bold">
+                    <div className="w-8 h-8 rounded-full bg-[var(--color-ok-soft)] border border-[var(--color-ok)]/30 flex items-center justify-center text-[var(--color-ok)] text-xs font-bold tnum">
                       {item.table_number}
                     </div>
                     <div className="flex-1">
-                      <span className="text-[#F5F5DC] text-sm">{item.quantity}× {item.item_name}</span>
-                      <p className="text-emerald-400 text-[10px]">Pronto per il servizio</p>
+                      <span className="text-[var(--color-text)] text-sm">
+                        <span className="text-[var(--color-gold)] tnum">{item.quantity}×</span> {item.item_name}
+                      </span>
+                      <p className="text-[var(--color-ok)] text-[10px] font-semibold">Pronto per il servizio</p>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="flex flex-col items-center py-8 text-[#555]">
-                  <Check size={24} className="mb-2 text-emerald-500/30" />
+                <div className="flex flex-col items-center py-8 text-[var(--color-text-3)]">
+                  <Check size={32} className="mb-2 text-[var(--color-ok)]/40" />
                   <p className="text-xs">Tutto in ordine</p>
                 </div>
               )}
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     </div>
