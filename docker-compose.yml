@@ -5,6 +5,17 @@ services:
     image: postgres:15-alpine
     container_name: gestionale-postgres
     restart: unless-stopped
+    # shared_preload_libraries deve essere settato a startup per consentire
+    # a pg_stat_statements di tracciare *tutte* le query fin dal boot.
+    # Senza questo flag l'extension carica ma non vede le query precedenti.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.max=10000
+      - -c
+      - pg_stat_statements.track=all
     environment:
       POSTGRES_DB: gustopro
       POSTGRES_USER: gustopro
