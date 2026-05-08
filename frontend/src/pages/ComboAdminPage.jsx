@@ -8,24 +8,27 @@ import {
 import { comboAPI, menuAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
+import { Card, Button } from '../components/v2'
 
-// ─── Inline field editor ─────────────────────────────────────
+const inputCls = 'bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-3 py-2 text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-3)] outline-none transition'
+
+// ─── Inline field editor ─────────────────────────────────────────────────────
 function Field({ label, value, onChange, type = 'text', placeholder = '' }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[#555] text-[10px] uppercase tracking-wider">{label}</label>
+      <label className="text-[var(--color-text-3)] text-[10px] uppercase tracking-wider font-semibold">{label}</label>
       <input
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="bg-[#1A1A1A] border border-[#3A3A3A] rounded-lg px-3 py-2 text-[#F5F5DC] text-sm placeholder-[#444] outline-none focus:border-[#D4AF37]/60 transition"
+        className={`${inputCls} ${type === 'number' ? 'tnum' : ''}`}
       />
     </div>
   )
 }
 
-// ─── New Combo Form ──────────────────────────────────────────
+// ─── New Combo Form ──────────────────────────────────────────────────────────
 function NewComboForm({ allItems, onCreated, onCancel }) {
   const { toast } = useToast()
   const [name, setName]         = useState('')
@@ -85,98 +88,115 @@ function NewComboForm({ allItems, onCreated, onCancel }) {
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-      className="bg-[#222] border border-[#3A3A3A] rounded-2xl p-5 flex flex-col gap-5">
-      <h3 className="text-[#F5F5DC] font-bold flex items-center gap-2">
-        <Plus size={16} className="text-[#D4AF37]" /> Nuovo Menù Fisso
-      </h3>
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+      <Card padding="lg" className="flex flex-col gap-5">
+        <h3 className="serif text-[var(--color-text)] font-bold tracking-tight flex items-center gap-2 text-lg">
+          <Plus size={18} className="text-[var(--color-gold)]" /> Nuovo menù fisso
+        </h3>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Nome" value={name} onChange={setName} placeholder="es. Menù del giorno" />
-        <Field label="Prezzo (€)" value={price} onChange={setPrice} type="number" placeholder="15.00" />
-      </div>
-      <Field label="Descrizione" value={description} onChange={setDesc} placeholder="Antipasto + primo + secondo + dolce…" />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Nome" value={name} onChange={setName} placeholder="es. Menù del giorno" />
+          <Field label="Prezzo (€)" value={price} onChange={setPrice} type="number" placeholder="15.00" />
+        </div>
+        <Field label="Descrizione" value={description} onChange={setDesc} placeholder="Antipasto + primo + secondo + dolce…" />
 
-      {/* Courses */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[#888] text-xs uppercase tracking-wider font-medium">Portate</span>
-          <button onClick={addCourse}
-            className="flex items-center gap-1 text-xs text-[#D4AF37] hover:text-[#c9a42e] transition">
-            <Plus size={12} /> Aggiungi portata
-          </button>
+        {/* Courses */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[var(--color-text-2)] text-xs uppercase tracking-wider font-semibold">Portate</span>
+            <button
+              onClick={addCourse}
+              className="flex items-center gap-1 text-xs text-[var(--color-gold)] hover:brightness-125 transition font-semibold"
+            >
+              <Plus size={12} /> Aggiungi portata
+            </button>
+          </div>
+
+          {courses.map((course, ci) => (
+            <Card key={ci} variant="outline" padding="md" className="flex flex-col gap-3 bg-[var(--color-surface-2)]">
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  value={course.name}
+                  onChange={e => updateCourse(ci, 'name', e.target.value)}
+                  placeholder="Nome portata"
+                  className={`${inputCls} flex-1 min-w-[120px]`}
+                />
+                <div className="flex items-center gap-1 text-xs text-[var(--color-text-3)] uppercase tracking-wider font-semibold">
+                  <span>min</span>
+                  <input
+                    type="number"
+                    value={course.min_choices}
+                    onChange={e => updateCourse(ci, 'min_choices', e.target.value)}
+                    min="1" max="10"
+                    className={`${inputCls} w-14 text-center tnum`}
+                  />
+                  <span>max</span>
+                  <input
+                    type="number"
+                    value={course.max_choices}
+                    onChange={e => updateCourse(ci, 'max_choices', e.target.value)}
+                    min="1" max="10"
+                    className={`${inputCls} w-14 text-center tnum`}
+                  />
+                </div>
+                {courses.length > 1 && (
+                  <button onClick={() => removeCourse(ci)} className="text-[var(--color-text-3)] hover:text-[var(--color-err)] transition p-1.5">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Item checkboxes */}
+              <div className="grid grid-cols-2 gap-1 max-h-36 overflow-y-auto">
+                {allItems.map(item => {
+                  const isSelected = course.items.some(it => it.menu_item_id === item.id)
+                  const entry = course.items.find(it => it.menu_item_id === item.id)
+                  return (
+                    <div key={item.id} className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => toggleItem(ci, item.id)}
+                        className={`flex items-center gap-1.5 flex-1 px-2 py-1.5 rounded-lg border text-left transition ${
+                          isSelected
+                            ? 'border-[var(--color-gold-ring)] bg-[var(--color-gold-soft)] text-[var(--color-text)]'
+                            : 'border-[var(--color-border-strong)] text-[var(--color-text-3)] hover:text-[var(--color-text-2)]'
+                        }`}
+                      >
+                        <div className={`w-3 h-3 rounded border flex-shrink-0 flex items-center justify-center transition ${
+                          isSelected ? 'bg-[var(--color-gold)] border-[var(--color-gold)]' : 'border-[var(--color-text-3)]'
+                        }`}>
+                          {isSelected && <Check size={8} className="text-[#13181C]" />}
+                        </div>
+                        <span className="text-[11px] truncate font-medium">{item.name}</span>
+                      </button>
+                      {isSelected && (
+                        <input
+                          type="number"
+                          value={entry?.price_supplement || ''}
+                          onChange={e => updateSupplement(ci, item.id, e.target.value)}
+                          placeholder="+€"
+                          className="w-14 bg-[var(--color-surface)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] rounded px-1.5 py-1 text-[var(--color-text-2)] text-[10px] text-right outline-none transition tnum"
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          ))}
         </div>
 
-        {courses.map((course, ci) => (
-          <div key={ci} className="bg-[#2A2A2A] rounded-xl p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <input value={course.name} onChange={e => updateCourse(ci, 'name', e.target.value)}
-                placeholder="Nome portata"
-                className="flex-1 bg-[#1A1A1A] border border-[#3A3A3A] rounded-lg px-3 py-1.5 text-[#F5F5DC] text-sm placeholder-[#444] outline-none focus:border-[#D4AF37]/60 transition" />
-              <div className="flex items-center gap-1 text-xs text-[#555]">
-                <span>min</span>
-                <input type="number" value={course.min_choices} onChange={e => updateCourse(ci, 'min_choices', e.target.value)}
-                  min="1" max="10"
-                  className="w-12 bg-[#1A1A1A] border border-[#3A3A3A] rounded-lg px-2 py-1.5 text-[#F5F5DC] text-sm text-center outline-none focus:border-[#D4AF37]/60 transition" />
-                <span>max</span>
-                <input type="number" value={course.max_choices} onChange={e => updateCourse(ci, 'max_choices', e.target.value)}
-                  min="1" max="10"
-                  className="w-12 bg-[#1A1A1A] border border-[#3A3A3A] rounded-lg px-2 py-1.5 text-[#F5F5DC] text-sm text-center outline-none focus:border-[#D4AF37]/60 transition" />
-              </div>
-              {courses.length > 1 && (
-                <button onClick={() => removeCourse(ci)} className="text-[#444] hover:text-red-400 transition">
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-
-            {/* Item checkboxes */}
-            <div className="grid grid-cols-2 gap-1 max-h-36 overflow-y-auto">
-              {allItems.map(item => {
-                const isSelected = course.items.some(it => it.menu_item_id === item.id)
-                const entry = course.items.find(it => it.menu_item_id === item.id)
-                return (
-                  <div key={item.id} className="flex items-center gap-1.5">
-                    <button onClick={() => toggleItem(ci, item.id)}
-                      className={`flex items-center gap-1.5 flex-1 px-2 py-1.5 rounded-lg border text-left transition ${
-                        isSelected
-                          ? 'border-[#D4AF37]/60 bg-[#D4AF37]/10 text-[#F5F5DC]'
-                          : 'border-[#333] text-[#555] hover:text-[#888]'
-                      }`}>
-                      <div className={`w-3 h-3 rounded border flex-shrink-0 flex items-center justify-center transition ${
-                        isSelected ? 'bg-[#D4AF37] border-[#D4AF37]' : 'border-[#444]'
-                      }`}>
-                        {isSelected && <Check size={8} className="text-[#1A1A1A]" />}
-                      </div>
-                      <span className="text-[10px] truncate">{item.name}</span>
-                    </button>
-                    {isSelected && (
-                      <input type="number" value={entry?.price_supplement || ''} onChange={e => updateSupplement(ci, item.id, e.target.value)}
-                        placeholder="+€"
-                        className="w-14 bg-[#1A1A1A] border border-[#3A3A3A] rounded px-1.5 py-1 text-[#888] text-[10px] text-right outline-none focus:border-[#D4AF37]/60 transition" />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex gap-2">
-        <button onClick={onCancel} className="flex-1 py-2 rounded-xl border border-[#3A3A3A] text-[#888] text-sm hover:text-[#F5F5DC] hover:border-[#555] transition">
-          Annulla
-        </button>
-        <button onClick={handleSave} disabled={saving}
-          className="flex-1 py-2 rounded-xl bg-[#D4AF37] text-[#1A1A1A] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-[#c9a42e] transition">
-          {saving ? <RefreshCw size={14} className="animate-spin" /> : <><Check size={14} /> Crea Menù</>}
-        </button>
-      </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" fullWidth onClick={onCancel}>Annulla</Button>
+          <Button fullWidth loading={saving} leftIcon={<Check size={14} />} onClick={handleSave}>
+            Crea menù
+          </Button>
+        </div>
+      </Card>
     </motion.div>
   )
 }
 
-// ─── Combo Card ──────────────────────────────────────────────
+// ─── Combo Card ──────────────────────────────────────────────────────────────
 function ComboCard({ combo, allItems, onRefresh }) {
   const { toast } = useToast()
   const [expanded, setExpanded] = useState(false)
@@ -245,29 +265,29 @@ function ComboCard({ combo, allItems, onRefresh }) {
   }
 
   return (
-    <div className={`bg-[#222] border rounded-2xl overflow-hidden transition ${
-      combo.is_active ? 'border-[#3A3A3A]' : 'border-[#2A2A2A] opacity-60'
-    }`}>
+    <Card padding="none" className={`overflow-hidden transition ${!combo.is_active ? 'opacity-60' : ''}`}>
       {/* Header */}
-      <div className="px-5 py-4 flex items-center gap-3">
+      <div className="px-5 py-4 flex items-center gap-3 bg-[var(--color-surface-2)]">
         <button onClick={() => setExpanded(p => !p)} className="flex-1 flex items-center gap-3 text-left min-w-0">
-          {expanded ? <ChevronUp size={16} className="text-[#555] flex-shrink-0" /> : <ChevronDown size={16} className="text-[#555] flex-shrink-0" />}
+          {expanded ? <ChevronUp size={16} className="text-[var(--color-text-3)] flex-shrink-0" /> : <ChevronDown size={16} className="text-[var(--color-text-3)] flex-shrink-0" />}
           <div className="min-w-0">
-            <p className="text-[#F5F5DC] font-semibold truncate">{combo.name}</p>
-            {combo.description && <p className="text-[#555] text-xs truncate">{combo.description}</p>}
+            <p className="serif text-[var(--color-text)] font-bold tracking-tight truncate text-base">{combo.name}</p>
+            {combo.description && <p className="text-[var(--color-text-3)] text-xs truncate">{combo.description}</p>}
           </div>
-          <span className="text-[#D4AF37] font-bold text-sm flex-shrink-0 ml-auto">{formatPrice(combo.price)}</span>
+          <span className="serif text-[var(--color-gold)] font-bold text-base flex-shrink-0 ml-auto tnum">
+            {formatPrice(combo.price)}
+          </span>
         </button>
 
-        <button onClick={handleToggleActive} className="text-[#555] hover:text-[#888] transition flex-shrink-0">
+        <button onClick={handleToggleActive} className="text-[var(--color-text-3)] hover:text-[var(--color-text)] transition flex-shrink-0">
           {combo.is_active
-            ? <ToggleRight size={20} className="text-emerald-400" />
+            ? <ToggleRight size={20} className="text-[var(--color-ok)]" />
             : <ToggleLeft size={20} />}
         </button>
-        <button onClick={() => setEditing(p => !p)} className="text-[#555] hover:text-[#D4AF37] transition flex-shrink-0">
+        <button onClick={() => setEditing(p => !p)} className="text-[var(--color-text-3)] hover:text-[var(--color-gold)] transition flex-shrink-0 p-1">
           <Pencil size={15} />
         </button>
-        <button onClick={handleDelete} className="text-[#555] hover:text-red-400 transition flex-shrink-0">
+        <button onClick={handleDelete} className="text-[var(--color-text-3)] hover:text-[var(--color-err)] transition flex-shrink-0 p-1">
           <Trash2 size={15} />
         </button>
       </div>
@@ -275,20 +295,21 @@ function ComboCard({ combo, allItems, onRefresh }) {
       {/* Edit fields */}
       <AnimatePresence>
         {editing && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden border-t border-[#3A3A3A]">
-            <div className="px-5 py-4 flex flex-col gap-3">
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t border-[var(--color-border-soft)]"
+          >
+            <div className="px-5 py-4 flex flex-col gap-3 bg-[var(--color-surface)]">
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Nome" value={name} onChange={setName} />
                 <Field label="Prezzo (€)" value={price} onChange={setPrice} type="number" />
               </div>
               <Field label="Descrizione" value={description} onChange={setDesc} />
               <div className="flex gap-2">
-                <button onClick={() => setEditing(false)} className="flex-1 py-2 rounded-xl border border-[#3A3A3A] text-[#888] text-xs hover:text-[#F5F5DC] transition">Annulla</button>
-                <button onClick={handleSaveEdits} disabled={saving}
-                  className="flex-1 py-2 rounded-xl bg-[#D4AF37] text-[#1A1A1A] font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40 hover:bg-[#c9a42e] transition">
-                  {saving ? <RefreshCw size={12} className="animate-spin" /> : <><Check size={12} /> Salva</>}
-                </button>
+                <Button variant="secondary" fullWidth size="sm" onClick={() => setEditing(false)}>Annulla</Button>
+                <Button fullWidth size="sm" loading={saving} leftIcon={<Check size={12} />} onClick={handleSaveEdits}>Salva</Button>
               </div>
             </div>
           </motion.div>
@@ -298,17 +319,20 @@ function ComboCard({ combo, allItems, onRefresh }) {
       {/* Courses detail */}
       <AnimatePresence>
         {expanded && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden border-t border-[#3A3A3A]">
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t border-[var(--color-border-soft)]"
+          >
             <div className="px-5 py-4 flex flex-col gap-4">
               {combo.courses.map(course => (
                 <div key={course.id}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[#888] text-xs font-semibold uppercase tracking-wider">{course.name}</span>
+                    <span className="text-[var(--color-text-2)] text-xs font-semibold uppercase tracking-wider">{course.name}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-[#444] text-[10px]">min {course.min_choices} / max {course.max_choices}</span>
-                      <button onClick={() => handleRemoveCourse(course.id, course.name)}
-                        className="text-[#444] hover:text-red-400 transition">
+                      <span className="text-[var(--color-text-3)] text-[10px] tnum">min {course.min_choices} / max {course.max_choices}</span>
+                      <button onClick={() => handleRemoveCourse(course.id, course.name)} className="text-[var(--color-text-3)] hover:text-[var(--color-err)] transition p-1">
                         <X size={12} />
                       </button>
                     </div>
@@ -317,19 +341,21 @@ function ComboCard({ combo, allItems, onRefresh }) {
                     {allItems.map(menuItem => {
                       const isIn = course.items.some(it => it.menu_item_id === menuItem.id)
                       return (
-                        <button key={menuItem.id}
+                        <button
+                          key={menuItem.id}
                           onClick={() => handleToggleCourseItem(course, menuItem.id, isIn)}
                           className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-left transition ${
                             isIn
-                              ? 'border-[#D4AF37]/50 bg-[#D4AF37]/10 text-[#F5F5DC]'
-                              : 'border-[#2E2E2E] text-[#555] hover:text-[#888] hover:border-[#3A3A3A]'
-                          }`}>
+                              ? 'border-[var(--color-gold-ring)] bg-[var(--color-gold-soft)] text-[var(--color-text)]'
+                              : 'border-[var(--color-border-soft)] text-[var(--color-text-3)] hover:text-[var(--color-text-2)] hover:border-[var(--color-border-strong)]'
+                          }`}
+                        >
                           <div className={`w-3 h-3 rounded border flex-shrink-0 flex items-center justify-center ${
-                            isIn ? 'bg-[#D4AF37] border-[#D4AF37]' : 'border-[#3A3A3A]'
+                            isIn ? 'bg-[var(--color-gold)] border-[var(--color-gold)]' : 'border-[var(--color-border-strong)]'
                           }`}>
-                            {isIn && <Check size={8} className="text-[#1A1A1A]" />}
+                            {isIn && <Check size={8} className="text-[#13181C]" />}
                           </div>
-                          <span className="text-[10px] truncate">{menuItem.name}</span>
+                          <span className="text-[11px] truncate font-medium">{menuItem.name}</span>
                         </button>
                       )
                     })}
@@ -337,19 +363,21 @@ function ComboCard({ combo, allItems, onRefresh }) {
                 </div>
               ))}
 
-              <button onClick={handleAddCourse}
-                className="flex items-center gap-1.5 text-xs text-[#555] hover:text-[#D4AF37] transition py-1">
+              <button
+                onClick={handleAddCourse}
+                className="flex items-center gap-1.5 text-xs text-[var(--color-text-3)] hover:text-[var(--color-gold)] transition py-1 font-semibold"
+              >
                 <Plus size={12} /> Aggiungi portata
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </Card>
   )
 }
 
-// ─── Page ────────────────────────────────────────────────────
+// ─── Page ────────────────────────────────────────────────────────────────────
 export default function ComboAdminPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -370,29 +398,38 @@ export default function ComboAdminPage() {
     } catch {
       toast({ type: 'error', title: 'Errore caricamento' })
     } finally { setLoading(false) }
-  }, [])
+  }, []) // eslint-disable-line
 
   useEffect(() => { load() }, [load])
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A] flex flex-col">
-      <header className="bg-[#2A2A2A] border-b border-[#3A3A3A] px-5 py-3 flex items-center gap-4">
-        <button onClick={() => navigate('/dashboard')} className="text-[#888] hover:text-[#F5F5DC] transition">
+    <div className="min-h-screen flex flex-col">
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 sm:px-5 py-3 flex items-center gap-3 sticky top-0 z-20">
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
+          aria-label="Indietro"
+        >
           <ArrowLeft size={18} />
         </button>
-        <BookOpen size={17} className="text-[#D4AF37]" />
-        <span className="text-[#F5F5DC] font-bold">Menù Fissi</span>
-        <span className="text-[#555] text-xs">{combos.filter(c => c.is_active).length} attivi</span>
-        <button onClick={() => setShowNew(p => !p)}
-          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-[#D4AF37] text-[#1A1A1A] rounded-lg text-xs font-semibold hover:bg-[#c9a42e] transition">
-          {showNew ? <X size={13} /> : <Plus size={13} />} {showNew ? 'Chiudi' : 'Nuovo menù'}
-        </button>
+        <BookOpen size={18} className="text-[var(--color-gold)]" />
+        <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">Menù fissi</h1>
+        <span className="text-[var(--color-text-3)] text-xs tnum">{combos.filter(c => c.is_active).length} attivi</span>
+        <Button
+          size="sm"
+          leftIcon={showNew ? <X size={13} /> : <Plus size={13} />}
+          onClick={() => setShowNew(p => !p)}
+          className="ml-auto"
+        >
+          {showNew ? 'Chiudi' : 'Nuovo menù'}
+        </Button>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4 max-w-3xl mx-auto w-full">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-4 max-w-3xl mx-auto w-full">
         {loading ? (
-          <div className="flex justify-center py-16">
-            <RefreshCw size={18} className="animate-spin text-[#555]" />
+          <div className="flex justify-center py-16 gap-2 text-[var(--color-text-2)]">
+            <RefreshCw size={18} className="animate-spin text-[var(--color-gold)]" />
+            <span className="text-sm">Caricamento menù…</span>
           </div>
         ) : (
           <>
@@ -407,11 +444,12 @@ export default function ComboAdminPage() {
             </AnimatePresence>
 
             {combos.length === 0 && !showNew && (
-              <div className="flex flex-col items-center gap-3 py-20">
-                <BookOpen size={40} className="text-[#333]" />
-                <p className="text-[#555] text-sm">Nessun menù fisso ancora</p>
-                <button onClick={() => setShowNew(true)}
-                  className="text-[#D4AF37] text-sm hover:underline">Crea il primo</button>
+              <div className="flex flex-col items-center gap-3 py-20 text-[var(--color-text-3)]">
+                <BookOpen size={48} className="text-[var(--color-text-3)]/40" />
+                <p className="serif text-[var(--color-text-2)] text-base font-bold">Nessun menù fisso ancora</p>
+                <button onClick={() => setShowNew(true)} className="text-[var(--color-gold)] text-sm hover:underline font-semibold">
+                  Crea il primo
+                </button>
               </div>
             )}
 
