@@ -26,11 +26,13 @@ import AdminHomePage from './pages/AdminHomePage'
 import WaitingMonitorPage from './pages/WaitingMonitorPage'
 import NotFoundPage from './pages/NotFoundPage'
 import SuperadminPage from './pages/SuperadminPage'
+import DesignSystemPage from './pages/DesignSystemPage'
 import ServiceAlertBanner from './components/ServiceAlertBanner'
 import MobileBottomNav from './components/MobileBottomNav'
 import MandatoryAlertModal from './components/MandatoryAlertModal'
 import DirectDeliveredAlerts from './components/DirectDeliveredAlerts'
 import OfflineBanner from './components/OfflineBanner'
+import { ToastProvider } from './components/v2'
 
 function ProtectedRoute() {
   const { isAuthenticated, user } = useAuth()
@@ -65,7 +67,7 @@ function HomeRedirect() {
 
 export default function App() {
   return (
-    <>
+    <ToastProvider>
       <OfflineBanner />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
@@ -74,6 +76,10 @@ export default function App() {
           Pubblica perche' non usa il JWT del normale login: e' protetta lato
           backend dal middleware requireSuperadmin che verifica la key. */}
       <Route path="/admin-saas" element={<SuperadminPage />} />
+
+      {/* Showcase del nuovo design system v2 — accessibile senza login per
+          test visivo dei primitivi (Button/Card/Badge/Input/Modal/...). */}
+      <Route path="/design-system" element={<DesignSystemPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<HomeRedirect />} />
@@ -173,6 +179,6 @@ export default function App() {
 
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
-    </>
+    </ToastProvider>
   )
 }
