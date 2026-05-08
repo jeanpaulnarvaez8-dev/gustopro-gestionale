@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react'
 import { Delete } from 'lucide-react'
 import { motion } from 'framer-motion'
 
+/**
+ * PinPad — keypad numerico per autenticazione (tokens Riva Beach).
+ * Logica funzionale identica alla v1: digit/⌫/auto-submit @ maxLength.
+ */
 export default function PinPad({ onSubmit, loading, error, maxLength = 4 }) {
   const [pin, setPin] = useState('')
   const [shake, setShake] = useState(false)
@@ -32,26 +36,29 @@ export default function PinPad({ onSubmit, loading, error, maxLength = 4 }) {
 
   return (
     <div className="flex flex-col items-center gap-6">
-      {/* PIN dots with shake animation on error */}
+      {/* PIN dots con shake animation on error */}
       <motion.div
         className="flex gap-3"
         animate={shake ? { x: [-8, 8, -6, 6, -3, 3, 0] } : { x: 0 }}
         transition={{ duration: 0.45, ease: 'easeInOut' }}
       >
-        {Array.from({ length: maxLength }).map((_, i) => (
-          <div
-            key={i}
-            className={`w-4 h-4 rounded-full border-2 transition-all duration-150 ${
-              loading
-                ? 'bg-[#D4AF37]/40 border-[#D4AF37]/40 animate-pulse'
-                : i < pin.length
-                  ? 'bg-[#D4AF37] border-[#D4AF37]'
-                  : error
-                    ? 'border-red-500/60 bg-transparent'
-                    : 'border-[#3A3A3A] bg-transparent'
-            }`}
-          />
-        ))}
+        {Array.from({ length: maxLength }).map((_, i) => {
+          const filled = i < pin.length
+          let dotClass = 'border-[var(--color-border-strong)] bg-transparent'
+          if (loading) {
+            dotClass = 'bg-[var(--color-gold)]/40 border-[var(--color-gold)]/40 animate-pulse'
+          } else if (filled) {
+            dotClass = 'bg-[var(--color-gold)] border-[var(--color-gold)]'
+          } else if (error) {
+            dotClass = 'border-[var(--color-err)]/60 bg-transparent'
+          }
+          return (
+            <div
+              key={i}
+              className={`w-4 h-4 rounded-full border-2 transition-all duration-150 ${dotClass}`}
+            />
+          )
+        })}
       </motion.div>
 
       {/* Error message */}
@@ -60,7 +67,7 @@ export default function PinPad({ onSubmit, loading, error, maxLength = 4 }) {
           key={error}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-red-400 text-sm text-center"
+          className="text-[var(--color-err)] text-sm text-center font-medium"
         >
           {error}
         </motion.p>
@@ -74,10 +81,12 @@ export default function PinPad({ onSubmit, loading, error, maxLength = 4 }) {
             return (
               <motion.button
                 key="del"
+                type="button"
                 whileTap={{ scale: 0.92 }}
                 onClick={handleDelete}
                 disabled={loading}
-                className="w-16 h-16 rounded-2xl bg-[#2A2A2A] border border-[#3A3A3A] flex items-center justify-center text-[#D4AF37] hover:bg-[#3A3A3A] active:bg-[#4A4A4A] transition disabled:opacity-40"
+                aria-label="Cancella"
+                className="w-16 h-16 rounded-2xl bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] flex items-center justify-center text-[var(--color-gold)] hover:bg-[rgba(255,255,255,0.04)] hover:border-[var(--color-gold-ring)] active:bg-[rgba(255,255,255,0.08)] transition disabled:opacity-40"
               >
                 <Delete size={20} />
               </motion.button>
@@ -86,10 +95,12 @@ export default function PinPad({ onSubmit, loading, error, maxLength = 4 }) {
           return (
             <motion.button
               key={`digit-${k}`}
+              type="button"
               whileTap={{ scale: 0.92 }}
               onClick={() => handleKey(k)}
               disabled={loading}
-              className="w-16 h-16 rounded-2xl bg-[#2A2A2A] border border-[#3A3A3A] text-2xl font-semibold text-[#F5F5DC] hover:bg-[#3A3A3A] hover:border-[#D4AF37] active:bg-[#4A4A4A] transition disabled:opacity-40"
+              aria-label={`Cifra ${k}`}
+              className="w-16 h-16 rounded-2xl bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-2xl font-semibold text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] hover:border-[var(--color-gold-ring)] active:bg-[rgba(255,255,255,0.08)] transition disabled:opacity-40 tnum"
             >
               {k}
             </motion.button>
