@@ -324,7 +324,8 @@ export default function KDSPage() {
           </Card>
         )}
 
-        {!loading && orders.length > 0 && (
+        {/* DEBUG: bisezione — se /kds carica disabilitando questo, il bug è qui */}
+        {false && !loading && orders.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             <AnimatePresence>
               {orders.map(order => {
