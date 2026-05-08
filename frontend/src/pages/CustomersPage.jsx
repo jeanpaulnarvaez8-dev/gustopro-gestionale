@@ -4,7 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Users, Plus, Search, Pencil, Trash2, Check, RefreshCw, Phone, Mail, CalendarDays, Star } from 'lucide-react'
 import { customersAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
-import { Card, Button, Modal } from '../components/v2'
+import { Card, Button, Modal, useConfirm } from '../components/v2'
 
 // ─── Form (Modal v2) ────────────────────────────────────────────────────────
 function CustomerForm({ initial, onClose, onSaved }) {
@@ -95,6 +95,7 @@ function CustomerForm({ initial, onClose, onSaved }) {
 export default function CustomersPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { confirm } = useConfirm()
   const [customers, setCustomers] = useState([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
@@ -115,7 +116,13 @@ export default function CustomersPage() {
   }
 
   const handleDelete = async (c) => {
-    if (!window.confirm(`Eliminare ${c.name}?`)) return
+    const ok = await confirm({
+      title: `Eliminare ${c.name}?`,
+      description: 'Il cliente verra rimosso dall anagrafica. Gli ordini storici restano.',
+      tone: 'danger',
+      confirmText: 'Sì, elimina',
+    })
+    if (!ok) return
     try {
       await customersAPI.remove(c.id)
       toast({ type: 'success', title: `${c.name} eliminato` })

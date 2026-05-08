@@ -157,13 +157,13 @@ export default function MandatoryAlertModal() {
                 />
                 <button
                   onClick={() => {
-                    const m = parseInt(customMinutes)
+                    const m = parseInt(customMinutes, 10)
                     if (m > 0 && m <= 30) {
                       handleDefer(currentAlert.id, m)
                       setCustomMinutes('')
                     }
                   }}
-                  disabled={responding || !customMinutes || parseInt(customMinutes) <= 0}
+                  disabled={responding || !customMinutes || parseInt(customMinutes, 10) <= 0}
                   className="px-4 py-2 rounded-xl bg-[#333] hover:bg-[#444] text-[#F5F5DC] text-sm font-medium disabled:opacity-30 transition"
                 >
                   Rinvia

@@ -141,7 +141,7 @@ async function createOrder(req, res, next) {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [tenantId, table_id || null, req.user.id, notes || null,
        order_type, customer_name || null, customer_phone || null, pickup_time || null,
-       Math.max(1, parseInt(covers) || 1)]
+       Math.max(1, parseInt(covers, 10) || 1)]
     );
 
     const orderItems = [];

@@ -29,8 +29,8 @@ async function getDashboardStats(req, res, next) {
     res.json({
       revenue_today: parseFloat(stats.revenue_today),
       revenue_yesterday: parseFloat(stats.revenue_yesterday),
-      tables_open: parseInt(stats.tables_open),
-      covers_today: parseInt(stats.covers_today),
+      tables_open: parseInt(stats.tables_open, 10),
+      covers_today: parseInt(stats.covers_today, 10),
       avg_ticket_today: parseFloat(stats.avg_ticket_today),
     });
   } catch (err) { next(err); }
@@ -52,7 +52,7 @@ async function getHourlyRevenue(req, res, next) {
     );
 
     const hourMap = {};
-    rows.forEach(r => { hourMap[parseInt(r.hour)] = parseFloat(r.revenue); });
+    rows.forEach(r => { hourMap[parseInt(r.hour, 10)] = parseFloat(r.revenue); });
     const result = Array.from({ length: 24 }, (_, h) => ({
       hour: h,
       revenue: hourMap[h] || 0,
@@ -64,8 +64,8 @@ async function getHourlyRevenue(req, res, next) {
 
 async function getTopItems(req, res, next) {
   try {
-    const days  = Math.min(Math.max(parseInt(req.query.days  ?? 30),  1), 365);
-    const limit = Math.min(Math.max(parseInt(req.query.limit ?? 10),  1),  50);
+    const days  = Math.min(Math.max(parseInt(req.query.days  ?? 30, 10),  1), 365);
+    const limit = Math.min(Math.max(parseInt(req.query.limit ?? 10, 10),  1),  50);
 
     const { rows } = await pool.query(
       `SELECT
@@ -93,16 +93,16 @@ async function getTopItems(req, res, next) {
       id:             r.id,
       name:           r.name,
       category:       r.category,
-      total_quantity: parseInt(r.total_quantity),
+      total_quantity: parseInt(r.total_quantity, 10),
       total_revenue:  parseFloat(r.total_revenue),
-      order_count:    parseInt(r.order_count),
+      order_count:    parseInt(r.order_count, 10),
     })));
   } catch (err) { next(err); }
 }
 
 async function getByWeekday(req, res, next) {
   try {
-    const weeks = Math.min(Math.max(parseInt(req.query.weeks ?? 8), 1), 52);
+    const weeks = Math.min(Math.max(parseInt(req.query.weeks ?? 8, 10), 1), 52);
 
     const { rows } = await pool.query(
       `SELECT
@@ -121,12 +121,12 @@ async function getByWeekday(req, res, next) {
     );
 
     const IT_LABELS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
-    const byDow = Object.fromEntries(rows.map(r => [parseInt(r.dow), r]));
+    const byDow = Object.fromEntries(rows.map(r => [parseInt(r.dow, 10), r]));
 
     const all = Array.from({ length: 7 }, (_, i) => {
       const r = byDow[i];
-      const oc  = r ? parseInt(r.order_count) : 0;
-      const dc  = r ? parseInt(r.day_count)   : 0;
+      const oc  = r ? parseInt(r.order_count, 10) : 0;
+      const dc  = r ? parseInt(r.day_count, 10)   : 0;
       return {
         dow:               i,
         label:             IT_LABELS[i],
@@ -191,7 +191,7 @@ async function getTaxReport(req, res, next) {
         lordo:         acc.lordo        + parseFloat(r.lordo),
         imponibile:    acc.imponibile   + parseFloat(r.imponibile),
         iva:           acc.iva          + parseFloat(r.iva),
-        num_scontrini: acc.num_scontrini + parseInt(r.num_scontrini),
+        num_scontrini: acc.num_scontrini + parseInt(r.num_scontrini, 10),
       }),
       { lordo: 0, imponibile: 0, iva: 0, num_scontrini: 0 }
     );
@@ -200,14 +200,14 @@ async function getTaxReport(req, res, next) {
       periodo: { from, to },
       by_aliquota: byAliquota.map(r => ({
         aliquota:      parseFloat(r.aliquota),
-        num_scontrini: parseInt(r.num_scontrini),
+        num_scontrini: parseInt(r.num_scontrini, 10),
         lordo:         parseFloat(r.lordo),
         imponibile:    parseFloat(r.imponibile),
         iva:           parseFloat(r.iva),
       })),
       by_day: byDay.map(r => ({
         giorno:        r.giorno,
-        num_scontrini: parseInt(r.num_scontrini),
+        num_scontrini: parseInt(r.num_scontrini, 10),
         lordo:         parseFloat(r.lordo),
         iva:           parseFloat(r.iva),
       })),

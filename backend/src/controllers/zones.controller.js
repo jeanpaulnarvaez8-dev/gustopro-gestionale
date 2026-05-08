@@ -55,7 +55,7 @@ async function deleteZone(req, res, next) {
       'SELECT COUNT(*) FROM tables WHERE zone_id=$1 AND tenant_id=$2',
       [id, TENANT(req)]
     );
-    if (parseInt(rows[0].count) > 0) {
+    if (parseInt(rows[0].count, 10) > 0) {
       return res.status(400).json({ error: 'La zona ha tavoli attivi. Sposta i tavoli prima di eliminarla.' });
     }
     const result = await pool.query(

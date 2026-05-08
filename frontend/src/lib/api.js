@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { enqueueAction, uuidv4 } from './offlineDB';
+import { storage } from './storage';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'https://loyal-eagerness-production.up.railway.app/api',
@@ -55,10 +56,10 @@ function decodeJwtTenantId(token) {
 //    rispetto al JWT. Post-login, il tenant_id e' nel JWT claim quindi
 //    questo header e' ridondante (ma innocuo).
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('gustopro_token');
+  const token = storage.get('gustopro_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
-  const tenantSlug = localStorage.getItem('gustopro_tenant_slug');
+  const tenantSlug = storage.get('gustopro_tenant_slug');
   if (tenantSlug && !config.headers['X-Tenant-Slug']) {
     config.headers['X-Tenant-Slug'] = tenantSlug;
   }
@@ -80,8 +81,10 @@ api.interceptors.response.use(
   (r) => r,
   async (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('gustopro_token');
-      localStorage.removeItem('gustopro_user');
+      storage.remove('gustopro_token');
+      storage.remove('gustopro_user');
+      // Redirect via location.href (full reload) per resettare lo state React
+      // dopo logout forzato. Alternativa: useNavigate, ma serve hook.
       window.location.href = '/login';
       return Promise.reject(err);
     }
@@ -99,7 +102,7 @@ api.interceptors.response.use(
           const body = config.data
             ? (typeof config.data === 'string' ? JSON.parse(config.data) : config.data)
             : null;
-          const token = localStorage.getItem('gustopro_token');
+          const token = storage.get('gustopro_token');
           const tenantId = decodeJwtTenantId(token);
 
           await enqueueAction({
@@ -354,7 +357,7 @@ export const superadminAPI = {
 };
 
 // Debug helper opt-in (solo se localStorage.gustopro_dev_mode === '1')
-if (typeof window !== 'undefined' && localStorage.getItem('gustopro_dev_mode') === '1') {
+if (typeof window !== 'undefined' && storage.get('gustopro_dev_mode') === '1') {
   window.gustoApi = api;
 }
 

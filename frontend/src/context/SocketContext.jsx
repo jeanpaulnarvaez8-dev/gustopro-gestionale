@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { connectSocket, disconnectSocket } from '../lib/socket';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
+import { storage } from '../lib/storage';
 
 const SocketContext = createContext(null);
 
@@ -20,7 +21,7 @@ export function SocketProvider({ children }) {
       return;
     }
 
-    const token = localStorage.getItem('gustopro_token');
+    const token = storage.get('gustopro_token');
     if (!token) return;
 
     const socket = connectSocket(token);

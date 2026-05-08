@@ -5,6 +5,7 @@ import { Building, Wifi, WifiOff, Settings2, ArrowRight } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import PinPad from '../components/ui/PinPad'
 import { Card, Badge, Modal, Button, Input, useToast } from '../components/v2'
+import { storage } from '../lib/storage'
 
 const APP_VERSION = (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0')
 
@@ -34,7 +35,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [tenantModalOpen, setTenantModalOpen] = useState(false)
-  const [tenantSlug, setTenantSlug] = useState(() => localStorage.getItem('gustopro_tenant_slug') || '')
+  const [tenantSlug, setTenantSlug] = useState(() => storage.get('gustopro_tenant_slug', ''))
   const [tenantInput, setTenantInput] = useState(tenantSlug)
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
 
@@ -57,7 +58,7 @@ export default function LoginPage() {
     if (t && t !== tenantSlug) {
       setTenantSlug(t)
       setTenantInput(t)
-      localStorage.setItem('gustopro_tenant_slug', t)
+      storage.set('gustopro_tenant_slug', t)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -86,11 +87,11 @@ export default function LoginPage() {
   function applyTenantSlug() {
     const trimmed = tenantInput.trim().toLowerCase()
     if (trimmed) {
-      localStorage.setItem('gustopro_tenant_slug', trimmed)
+      storage.set('gustopro_tenant_slug', trimmed)
       setTenantSlug(trimmed)
       toast.gold(`Locale impostato: ${trimmed}`)
     } else {
-      localStorage.removeItem('gustopro_tenant_slug')
+      storage.remove('gustopro_tenant_slug')
       setTenantSlug('')
       toast.info('Locale: default (Riva Beach)')
     }

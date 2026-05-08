@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext'
 import { SocketProvider } from './context/SocketContext'
 import { CartProvider } from './context/CartContext'
 import { ToastProvider } from './context/ToastContext'
+import { ConfirmProvider } from './components/v2'
 import ErrorBoundary from './components/ErrorBoundary'
 import App from './App'
 import './index.css'
@@ -37,11 +38,13 @@ createRoot(document.getElementById('root')).render(
       <BrowserRouter>
         <AuthProvider>
           <ToastProvider>
-            <SocketProvider>
-              <CartProvider>
-                <App />
-              </CartProvider>
-            </SocketProvider>
+            <ConfirmProvider>
+              <SocketProvider>
+                <CartProvider>
+                  <App />
+                </CartProvider>
+              </SocketProvider>
+            </ConfirmProvider>
           </ToastProvider>
         </AuthProvider>
       </BrowserRouter>

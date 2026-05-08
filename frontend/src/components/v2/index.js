@@ -10,4 +10,5 @@ export { default as Input } from './Input';
 export { default as Modal } from './Modal';
 export { default as BottomSheet } from './BottomSheet';
 export { ToastProvider, useToast } from './Toast';
+export { ConfirmProvider, useConfirm } from './useConfirm';
 export { cn } from './cn';

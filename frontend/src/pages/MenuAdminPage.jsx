@@ -213,7 +213,7 @@ function ItemRow({ item, onToggle, onEdit, onDelete }) {
         name: name.trim(),
         base_price: parseFloat(price),
         description: desc.trim() || null,
-        prep_time_mins: prep ? parseInt(prep) : null,
+        prep_time_mins: prep ? parseInt(prep, 10) : null,
         allergens,
       })
       setEditing(false)
@@ -347,7 +347,7 @@ function NewItemForm({ categoryId, onCreated, onCancel }) {
         name: name.trim(),
         base_price: parseFloat(price),
         description: desc.trim() || null,
-        prep_time_mins: prep ? parseInt(prep) : null,
+        prep_time_mins: prep ? parseInt(prep, 10) : null,
       })
       onCreated()
     } catch { toast({ type: 'error', title: 'Errore creazione' }) }

@@ -206,14 +206,14 @@ function FloorPlanEditor({ onBack }){
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
                 <div>
                   <label style={{fontSize:11,color:'var(--text-2)',fontWeight:600,display:'block',marginBottom:4}}>X</label>
-                  <input type="number" value={Math.round(sel.x)} onChange={e=>updateSel({x:parseInt(e.target.value)||0})} style={{
+                  <input type="number" value={Math.round(sel.x)} onChange={e=>updateSel({x:parseInt(e.target.value, 10)||0})} style={{
                     width:'100%',background:'rgba(0,0,0,0.3)',border:'1px solid var(--border)',borderRadius:8,
                     padding:'8px 10px',color:'var(--text)',fontSize:13,fontFamily:'inherit',outline:'none'
                   }}/>
                 </div>
                 <div>
                   <label style={{fontSize:11,color:'var(--text-2)',fontWeight:600,display:'block',marginBottom:4}}>Y</label>
-                  <input type="number" value={Math.round(sel.y)} onChange={e=>updateSel({y:parseInt(e.target.value)||0})} style={{
+                  <input type="number" value={Math.round(sel.y)} onChange={e=>updateSel({y:parseInt(e.target.value, 10)||0})} style={{
                     width:'100%',background:'rgba(0,0,0,0.3)',border:'1px solid var(--border)',borderRadius:8,
                     padding:'8px 10px',color:'var(--text)',fontSize:13,fontFamily:'inherit',outline:'none'
                   }}/>

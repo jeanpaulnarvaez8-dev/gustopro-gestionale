@@ -64,7 +64,7 @@ async function createReservation(req, res, next) {
     }
 
     // Validazione party_size: almeno 1
-    const psize = parseInt(party_size);
+    const psize = parseInt(party_size, 10);
     if (party_size !== undefined && party_size !== null && (isNaN(psize) || psize < 1 || psize > 50)) {
       return res.status(400).json({ error: 'Numero persone deve essere tra 1 e 50' });
     }

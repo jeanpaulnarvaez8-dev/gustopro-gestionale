@@ -8,7 +8,7 @@ import {
 import { comboAPI, menuAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
-import { Card, Button } from '../components/v2'
+import { Card, Button, useConfirm } from '../components/v2'
 
 const inputCls = 'bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-3 py-2 text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-3)] outline-none transition'
 
@@ -75,8 +75,8 @@ function NewComboForm({ allItems, onCreated, onCancel }) {
         description: description.trim() || null,
         courses: courses.map(c => ({
           name: c.name,
-          min_choices: parseInt(c.min_choices) || 1,
-          max_choices: parseInt(c.max_choices) || 1,
+          min_choices: parseInt(c.min_choices, 10) || 1,
+          max_choices: parseInt(c.max_choices, 10) || 1,
           items: c.items,
         })),
       })
@@ -199,6 +199,7 @@ function NewComboForm({ allItems, onCreated, onCancel }) {
 // ─── Combo Card ──────────────────────────────────────────────────────────────
 function ComboCard({ combo, allItems, onRefresh }) {
   const { toast } = useToast()
+  const { confirm, prompt } = useConfirm()
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing]   = useState(false)
   const [name, setName]         = useState(combo.name)
@@ -226,7 +227,13 @@ function ComboCard({ combo, allItems, onRefresh }) {
   }
 
   const handleDelete = async () => {
-    if (!window.confirm(`Eliminare "${combo.name}"?`)) return
+    const ok = await confirm({
+      title: `Eliminare "${combo.name}"?`,
+      description: 'Il menu combo viene rimosso. Gli ordini storici restano.',
+      tone: 'danger',
+      confirmText: 'Sì, elimina',
+    })
+    if (!ok) return
     try {
       await comboAPI.remove(combo.id)
       toast({ type: 'success', title: 'Eliminato' })
@@ -235,8 +242,13 @@ function ComboCard({ combo, allItems, onRefresh }) {
   }
 
   const handleAddCourse = async () => {
-    const courseName = window.prompt('Nome della nuova portata:')
-    if (!courseName?.trim()) return
+    const courseName = await prompt({
+      title: 'Nuova portata',
+      placeholder: 'Antipasti, primi, secondi…',
+      confirmText: 'Aggiungi',
+      validate: (v) => (v.trim().length < 2 ? 'Nome troppo corto' : null),
+    })
+    if (!courseName) return
     try {
       await comboAPI.addCourse(combo.id, { name: courseName.trim(), min_choices: 1, max_choices: 1 })
       toast({ type: 'success', title: 'Portata aggiunta' })
@@ -245,7 +257,12 @@ function ComboCard({ combo, allItems, onRefresh }) {
   }
 
   const handleRemoveCourse = async (courseId, courseName) => {
-    if (!window.confirm(`Rimuovere la portata "${courseName}"?`)) return
+    const ok = await confirm({
+      title: `Rimuovere la portata "${courseName}"?`,
+      tone: 'danger',
+      confirmText: 'Sì, rimuovi',
+    })
+    if (!ok) return
     try {
       await comboAPI.removeCourse(courseId)
       onRefresh()

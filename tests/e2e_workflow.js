@@ -289,8 +289,8 @@ async function testSuite2_IncrocioMultiTavolo(t1) {
 
   const carboX = d.find(c => c.item_name === 'Carbonara');
   ok(!!carboX, 'Carbonara negli incroci');
-  ok(parseInt(carboX.total_quantity) >= 7, `Qty totale Carbonara: ${carboX?.total_quantity} (atteso ≥7)`);
-  ok(parseInt(carboX.order_count) >= 3, `Su ${carboX?.order_count} ordini (atteso ≥3)`);
+  ok(parseInt(carboX.total_quantity, 10) >= 7, `Qty totale Carbonara: ${carboX?.total_quantity} (atteso ≥7)`);
+  ok(parseInt(carboX.order_count, 10) >= 3, `Su ${carboX?.order_count} ordini (atteso ≥3)`);
 
   // Verifica dettaglio ordini nell'incrocio
   ok(Array.isArray(carboX.orders), 'orders e\' un array');

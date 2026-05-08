@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { zonesAPI, tablesAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
-import { Card, Badge, Button } from '../components/v2'
+import { Card, Badge, Button, useConfirm } from '../components/v2'
 
 const STATUS_TONE = {
   free:     'ok',
@@ -31,7 +31,7 @@ function TableRow({ table, zones, onEdit, onDelete }) {
   const handleSave = async () => {
     setSaving(true)
     try {
-      await onEdit(table.id, { table_number: parseInt(num), seats: parseInt(seats), zone_id: zoneId })
+      await onEdit(table.id, { table_number: parseInt(num, 10), seats: parseInt(seats, 10), zone_id: zoneId })
       setEditing(false)
     } catch { toast({ type: 'error', title: 'Errore salvataggio' }) }
     finally { setSaving(false) }
@@ -96,6 +96,7 @@ function TableRow({ table, zones, onEdit, onDelete }) {
 // ─── Zone Card ───────────────────────────────────────────────────────────────
 function ZoneCard({ zone, allZones, allTables, onRefresh }) {
   const { toast } = useToast()
+  const { confirm } = useConfirm()
   const [expanded, setExpanded]   = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [name, setName]           = useState(zone.name)
@@ -121,7 +122,13 @@ function ZoneCard({ zone, allZones, allTables, onRefresh }) {
       toast({ type: 'warning', title: `Sposta i ${zoneTables.length} tavoli prima di eliminare la zona` })
       return
     }
-    if (!window.confirm(`Eliminare la zona "${zone.name}"?`)) return
+    const ok = await confirm({
+      title: `Eliminare la zona "${zone.name}"?`,
+      description: 'La zona verra rimossa. I tavoli devono essere spostati prima.',
+      tone: 'danger',
+      confirmText: 'Sì, elimina',
+    })
+    if (!ok) return
     try {
       await zonesAPI.remove(zone.id)
       onRefresh()
@@ -135,7 +142,7 @@ function ZoneCard({ zone, allZones, allTables, onRefresh }) {
     if (!newNum) { toast({ type: 'warning', title: 'Numero tavolo obbligatorio' }); return }
     setSaving(true)
     try {
-      await tablesAPI.create({ zone_id: zone.id, table_number: parseInt(newNum), seats: parseInt(newSeats) })
+      await tablesAPI.create({ zone_id: zone.id, table_number: parseInt(newNum, 10), seats: parseInt(newSeats, 10) })
       setNewNum(''); setNewSeats('4'); setAddingTable(false)
       onRefresh()
       toast({ type: 'success', title: `Tavolo ${newNum} aggiunto` })
@@ -151,7 +158,12 @@ function ZoneCard({ zone, allZones, allTables, onRefresh }) {
 
   const handleDeleteTable = async (id, num, status) => {
     if (status === 'occupied') { toast({ type: 'warning', title: 'Impossibile eliminare un tavolo occupato' }); return }
-    if (!window.confirm(`Eliminare il tavolo ${num}?`)) return
+    const ok = await confirm({
+      title: `Eliminare il tavolo ${num}?`,
+      tone: 'danger',
+      confirmText: 'Sì, elimina',
+    })
+    if (!ok) return
     try {
       await tablesAPI.remove(id)
       onRefresh()

@@ -157,7 +157,7 @@ export default function OrderPage() {
 
   // Coperti dalla URL (?covers=N)
   const searchParams = new URLSearchParams(window.location.search)
-  const initialCovers = parseInt(searchParams.get('covers')) || 1
+  const initialCovers = parseInt(searchParams.get('covers'), 10) || 1
 
   const [table, setTableData]         = useState(null)
   const [categories, setCategories]   = useState([])
@@ -791,24 +791,24 @@ export default function OrderPage() {
               autoFocus
             />
           </div>
-          {weightInput && parseInt(weightInput) > 0 && weightSheet && (
+          {weightInput && parseInt(weightInput, 10) > 0 && weightSheet && (
             <div className="text-center bg-[var(--color-gold-soft)] rounded-lg py-3">
               <span className="text-[var(--color-text-2)] text-xs">Prezzo: </span>
               <span className="serif text-[var(--color-gold)] font-bold text-2xl tnum">
-                {formatPrice((parseFloat(weightSheet.base_price) * parseInt(weightInput)) / 1000)}
+                {formatPrice((parseFloat(weightSheet.base_price) * parseInt(weightInput, 10)) / 1000)}
               </span>
               <span className="text-[var(--color-text-3)] text-xs ml-1 tnum">
-                ({parseInt(weightInput)}g)
+                ({parseInt(weightInput, 10)}g)
               </span>
             </div>
           )}
           <Button
             fullWidth
             size="lg"
-            disabled={!weightInput || parseInt(weightInput) <= 0}
+            disabled={!weightInput || parseInt(weightInput, 10) <= 0}
             leftIcon={<Plus size={16} />}
             onClick={() => {
-              const g = parseInt(weightInput)
+              const g = parseInt(weightInput, 10)
               if (!g || g <= 0 || !weightSheet) {
                 toast({ type: 'warning', title: 'Inserisci un peso valido' })
                 return

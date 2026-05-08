@@ -66,7 +66,7 @@ function ReservationForm({ initial, tables, onClose, onSaved }) {
       const payload = {
         ...form,
         table_id: form.table_id || null,
-        party_size: parseInt(form.party_size),
+        party_size: parseInt(form.party_size, 10),
       }
       if (isEdit) {
         await reservationsAPI.update(initial.id, payload)

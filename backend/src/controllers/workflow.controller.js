@@ -265,7 +265,7 @@ async function respondToAlert(req, res, next) {
 
       res.json({ status: 'released', item_id: alert.oi_id });
     } else {
-      const minutes = Math.max(1, Math.min(parseInt(defer_minutes) || 3, 30));
+      const minutes = Math.max(1, Math.min(parseInt(defer_minutes, 10) || 3, 30));
       const deferEntry = { deferred_at: new Date().toISOString(), minutes, user_id: req.user.id };
 
       await client.query(
@@ -412,6 +412,9 @@ async function deleteItem(req, res, next) {
 async function getAuditLog(req, res, next) {
   try {
     const { orderId } = req.params;
+    // LIMIT 1000 come safety: un ordine "normale" produce 10-30 audit
+    // entries. 1000 e' largamente sopra il p99 reale e protegge UI da
+    // payload enormi (e DB da query unbounded).
     const { rows } = await pool.query(
       `SELECT al.*,
               COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name
@@ -419,7 +422,8 @@ async function getAuditLog(req, res, next) {
        LEFT JOIN order_items oi ON oi.id = al.item_id
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        WHERE al.order_id = $1 AND al.tenant_id = $2
-       ORDER BY al.created_at ASC`,
+       ORDER BY al.created_at ASC
+       LIMIT 1000`,
       [orderId, TENANT(req)]
     );
     res.json(rows);

@@ -22,7 +22,8 @@ async function getAlerts(req, res, next) {
          AND oi.served_at IS NULL
          AND (sa.target_user_id = $1 OR sa.alert_type = 'manager_25min')
          AND sa.tenant_id = $2
-       ORDER BY sa.created_at DESC`,
+       ORDER BY sa.created_at DESC
+       LIMIT 200`,
       [req.user.id, TENANT(req)]
     );
     res.json(rows);
