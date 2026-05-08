@@ -104,10 +104,14 @@ export default function KDSPage() {
         kdsAPI.pending(),
         workflowAPI.getCrossmatches().catch(() => ({ data: [] })),
       ])
-      setOrders(ordersRes.data)
-      setCrossmatches(crossRes.data)
-    } catch {
-      // keep existing data
+      setOrders(Array.isArray(ordersRes.data) ? ordersRes.data : [])
+      // DEBUG: log crossmatches shape per diagnose React #31
+      // eslint-disable-next-line no-console
+      console.log('[KDS] crossmatches payload:', crossRes.data)
+      setCrossmatches(Array.isArray(crossRes.data) ? crossRes.data : [])
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[KDS] loadOrders failed:', err)
     } finally {
       setLoading(false)
     }
@@ -279,7 +283,7 @@ export default function KDSPage() {
           </div>
         )}
 
-        {/* Incroci: piatti uguali su più tavoli */}
+        {/* Incroci: piatti uguali su più tavoli — render difensivo per React #31 */}
         {!loading && crossmatches.length > 0 && (
           <Card variant="elevated" padding="md" className="mb-4 border-[var(--color-park)]/40">
             <div className="flex items-center gap-2 mb-3">
@@ -289,20 +293,31 @@ export default function KDSPage() {
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {crossmatches.map(cm => (
-                <div
-                  key={cm.menu_item_id}
-                  className="bg-[var(--color-park-soft)] border border-[var(--color-park)]/30 rounded-lg px-3 py-2 flex items-center gap-2"
-                >
-                  <span className="text-[var(--color-text)] text-sm font-bold">{cm.item_name}</span>
-                  <span className="text-[var(--color-park)] text-xs font-bold tnum">
-                    {cm.total_quantity}×
-                  </span>
-                  <span className="text-[var(--color-text-3)] text-[10px]">
-                    ({cm.orders.map(o => o.table_number).join(', ')})
-                  </span>
-                </div>
-              ))}
+              {crossmatches.map((cm, idx) => {
+                // Difensivo: cast tutti i campi a primitive
+                const id = String(cm?.menu_item_id ?? `cm-${idx}`)
+                const name = String(cm?.item_name ?? 'Piatto')
+                const qty = String(cm?.total_quantity ?? 0)
+                const tables = Array.isArray(cm?.orders)
+                  ? cm.orders.map(o => String(o?.table_number ?? '')).filter(Boolean).join(', ')
+                  : ''
+                return (
+                  <div
+                    key={id}
+                    className="bg-[var(--color-park-soft)] border border-[var(--color-park)]/30 rounded-lg px-3 py-2 flex items-center gap-2"
+                  >
+                    <span className="text-[var(--color-text)] text-sm font-bold">{name}</span>
+                    <span className="text-[var(--color-park)] text-xs font-bold tnum">
+                      {qty}×
+                    </span>
+                    {tables && (
+                      <span className="text-[var(--color-text-3)] text-[10px]">
+                        ({tables})
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </Card>
         )}
