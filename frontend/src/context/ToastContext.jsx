@@ -21,6 +21,7 @@
  * .warn, .info, .gold, .dismiss), cosi' il codice nuovo puo' usarli senza
  * importare nulla in piu'. La migrazione progressiva resta opzionale.
  */
+import { useMemo } from 'react'
 import { useToast as useV2Toast, ToastProvider as V2ToastProvider } from '../components/v2/Toast'
 
 // Re-export del Provider v2 (un unico provider per tutta l'app, gia' montato
@@ -39,26 +40,34 @@ const TYPE_TO_TONE = {
 export function useToast() {
   const v2 = useV2Toast()
 
-  // Funzione invocabile: toast({ type, title, message, duration })
-  function toast(arg) {
-    if (typeof arg === 'string') {
-      // Convenience: toast('Stringa qualsiasi') → info
-      return v2.info(arg)
+  // CRITICO: `toast` deve avere identita' stabile tra render altrimenti
+  // i consumer che lo mettono in useCallback([toast])/useEffect([toast])
+  // entrano in infinite re-render loop. Esempio reale dove e' successo:
+  // StaffPerformancePage 2026-05-08 → 3+ richieste API "pending forever"
+  // perche' load(useCallback) cambiava ogni render.
+  const toast = useMemo(() => {
+    function toastFn(arg) {
+      if (typeof arg === 'string') {
+        return v2.info(arg)
+      }
+      const { type = 'info', title, message, text, duration } = arg || {}
+      const tone = TYPE_TO_TONE[type] || 'info'
+      return v2.show({ tone, title, text: text ?? message, duration })
     }
-    const { type = 'info', title, message, text, duration } = arg || {}
-    const tone = TYPE_TO_TONE[type] || 'info'
-    return v2.show({ tone, title, text: text ?? message, duration })
-  }
+    // Helpers diretti (per code nuovo che vuole API v2 senza re-import)
+    toastFn.show    = v2.show
+    toastFn.dismiss = v2.dismiss
+    toastFn.success = v2.success
+    toastFn.error   = v2.error
+    toastFn.warn    = v2.warn
+    toastFn.warning = v2.warn // alias retro-compat
+    toastFn.info    = v2.info
+    toastFn.gold    = v2.gold
+    return toastFn
+  }, [v2])
 
-  // Helpers diretti (chi vuole adottare la nuova API senza migrare l'import)
-  toast.show    = v2.show
-  toast.dismiss = v2.dismiss
-  toast.success = v2.success
-  toast.error   = v2.error
-  toast.warn    = v2.warn
-  toast.warning = v2.warn // alias retro-compat
-  toast.info    = v2.info
-  toast.gold    = v2.gold
-
+  // L'oggetto wrapper {toast} non puo' essere lo stesso useMemo perche' i
+  // consumer fanno destructuring: ogni destructure va bene quanto la
+  // reference di `toast` interno e' stabile.
   return { toast }
 }

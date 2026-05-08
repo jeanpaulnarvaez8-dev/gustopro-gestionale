@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import { cn } from './cn';
@@ -61,8 +61,11 @@ export function ToastProvider({ children, max = 4 }) {
     [dismiss, max]
   );
 
-  // helpers per i toni standard
-  const api = {
+  // Helpers stabili tra render: con useMemo `api` mantiene identica la
+  // reference finché `show`/`dismiss` non cambiano. CRITICO per consumer che
+  // mettono `toast` nelle dependency di useCallback/useEffect (es.
+  // StaffPerformancePage). Senza memoization → infinite re-render loop.
+  const api = useMemo(() => ({
     show,
     dismiss,
     success: (text, opts = {}) => show({ tone: 'success', text, ...opts }),
@@ -70,7 +73,7 @@ export function ToastProvider({ children, max = 4 }) {
     warn:    (text, opts = {}) => show({ tone: 'warn',    text, ...opts }),
     info:    (text, opts = {}) => show({ tone: 'info',    text, ...opts }),
     gold:    (text, opts = {}) => show({ tone: 'gold',    text, ...opts }),
-  };
+  }), [show, dismiss]);
 
   // cleanup all timers on unmount
   useEffect(() => () => timers.current.forEach((tm) => clearTimeout(tm)), []);
