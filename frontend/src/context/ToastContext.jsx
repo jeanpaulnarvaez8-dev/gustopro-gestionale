@@ -1,85 +1,64 @@
-import { createContext, useCallback, useContext, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react'
+/**
+ * ToastContext — adapter retro-compatibile sopra components/v2/Toast.
+ *
+ * Storia: la v1 dell'app aveva il proprio sistema toast (palette emerald/red/
+ * amber/blue, framer-motion, viewport in alto a destra). Phase 1 ha introdotto
+ * il design system v2 con palette Riva (gold/sea/pine/...) e una nuova API
+ * `useToast()` con helpers `toast.success(msg)` / `toast.error(msg)` / ...
+ *
+ * Migrare i 24 file consumatori uno-a-uno avrebbe richiesto effort senza
+ * benefici visibili: il rendering finale e' gia' identico (l'adapter delega
+ * al provider v2). Quindi questo file mantiene la API vecchia
+ *
+ *   const { toast } = useToast()
+ *   toast({ type: 'error', title: 'X', message: 'Y' })
+ *
+ * traducendola in chiamate al provider v2:
+ *
+ *   v2.show({ tone: 'error', title: 'X', text: 'Y' })
+ *
+ * Bonus: l'oggetto toast espone ANCHE i metodi v2 nativi (.success, .error,
+ * .warn, .info, .gold, .dismiss), cosi' il codice nuovo puo' usarli senza
+ * importare nulla in piu'. La migrazione progressiva resta opzionale.
+ */
+import { useToast as useV2Toast, ToastProvider as V2ToastProvider } from '../components/v2/Toast'
 
-const ToastContext = createContext(null)
+// Re-export del Provider v2 (un unico provider per tutta l'app, gia' montato
+// in App.jsx; main.jsx lo mantiene per compat ma e' idempotente).
+export { V2ToastProvider as ToastProvider }
 
-let _id = 0
-
-const ICONS = {
-  success: CheckCircle2,
-  error:   XCircle,
-  warning: AlertTriangle,
-  info:    Info,
-}
-
-const COLORS = {
-  success: 'border-emerald-500/40 bg-emerald-900/20 text-emerald-400',
-  error:   'border-red-500/40    bg-red-900/20    text-red-400',
-  warning: 'border-amber-500/40  bg-amber-900/20  text-amber-400',
-  info:    'border-blue-500/40   bg-blue-900/20   text-blue-400',
-}
-
-function ToastItem({ id, type, title, message, onDismiss }) {
-  const Icon = ICONS[type] ?? Info
-  const color = COLORS[type] ?? COLORS.info
-
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, x: 80, scale: 0.95 }}
-      animate={{ opacity: 1, x: 0,  scale: 1 }}
-      exit={{ opacity: 0, x: 80, scale: 0.9 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-      className={`flex items-start gap-3 w-80 border rounded-xl p-3.5 shadow-xl backdrop-blur-sm ${color}`}
-    >
-      <Icon size={16} className="shrink-0 mt-0.5" />
-      <div className="flex-1 min-w-0">
-        {title && <p className="font-semibold text-sm leading-snug">{title}</p>}
-        {message && <p className="text-xs opacity-80 mt-0.5 leading-snug">{message}</p>}
-      </div>
-      <button onClick={() => onDismiss(id)}
-        className="shrink-0 opacity-50 hover:opacity-100 transition">
-        <X size={13} />
-      </button>
-    </motion.div>
-  )
-}
-
-export function ToastProvider({ children }) {
-  const [toasts, setToasts] = useState([])
-
-  const dismiss = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id))
-  }, [])
-
-  const toast = useCallback(({ type = 'info', title, message, duration = 4000 }) => {
-    const id = ++_id
-    setToasts(prev => [...prev, { id, type, title, message }])
-    if (duration > 0) setTimeout(() => dismiss(id), duration)
-    return id
-  }, [dismiss])
-
-  return (
-    <ToastContext.Provider value={{ toast, dismiss }}>
-      {children}
-
-      {/* Toast container — bottom right */}
-      <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 items-end pointer-events-none">
-        <AnimatePresence mode="popLayout">
-          {toasts.map(t => (
-            <div key={t.id} className="pointer-events-auto">
-              <ToastItem {...t} onDismiss={dismiss} />
-            </div>
-          ))}
-        </AnimatePresence>
-      </div>
-    </ToastContext.Provider>
-  )
+// Map type vecchio → tone v2.
+const TYPE_TO_TONE = {
+  success: 'success',
+  error:   'error',
+  warning: 'warn',
+  warn:    'warn',
+  info:    'info',
 }
 
 export function useToast() {
-  const ctx = useContext(ToastContext)
-  if (!ctx) throw new Error('useToast must be used inside ToastProvider')
-  return ctx
+  const v2 = useV2Toast()
+
+  // Funzione invocabile: toast({ type, title, message, duration })
+  function toast(arg) {
+    if (typeof arg === 'string') {
+      // Convenience: toast('Stringa qualsiasi') → info
+      return v2.info(arg)
+    }
+    const { type = 'info', title, message, text, duration } = arg || {}
+    const tone = TYPE_TO_TONE[type] || 'info'
+    return v2.show({ tone, title, text: text ?? message, duration })
+  }
+
+  // Helpers diretti (chi vuole adottare la nuova API senza migrare l'import)
+  toast.show    = v2.show
+  toast.dismiss = v2.dismiss
+  toast.success = v2.success
+  toast.error   = v2.error
+  toast.warn    = v2.warn
+  toast.warning = v2.warn // alias retro-compat
+  toast.info    = v2.info
+  toast.gold    = v2.gold
+
+  return { toast }
 }

@@ -9,6 +9,7 @@ import {
 import { inventoryAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
+import { Card, Badge, Button, StatusDot } from '../components/v2'
 
 const TABS = [
   { id: 'kpis',       label: 'Panoramica',  icon: Package },
@@ -712,43 +713,51 @@ function SpoilageForm({ onClose, onSaved }) {
   )
 }
 
-// ── HELPERS ───────────────────────────────────────────────────
+// ── HELPERS (v2 design system) ─────────────────────────────────
 function Spinner() {
   return (
-    <div className="flex justify-center py-10">
-      <RefreshCw size={18} className="animate-spin text-[var(--color-text-3)]" />
+    <div className="flex justify-center items-center py-10 gap-2 text-[var(--color-text-2)]">
+      <StatusDot tone="gold" size="sm" pulse />
+      <span className="text-sm serif italic">Caricamento…</span>
     </div>
   )
 }
 
 function StatCard({ label, value, color = 'text-[var(--color-gold)]' }) {
   return (
-    <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border-strong)] p-4 flex flex-col gap-2">
-      <span className="text-[var(--color-text-3)] text-xs uppercase tracking-wide">{label}</span>
-      <span className={`text-2xl font-bold ${color}`}>{value}</span>
-    </div>
+    <Card variant="elevated" padding="md" className="flex flex-col gap-2">
+      <span className="text-[var(--color-text-3)] text-xs uppercase tracking-wide font-semibold">
+        {label}
+      </span>
+      <span className={`text-2xl font-bold tnum ${color}`}>{value}</span>
+    </Card>
   )
 }
 
 function Field({ label, children }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[var(--color-text-2)] text-xs">{label}</label>
+      <label className="text-[var(--color-text-2)] text-xs font-semibold uppercase tracking-wide">
+        {label}
+      </label>
       {children}
     </div>
   )
 }
 
+// Mappa stato PO → tone Badge v2
+const PO_STATUS_TONE = {
+  pending:   'warn',
+  received:  'ok',
+  cancelled: 'err',
+}
+
 function StatusBadge({ status }) {
-  const map = {
-    pending:  'bg-amber-500/20 text-[var(--color-warn)]',
-    received: 'bg-emerald-500/20 text-[var(--color-ok)]',
-    cancelled:'bg-red-500/20 text-[var(--color-err)]',
-  }
+  const tone = PO_STATUS_TONE[status] || 'neutral'
   return (
-    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${map[status] ?? 'bg-[#333] text-[var(--color-text-2)]'}`}>
+    <Badge tone={tone} size="sm">
       {status}
-    </span>
+    </Badge>
   )
 }
 
@@ -758,34 +767,47 @@ export default function InventoryPage() {
   const [tab, setTab] = useState('kpis')
 
   return (
-    <div className="min-h-screen bg-[var(--color-canvas)] flex flex-col">
-      <header className="bg-[var(--color-surface-2)] border-b border-[var(--color-border-strong)] px-5 py-3 flex items-center gap-4">
-        <button onClick={() => navigate('/tables')} className="text-[var(--color-text-2)] hover:text-[var(--color-text)] transition">
+    <div className="min-h-screen flex flex-col">
+      <header className="bg-[var(--color-surface-2)] border-b border-[var(--color-border-strong)] px-4 sm:px-5 py-3 flex items-center gap-3 sticky top-0 z-10">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/tables')}
+          aria-label="Indietro"
+          className="!p-2 !min-h-0 !rounded-lg"
+        >
           <ArrowLeft size={18} />
-        </button>
+        </Button>
         <Package size={18} className="text-[var(--color-gold)]" />
-        <span className="text-[var(--color-text)] font-bold">Inventario</span>
+        <h1 className="serif text-lg sm:text-xl font-bold text-[var(--color-text)] tracking-tight">
+          Inventario
+        </h1>
       </header>
 
-      {/* Tabs */}
-      <div className="bg-[var(--color-surface)] border-b border-[var(--color-border-strong)] px-5 flex gap-0">
+      {/* Tabs (mobile-scroll, no overflow) */}
+      <div className="bg-[var(--color-surface)] border-b border-[var(--color-border-strong)] px-2 sm:px-5 flex gap-0 overflow-x-auto">
         {TABS.map(t => {
           const Icon = t.icon
+          const active = tab === t.id
           return (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-3 text-xs font-medium border-b-2 transition ${
-                tab === t.id
-                  ? 'border-[#D4AF37] text-[var(--color-gold)]'
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-3 text-xs font-semibold border-b-2 transition whitespace-nowrap min-h-[44px] ${
+                active
+                  ? 'border-[var(--color-gold)] text-[var(--color-gold)]'
                   : 'border-transparent text-[var(--color-text-3)] hover:text-[var(--color-text-2)]'
-              }`}>
-              <Icon size={13} />
+              }`}
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon size={14} />
               {t.label}
             </button>
           )
         })}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-5">
         {tab === 'kpis'     && <KpisTab />}
         {tab === 'po'       && <POTab />}
         {tab === 'receipts' && <ReceiptsTab />}

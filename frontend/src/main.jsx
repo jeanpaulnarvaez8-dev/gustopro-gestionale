@@ -2,12 +2,15 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
-import { ToastProvider } from './context/ToastContext'
 import { SocketProvider } from './context/SocketContext'
 import { CartProvider } from './context/CartContext'
+import { ToastProvider } from './context/ToastContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import App from './App'
 import './index.css'
+
+// ToastProvider DEVE stare fuori da SocketProvider perche' SocketContext usa
+// useToast() per notificare service-alert / inventory:* in arrivo via WS.
 
 // PWA — registra il Service Worker generato da vite-plugin-pwa.
 // `autoUpdate` significa: ad ogni reload, se c'è una nuova versione

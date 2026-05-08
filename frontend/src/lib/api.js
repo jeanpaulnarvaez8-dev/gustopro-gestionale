@@ -50,9 +50,18 @@ function decodeJwtTenantId(token) {
 // ─── Request interceptor ─────────────────────────────────────
 // 1. Attach JWT
 // 2. Inject Idempotency-Key su POST/PATCH/DELETE (se non già presente)
+// 3. Inject X-Tenant-Slug (se settato in localStorage). Necessario solo
+//    PRE-login perché il backend `resolveTenant` gli da' precedenza
+//    rispetto al JWT. Post-login, il tenant_id e' nel JWT claim quindi
+//    questo header e' ridondante (ma innocuo).
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('gustopro_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  const tenantSlug = localStorage.getItem('gustopro_tenant_slug');
+  if (tenantSlug && !config.headers['X-Tenant-Slug']) {
+    config.headers['X-Tenant-Slug'] = tenantSlug;
+  }
 
   const method = (config.method || '').toUpperCase();
   if (['POST', 'PATCH', 'DELETE'].includes(method) && !config.headers['Idempotency-Key']) {

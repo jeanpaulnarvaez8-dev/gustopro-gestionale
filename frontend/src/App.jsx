@@ -40,7 +40,8 @@ import MobileBottomNav from './components/MobileBottomNav'
 import MandatoryAlertModal from './components/MandatoryAlertModal'
 import DirectDeliveredAlerts from './components/DirectDeliveredAlerts'
 import OfflineBanner from './components/OfflineBanner'
-import { ToastProvider, StatusDot } from './components/v2'
+import { StatusDot } from './components/v2'
+// NB: <ToastProvider> sta in main.jsx (sopra SocketProvider che lo usa).
 
 // ─── Loading fallback per route lazy ──────────────────────────────────
 // Centrato, palette Riva, animato. Visibile mentre il chunk del route
@@ -89,7 +90,7 @@ function HomeRedirect() {
 
 export default function App() {
   return (
-    <ToastProvider>
+    <>
       <OfflineBanner />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
@@ -203,6 +204,6 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
-    </ToastProvider>
+    </>
   )
 }

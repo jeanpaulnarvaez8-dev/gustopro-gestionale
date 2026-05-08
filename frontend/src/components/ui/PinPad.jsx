@@ -18,8 +18,17 @@ export default function PinPad({ onSubmit, loading, error, maxLength = 4 }) {
     return () => clearTimeout(t)
   }, [error])
 
+  // Haptic feedback su mobile (Android Chrome / Samsung Internet supportano).
+  // No-op silenzioso su iOS Safari (vibrate non disponibile) e desktop.
+  const haptic = (ms = 8) => {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try { navigator.vibrate(ms) } catch { /* ignore */ }
+    }
+  }
+
   const handleKey = (digit) => {
     if (loading) return
+    haptic(8)
     if (pin.length < maxLength) {
       const next = pin + digit
       setPin(next)
@@ -30,7 +39,11 @@ export default function PinPad({ onSubmit, loading, error, maxLength = 4 }) {
     }
   }
 
-  const handleDelete = () => { if (!loading) setPin(p => p.slice(0, -1)) }
+  const handleDelete = () => {
+    if (loading || pin.length === 0) return
+    haptic(12) // delete: vibrazione un po' più lunga per distinguere
+    setPin(p => p.slice(0, -1))
+  }
 
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫']
 
