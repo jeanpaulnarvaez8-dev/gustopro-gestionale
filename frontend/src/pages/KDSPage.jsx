@@ -106,9 +106,9 @@ export default function KDSPage() {
       ])
       // DEBUG temporaneo per diagnose React #31 con menu_item_id
       // eslint-disable-next-line no-console
-      console.log('[KDS] orders[0]:', ordersRes.data?.[0])
+      console.log('[KDS] orders[0] JSON:', JSON.stringify(ordersRes.data?.[0]))
       // eslint-disable-next-line no-console
-      console.log('[KDS] orders[0].items[0]:', ordersRes.data?.[0]?.items?.[0])
+      console.log('[KDS] orders[0].items[0] JSON:', JSON.stringify(ordersRes.data?.[0]?.items?.[0]))
       setOrders(Array.isArray(ordersRes.data) ? ordersRes.data : [])
       setCrossmatches(Array.isArray(crossRes.data) ? crossRes.data : [])
     } catch (err) {
