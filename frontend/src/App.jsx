@@ -1,38 +1,60 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
+
+// Eager: pagine critiche al first paint (login deve essere istantaneo).
 import LoginPage from './pages/LoginPage'
-import TableMapPage from './pages/TableMapPage'
-import OrderPage from './pages/OrderPage'
-import CheckoutPage from './pages/CheckoutPage'
-import KDSPage from './pages/KDSPage'
-import DashboardPage from './pages/DashboardPage'
-import AnalyticsPage from './pages/AnalyticsPage'
-import InventoryPage from './pages/InventoryPage'
-import UsersPage from './pages/UsersPage'
-import CustomersPage from './pages/CustomersPage'
-import ReservationsPage from './pages/ReservationsPage'
-import AsportoPage from './pages/AsportoPage'
-import ComboAdminPage from './pages/ComboAdminPage'
-import MenuAdminPage from './pages/MenuAdminPage'
-import VenueAdminPage from './pages/VenueAdminPage'
-import TaxReportPage from './pages/TaxReportPage'
-import IngredientsPage from './pages/IngredientsPage'
-import StockReconciliationPage from './pages/StockReconciliationPage'
-import ZoneAssignmentPage from './pages/ZoneAssignmentPage'
-import WaiterDashboardPage from './pages/WaiterDashboardPage'
-import StaffPerformancePage from './pages/StaffPerformancePage'
-import FloorPlanPage from './pages/FloorPlanPage'
-import AdminHomePage from './pages/AdminHomePage'
-import WaitingMonitorPage from './pages/WaitingMonitorPage'
-import NotFoundPage from './pages/NotFoundPage'
-import SuperadminPage from './pages/SuperadminPage'
-import DesignSystemPage from './pages/DesignSystemPage'
+
+// Lazy: code-split per route. Riduce bundle iniziale 712KB → ~200KB.
+// Ogni page diventa un chunk separato, scaricato on-demand al navigate.
+const TableMapPage           = lazy(() => import('./pages/TableMapPage'))
+const OrderPage              = lazy(() => import('./pages/OrderPage'))
+const CheckoutPage           = lazy(() => import('./pages/CheckoutPage'))
+const KDSPage                = lazy(() => import('./pages/KDSPage'))
+const DashboardPage          = lazy(() => import('./pages/DashboardPage'))
+const AnalyticsPage          = lazy(() => import('./pages/AnalyticsPage'))
+const InventoryPage          = lazy(() => import('./pages/InventoryPage'))
+const UsersPage              = lazy(() => import('./pages/UsersPage'))
+const CustomersPage          = lazy(() => import('./pages/CustomersPage'))
+const ReservationsPage       = lazy(() => import('./pages/ReservationsPage'))
+const AsportoPage            = lazy(() => import('./pages/AsportoPage'))
+const ComboAdminPage         = lazy(() => import('./pages/ComboAdminPage'))
+const MenuAdminPage          = lazy(() => import('./pages/MenuAdminPage'))
+const VenueAdminPage         = lazy(() => import('./pages/VenueAdminPage'))
+const TaxReportPage          = lazy(() => import('./pages/TaxReportPage'))
+const IngredientsPage        = lazy(() => import('./pages/IngredientsPage'))
+const StockReconciliationPage= lazy(() => import('./pages/StockReconciliationPage'))
+const ZoneAssignmentPage     = lazy(() => import('./pages/ZoneAssignmentPage'))
+const WaiterDashboardPage    = lazy(() => import('./pages/WaiterDashboardPage'))
+const StaffPerformancePage   = lazy(() => import('./pages/StaffPerformancePage'))
+const FloorPlanPage          = lazy(() => import('./pages/FloorPlanPage'))
+const AdminHomePage          = lazy(() => import('./pages/AdminHomePage'))
+const WaitingMonitorPage     = lazy(() => import('./pages/WaitingMonitorPage'))
+const NotFoundPage           = lazy(() => import('./pages/NotFoundPage'))
+const SuperadminPage         = lazy(() => import('./pages/SuperadminPage'))
+const DesignSystemPage       = lazy(() => import('./pages/DesignSystemPage'))
+
+// Componenti UI eager (sempre montati nelle route protette).
 import ServiceAlertBanner from './components/ServiceAlertBanner'
 import MobileBottomNav from './components/MobileBottomNav'
 import MandatoryAlertModal from './components/MandatoryAlertModal'
 import DirectDeliveredAlerts from './components/DirectDeliveredAlerts'
 import OfflineBanner from './components/OfflineBanner'
-import { ToastProvider } from './components/v2'
+import { ToastProvider, StatusDot } from './components/v2'
+
+// ─── Loading fallback per route lazy ──────────────────────────────────
+// Centrato, palette Riva, animato. Visibile mentre il chunk del route
+// viene scaricato (~50-200ms su 4G dopo first-load, ~0ms da cache).
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh] gap-3">
+      <StatusDot tone="gold" size="lg" pulse />
+      <span className="serif italic text-[var(--color-text-2)] text-lg">
+        Caricamento…
+      </span>
+    </div>
+  )
+}
 
 function ProtectedRoute() {
   const { isAuthenticated, user } = useAuth()
@@ -69,116 +91,118 @@ export default function App() {
   return (
     <ToastProvider>
       <OfflineBanner />
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
 
-      {/* Super-admin (server-to-server, X-Superadmin-Key header).
-          Pubblica perche' non usa il JWT del normale login: e' protetta lato
-          backend dal middleware requireSuperadmin che verifica la key. */}
-      <Route path="/admin-saas" element={<SuperadminPage />} />
+          {/* Super-admin (server-to-server, X-Superadmin-Key header).
+              Pubblica perche' non usa il JWT del normale login: e' protetta lato
+              backend dal middleware requireSuperadmin che verifica la key. */}
+          <Route path="/admin-saas" element={<SuperadminPage />} />
 
-      {/* Showcase del nuovo design system v2 — accessibile senza login per
-          test visivo dei primitivi (Button/Card/Badge/Input/Modal/...). */}
-      <Route path="/design-system" element={<DesignSystemPage />} />
+          {/* Showcase del nuovo design system v2 — accessibile senza login per
+              test visivo dei primitivi (Button/Card/Badge/Input/Modal/...). */}
+          <Route path="/design-system" element={<DesignSystemPage />} />
 
-      <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<HomeRedirect />} />
-        <Route path="/tables" element={<TableMapPage />} />
-        <Route path="/order/:tableId" element={<OrderPage />} />
-        <Route path="/checkout/:orderId" element={<CheckoutPage />} />
-        <Route path="/kds" element={
-          <RoleRoute roles={['kitchen', 'admin', 'manager']}>
-            <KDSPage />
-          </RoleRoute>
-        } />
-        <Route path="/dashboard" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <DashboardPage />
-          </RoleRoute>
-        } />
-        <Route path="/inventory" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <InventoryPage />
-          </RoleRoute>
-        } />
-        <Route path="/users" element={
-          <RoleRoute roles={['admin']}>
-            <UsersPage />
-          </RoleRoute>
-        } />
-        <Route path="/analytics" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <AnalyticsPage />
-          </RoleRoute>
-        } />
-        <Route path="/customers" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <CustomersPage />
-          </RoleRoute>
-        } />
-        <Route path="/reservations" element={<ReservationsPage />} />
-        <Route path="/asporto" element={<AsportoPage />} />
-        <Route path="/combos" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <ComboAdminPage />
-          </RoleRoute>
-        } />
-        <Route path="/menu-admin" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <MenuAdminPage />
-          </RoleRoute>
-        } />
-        <Route path="/venue" element={
-          <RoleRoute roles={['admin']}>
-            <VenueAdminPage />
-          </RoleRoute>
-        } />
-        <Route path="/tax-report" element={
-          <RoleRoute roles={['admin']}>
-            <TaxReportPage />
-          </RoleRoute>
-        } />
-        <Route path="/ingredients" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <IngredientsPage />
-          </RoleRoute>
-        } />
-        <Route path="/stock-reconciliation" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <StockReconciliationPage />
-          </RoleRoute>
-        } />
-        <Route path="/my-tables" element={<WaiterDashboardPage />} />
-        <Route path="/admin-home" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <AdminHomePage />
-          </RoleRoute>
-        } />
-        <Route path="/assignments" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <ZoneAssignmentPage />
-          </RoleRoute>
-        } />
-        <Route path="/floor-plan" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <FloorPlanPage />
-          </RoleRoute>
-        } />
-        <Route path="/performance" element={
-          <RoleRoute roles={['admin', 'manager']}>
-            <StaffPerformancePage />
-          </RoleRoute>
-        } />
-        <Route path="/waiting-monitor" element={
-          <RoleRoute roles={['kitchen', 'admin', 'manager']}>
-            <WaitingMonitorPage />
-          </RoleRoute>
-        } />
-        <Route path="/staff" element={<Navigate to="/users" replace />} />
-      </Route>
+          <Route element={<ProtectedRoute />}>
+            <Route path="/" element={<HomeRedirect />} />
+            <Route path="/tables" element={<TableMapPage />} />
+            <Route path="/order/:tableId" element={<OrderPage />} />
+            <Route path="/checkout/:orderId" element={<CheckoutPage />} />
+            <Route path="/kds" element={
+              <RoleRoute roles={['kitchen', 'admin', 'manager']}>
+                <KDSPage />
+              </RoleRoute>
+            } />
+            <Route path="/dashboard" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <DashboardPage />
+              </RoleRoute>
+            } />
+            <Route path="/inventory" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <InventoryPage />
+              </RoleRoute>
+            } />
+            <Route path="/users" element={
+              <RoleRoute roles={['admin']}>
+                <UsersPage />
+              </RoleRoute>
+            } />
+            <Route path="/analytics" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <AnalyticsPage />
+              </RoleRoute>
+            } />
+            <Route path="/customers" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <CustomersPage />
+              </RoleRoute>
+            } />
+            <Route path="/reservations" element={<ReservationsPage />} />
+            <Route path="/asporto" element={<AsportoPage />} />
+            <Route path="/combos" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <ComboAdminPage />
+              </RoleRoute>
+            } />
+            <Route path="/menu-admin" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <MenuAdminPage />
+              </RoleRoute>
+            } />
+            <Route path="/venue" element={
+              <RoleRoute roles={['admin']}>
+                <VenueAdminPage />
+              </RoleRoute>
+            } />
+            <Route path="/tax-report" element={
+              <RoleRoute roles={['admin']}>
+                <TaxReportPage />
+              </RoleRoute>
+            } />
+            <Route path="/ingredients" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <IngredientsPage />
+              </RoleRoute>
+            } />
+            <Route path="/stock-reconciliation" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <StockReconciliationPage />
+              </RoleRoute>
+            } />
+            <Route path="/my-tables" element={<WaiterDashboardPage />} />
+            <Route path="/admin-home" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <AdminHomePage />
+              </RoleRoute>
+            } />
+            <Route path="/assignments" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <ZoneAssignmentPage />
+              </RoleRoute>
+            } />
+            <Route path="/floor-plan" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <FloorPlanPage />
+              </RoleRoute>
+            } />
+            <Route path="/performance" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <StaffPerformancePage />
+              </RoleRoute>
+            } />
+            <Route path="/waiting-monitor" element={
+              <RoleRoute roles={['kitchen', 'admin', 'manager']}>
+                <WaitingMonitorPage />
+              </RoleRoute>
+            } />
+            <Route path="/staff" element={<Navigate to="/users" replace />} />
+          </Route>
 
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
     </ToastProvider>
   )
 }

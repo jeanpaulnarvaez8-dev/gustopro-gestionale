@@ -335,15 +335,44 @@ async function tick() {
       await checkMandatoryAlertsForTenant(client, tenantId);
     });
   } catch (err) {
-    console.error('[ServiceTimer] tick error:', err.message);
+    // Errori transient (es. tabella non ancora migrata, DB non pronto)
+    // sono attesi durante deploy/migrate. NON terminare il timer: il
+    // try/catch dentro setInterval impedisce comunque il crash. Loghiamo
+    // solo se l'errore non e' "tabella non esiste" (race startup gia'
+    // gestita da waitForSchema).
+    if (!/relation .* does not exist/i.test(err.message)) {
+      console.error('[ServiceTimer] tick error:', err.message);
+    }
   }
+}
+
+// Verifica che lo schema multi-tenant sia pronto prima di avviare il
+// timer. Risolve il bug 2026-05-08: backend partito prima che il
+// pg_restore importasse la tabella `tenants` → 2 tick error iniziali.
+async function waitForSchema(maxAttempts = 30, delayMs = 1000) {
+  const pool = require('../config/db');
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      await pool.query('SELECT 1 FROM tenants LIMIT 1');
+      return true;
+    } catch (err) {
+      if (i === 0) console.log('[ServiceTimer] in attesa dello schema DB…');
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  console.warn(`[ServiceTimer] schema non pronto dopo ${maxAttempts}s, avvio comunque`);
+  return false;
 }
 
 function startServiceTimer() {
   if (timer) return;
   console.log('[ServiceTimer] Avviato — controllo ogni 30s (multi-tenant)');
+  // Wait async per schema, poi parte regolare. setInterval gia' attivo
+  // ma il primo tick e' delayed da schema-readiness check.
   timer = setInterval(tick, INTERVAL_MS);
-  setTimeout(tick, 5000);
+  waitForSchema()
+    .then(() => setTimeout(tick, 1000))
+    .catch((err) => console.error('[ServiceTimer] waitForSchema error:', err.message));
 }
 
 function stopServiceTimer() {
