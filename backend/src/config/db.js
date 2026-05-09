@@ -12,7 +12,10 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected DB pool error:', err.message);
+  // Lazy require evita ciclo di dipendenze (logger non dipende da db, ma per
+  // sicurezza richiediamolo solo qui dentro all'errore)
+  const logger = require('../lib/logger');
+  logger.error({ err }, 'Unexpected DB pool error');
 });
 
 module.exports = pool;

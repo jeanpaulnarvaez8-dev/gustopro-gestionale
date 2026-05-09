@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { getIO } = require('../socket');
 const { trackAlertReceived, trackEscalation } = require('./performanceTracker');
+const logger = require('../lib/logger').child({ component: 'serviceTimer' });
 
 const INTERVAL_MS = 30_000; // controlla ogni 30 secondi
 
@@ -30,7 +31,7 @@ async function forEachActiveTenant(fn) {
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
-      console.error(`[ServiceTimer] tenant ${t.id} error:`, err.message);
+      logger.error({ err, tenantId: t.id }, 'tenant tick error');
     } finally {
       client.release();
     }
@@ -341,7 +342,7 @@ async function tick() {
     // solo se l'errore non e' "tabella non esiste" (race startup gia'
     // gestita da waitForSchema).
     if (!/relation .* does not exist/i.test(err.message)) {
-      console.error('[ServiceTimer] tick error:', err.message);
+      logger.error({ err }, 'tick error');
     }
   }
 }
@@ -356,23 +357,23 @@ async function waitForSchema(maxAttempts = 30, delayMs = 1000) {
       await pool.query('SELECT 1 FROM tenants LIMIT 1');
       return true;
     } catch (err) {
-      if (i === 0) console.log('[ServiceTimer] in attesa dello schema DB…');
+      if (i === 0) logger.info('waiting for schema DB');
       await new Promise((r) => setTimeout(r, delayMs));
     }
   }
-  console.warn(`[ServiceTimer] schema non pronto dopo ${maxAttempts}s, avvio comunque`);
+  logger.warn({ maxAttempts }, 'schema non pronto, avvio comunque');
   return false;
 }
 
 function startServiceTimer() {
   if (timer) return;
-  console.log('[ServiceTimer] Avviato — controllo ogni 30s (multi-tenant)');
+  logger.info({ intervalMs: INTERVAL_MS }, 'started multi-tenant');
   // Wait async per schema, poi parte regolare. setInterval gia' attivo
   // ma il primo tick e' delayed da schema-readiness check.
   timer = setInterval(tick, INTERVAL_MS);
   waitForSchema()
     .then(() => setTimeout(tick, 1000))
-    .catch((err) => console.error('[ServiceTimer] waitForSchema error:', err.message));
+    .catch((err) => logger.error({ err }, 'waitForSchema error'));
 }
 
 function stopServiceTimer() {

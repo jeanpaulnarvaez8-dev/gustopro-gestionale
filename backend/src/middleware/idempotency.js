@@ -14,6 +14,7 @@
 // Cleanup TTL 7 giorni: per ora a mano via SQL, futuro cron job.
 
 const pool = require('../config/db');
+const logger = require('../lib/logger');
 
 const IDEMPOTENT_METHODS = new Set(['POST', 'PATCH', 'DELETE']);
 
@@ -51,7 +52,7 @@ async function idempotencyMiddleware(req, res, next) {
   } catch (err) {
     // Se la tabella non esiste (migration non applicata), saltiamo silenziosamente
     if (err.code === '42P01') {
-      console.warn('[idempotency] table not found, skipping (run migration 016)');
+      (req.log || logger).warn('[idempotency] table not found, skipping (run migration 016)');
       return next();
     }
     return next(err);
@@ -72,7 +73,7 @@ async function idempotencyMiddleware(req, res, next) {
          ON CONFLICT (tenant_id, key) DO NOTHING`,
       [tenantId, key, method, req.originalUrl || req.path, status, body, req.user?.id ?? null]
     ).catch((err) => {
-      console.error('[idempotency] save failed:', err.message);
+      (req.log || logger).error({ err, key, method, path: req.originalUrl }, '[idempotency] save failed');
     });
     return originalJson(body);
   };

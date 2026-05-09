@@ -1,3 +1,5 @@
+const logger = require('../lib/logger');
+
 // Mapping PostgreSQL error codes to appropriate HTTP status codes
 // https://www.postgresql.org/docs/current/errcodes-appendix.html
 const PG_ERROR_MAP = {
@@ -32,8 +34,25 @@ function errorHandler(err, req, res, next) {
     ? (status < 500 ? (message || 'Richiesta non valida') : 'Errore interno del server')
     : (message || 'Unknown error');
 
+  // Log strutturato: 5xx come error (alert), 4xx come warn (client error)
+  const log = req.log || logger; // pino-http inietta req.log con reqId
   if (status >= 500) {
-    console.error(`[${new Date().toISOString()}] ${req.method} ${req.path}:`, err);
+    log.error({
+      err,
+      method: req.method,
+      path: req.originalUrl,
+      tenantId: req.tenant?.id,
+      userId: req.user?.id,
+    }, '5xx error response');
+  } else if (status >= 400) {
+    log.warn({
+      method: req.method,
+      path: req.originalUrl,
+      status,
+      message: err.message,
+      tenantId: req.tenant?.id,
+      userId: req.user?.id,
+    }, '4xx client error');
   }
 
   res.status(status).json({ error: finalMessage });

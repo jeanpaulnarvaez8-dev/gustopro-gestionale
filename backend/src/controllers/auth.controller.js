@@ -35,7 +35,11 @@ async function login(req, res, next) {
     }
 
     if (!matchedUser) {
-      console.warn(`[auth] login fail tenant=${tenantId} ip=${req.ip} ua="${req.get('user-agent') || ''}"`);
+      req.log?.warn({
+        tenantId,
+        ip: req.ip,
+        ua: req.get('user-agent') || '',
+      }, '[auth] login fail');
       return res.status(401).json({ error: 'PIN non corretto' });
     }
 

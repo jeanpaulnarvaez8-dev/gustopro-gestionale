@@ -11,7 +11,7 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res, _next, options) => {
-    console.warn(`[auth] login rate-limit hit ip=${req.ip} ua="${req.get('user-agent') || ''}"`);
+    req.log?.warn({ ip: req.ip, ua: req.get('user-agent') || '' }, '[auth] login rate-limit hit');
     res.status(options.statusCode).json(options.message);
   },
 });

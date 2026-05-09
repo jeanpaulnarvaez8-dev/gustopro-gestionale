@@ -1,6 +1,7 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const pool = require('./config/db');
+const logger = require('./lib/logger');
 
 let io = null;
 
@@ -14,7 +15,7 @@ async function joinZoneRooms(socket) {
       socket.join(`zone:${row.zone_id}`);
     }
   } catch (err) {
-    console.error('[Socket] Errore join zone rooms:', err.message);
+    logger.error({ err, userId: socket.user?.id }, '[Socket] join zone rooms failed');
   }
 }
 
