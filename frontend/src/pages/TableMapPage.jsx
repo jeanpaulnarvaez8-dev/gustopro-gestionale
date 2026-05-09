@@ -246,6 +246,10 @@ export default function TableMapPage() {
                 onTableClick={handleNavigate}
                 canEdit={canEdit}
                 onRefresh={loadData}
+                /* Spotlight (sbiadisce le zone non attive): solo per camerieri,
+                   che hanno UNA zona assegnata. Admin/manager vedono tutto
+                   indistinto perche' supervisionano. */
+                spotlightZoneId={user?.role === 'waiter' ? activeZone : null}
               />
             </div>
           </>

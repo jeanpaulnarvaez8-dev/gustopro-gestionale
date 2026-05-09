@@ -25,17 +25,48 @@ const STATUS_SHORT = {
   parked:   'WAIT',
 }
 
-function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrder = 0 }) {
+function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrder = 0, dimmed = false }) {
   const [dragging, setDragging] = useState(false)
   const [hover, setHover] = useState(false)
   const [tapping, setTapping] = useState(false)
+  // Ripple effects: array di {id, cx, cy, t} — ogni tap genera un ripple
+  // che si espande + svanisce in 600ms.
+  const [ripples, setRipples] = useState([])
+  // Live flash: oro pulsante 600ms quando lo stato cambia (utile per
+  // multi-cameriere realtime: vedi che un altro ha modificato il tavolo).
+  const [statusFlash, setStatusFlash] = useState(false)
+  const prevStatus = useRef(table.status)
   const startRef = useRef(null)
+  const rippleIdRef = useRef(0)
   const w = table.width || 60, h = table.height || 60
   const shape = table.shape || 'circle'
   const st = STATUS_COLORS[table.status] || STATUS_COLORS.free
   const isOccupied = table.status === 'occupied'
   const isReserved = table.status === 'reserved'
   const isDirty    = table.status === 'dirty'
+
+  // Live flash on socket-driven status change: confronta status precedente,
+  // se cambia → flash 600ms. NB: salta il primo render (mount).
+  useEffect(() => {
+    if (prevStatus.current === table.status) return
+    if (prevStatus.current !== undefined) {
+      setStatusFlash(true)
+      const t = setTimeout(() => setStatusFlash(false), 700)
+      prevStatus.current = table.status
+      return () => clearTimeout(t)
+    }
+    prevStatus.current = table.status
+  }, [table.status])
+
+  // Garbage-collect dei ripple scaduti (>700ms)
+  useEffect(() => {
+    if (ripples.length === 0) return
+    const t = setTimeout(() => {
+      const cutoff = Date.now() - 700
+      setRipples((rs) => rs.filter((r) => r.t > cutoff))
+    }, 750)
+    return () => clearTimeout(t)
+  }, [ripples])
 
   // "since_min": minuti da quando il tavolo e' nello stato corrente. Se il
   // backend non lo fornisce ancora, lo derivo da updated_at se presente.
@@ -79,6 +110,18 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
   const down = e => {
     haptic()
     setTapping(true)
+    // Ripple dal punto di tap (Material-style). Coordinate in spazio SVG locale
+    // del gruppo tavolo: usa getBoundingClientRect per trasformare client →
+    // coords interne (approssima, e' OK per effetto visivo).
+    try {
+      const target = e.currentTarget
+      const rect = target.getBoundingClientRect()
+      const cx = ((e.clientX - rect.left) / rect.width) * w
+      const cy = ((e.clientY - rect.top) / rect.height) * h
+      const id = ++rippleIdRef.current
+      setRipples((rs) => [...rs, { id, cx, cy, t: Date.now() }])
+    } catch { /* no-op */ }
+
     if (!editing) { onSelect(table); return }
     e.stopPropagation(); e.target.setPointerCapture(e.pointerId)
     setDragging(true); startRef.current = { x: e.clientX - table.pos_x, y: e.clientY - table.pos_y }
@@ -98,6 +141,10 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
   // Animazione di stagger entrance: ogni tavolo appare con delay = i * 25ms
   const enterDelay = `${Math.min(indexOrder * 25, 600)}ms`
 
+  // Clip-path per il ripple: deve restare DENTRO il tavolo. Definito
+  // come <clipPath> nel <defs> globale (vedi Restaurant + svg defs).
+  const clipId = `clip-${table.id}`
+
   return (
     <g
       transform={`translate(${table.pos_x},${table.pos_y}) rotate(${table.rotation||0},${w/2},${h/2})`}
@@ -107,15 +154,30 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
       style={{
         cursor: editing ? (dragging ? 'grabbing' : 'grab') : 'pointer',
         touchAction: 'none',
-        // SVG transform-origin mid → scale "dal centro" del tavolo
         transformBox: 'fill-box',
         transformOrigin: 'center',
-        transition: 'opacity 250ms ease, filter 200ms ease',
-        opacity: 0,
-        filter: dragging ? 'drop-shadow(0 6px 12px rgba(212,175,55,0.4))' : 'none',
+        transition: 'opacity 350ms ease, filter 200ms ease',
+        opacity: dimmed ? 0.28 : 0,  // dimmed = fuori zona attiva (spotlight)
+        filter: dragging
+          ? 'drop-shadow(0 6px 18px rgba(212,175,55,0.55))'
+          : statusFlash
+          ? 'drop-shadow(0 0 12px rgba(212,175,55,0.85))'
+          : 'none',
         animation: `fp-enter 350ms cubic-bezier(0.34, 1.4, 0.64, 1) ${enterDelay} forwards`,
       }}
     >
+      {/* Clip-path interno (per ripple) — segue la forma del tavolo */}
+      <defs>
+        {shape === 'circle' ? (
+          <clipPath id={clipId}>
+            <ellipse cx={w/2} cy={h/2} rx={w/2} ry={h/2} />
+          </clipPath>
+        ) : (
+          <clipPath id={clipId}>
+            <rect x={0} y={0} width={w} height={h} rx={shape==='rect' ? 4 : 6} />
+          </clipPath>
+        )}
+      </defs>
       {/* Halo "in ritardo" — pulsa rosso, animazione SVG-native (NO box-shadow) */}
       {isLate && (
         <>
@@ -170,6 +232,25 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
         transformOrigin: 'center',
         transition: 'transform 180ms cubic-bezier(0.34, 1.4, 0.64, 1)',
       }}>
+        {/* Status flash overlay — pulsa oro quando arriva un cambio stato via socket */}
+        {statusFlash && (
+          shape === 'circle' ? (
+            <ellipse cx={w/2} cy={h/2} rx={w/2 + 4} ry={h/2 + 4}
+              fill="none" stroke="#D4AF37" strokeWidth="3" opacity="0.9">
+              <animate attributeName="r"
+                values={`${w/2 + 4};${w/2 + 16}`} dur="600ms" repeatCount="1" />
+              <animate attributeName="opacity"
+                values="0.9;0" dur="600ms" repeatCount="1" />
+            </ellipse>
+          ) : (
+            <rect x={-4} y={-4} width={w + 8} height={h + 8} rx={10}
+              fill="none" stroke="#D4AF37" strokeWidth="3" opacity="0.9">
+              <animate attributeName="opacity"
+                values="0.9;0" dur="600ms" repeatCount="1" />
+            </rect>
+          )
+        )}
+
         {/* Sedie con stato (più scure per occupied) */}
         {chairs.map((c, i) => (
           <rect
@@ -198,6 +279,40 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
             strokeWidth={selected ? 3 : hover ? 2 : 1.5}
             style={{ transition: 'fill 280ms ease, stroke 200ms ease, stroke-width 150ms ease' }}
           />
+        )}
+
+        {/* Shimmer sweep (gold premium) per i tavoli occupati: una stria
+            chiara che attraversa il tavolo orizzontalmente ogni 4s.
+            Clip-path tiene la stria DENTRO la forma del tavolo. */}
+        {isOccupied && !dimmed && (
+          <g clipPath={`url(#${clipId})`} style={{ pointerEvents: 'none' }}>
+            <rect x={-w} y={0} width={w * 0.5} height={h}
+              fill="url(#shimmer-gold)" opacity="0.9">
+              <animate
+                attributeName="x"
+                values={`${-w * 0.6};${w * 1.2}`}
+                dur="3.5s"
+                begin={`${(table.id?.charCodeAt?.(0) || 0) % 7 * 0.4}s`}
+                repeatCount="indefinite"
+              />
+            </rect>
+          </g>
+        )}
+
+        {/* Ripple-on-tap (Material): cerchio che si espande dal punto di tap.
+            Clip-path lo tiene dentro la forma del tavolo. */}
+        {ripples.length > 0 && (
+          <g clipPath={`url(#${clipId})`} style={{ pointerEvents: 'none' }}>
+            {ripples.map((r) => (
+              <circle key={r.id} cx={r.cx} cy={r.cy} r="2" fill="#D4AF37" opacity="0.65">
+                <animate attributeName="r"
+                  values={`2;${Math.max(w, h) * 0.9}`}
+                  dur="600ms" repeatCount="1" fill="freeze" />
+                <animate attributeName="opacity"
+                  values="0.55;0" dur="600ms" repeatCount="1" fill="freeze" />
+              </circle>
+            ))}
+          </g>
         )}
 
         {/* Numero tavolo */}
@@ -459,7 +574,7 @@ function Restaurant({ zones }) {
 const PLAN_W = 1450
 const PLAN_H = 950
 
-export default function FloorPlanInteractive({ tables, zones, onTableClick, canEdit, onRefresh }) {
+export default function FloorPlanInteractive({ tables, zones, onTableClick, canEdit, onRefresh, spotlightZoneId = null }) {
   const { toast } = useToast()
   const containerRef = useRef(null)
   const [zoom, setZoom] = useState(1)
@@ -697,12 +812,53 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
         <svg width="100%" height="100%" style={{ cursor: panning ? 'grabbing' : 'default' }}>
           <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
             <defs>
+              {/* Grid pattern di sfondo */}
               <pattern id="grid2" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
                 <path d={`M ${GRID} 0 L 0 0 0 ${GRID}`} fill="none" stroke="rgba(232,219,180,0.04)" strokeWidth="0.3"/>
               </pattern>
+              {/* Grid GRANDE in editing mode: snap-grid visibile */}
+              <pattern id="grid-edit" width={GRID*2} height={GRID*2} patternUnits="userSpaceOnUse">
+                <path d={`M ${GRID*2} 0 L 0 0 0 ${GRID*2}`} fill="none" stroke="rgba(212,175,55,0.13)" strokeWidth="0.5"/>
+              </pattern>
+              {/* Shimmer sweep gradient per tavoli oro (occupati) */}
+              <linearGradient id="shimmer-gold" x1="0%" y1="50%" x2="100%" y2="50%">
+                <stop offset="0%"   stopColor="#D4AF37" stopOpacity="0" />
+                <stop offset="40%"  stopColor="#F0E9D2" stopOpacity="0.18" />
+                <stop offset="50%"  stopColor="#FFFFFF" stopOpacity="0.32" />
+                <stop offset="60%"  stopColor="#F0E9D2" stopOpacity="0.18" />
+                <stop offset="100%" stopColor="#D4AF37" stopOpacity="0" />
+              </linearGradient>
             </defs>
-            <rect className="bg-layer" width={PLAN_W} height={PLAN_H} fill="url(#grid2)"/>
+            {/* Sfondo: in editing mode, grid piu' visibile (snap-feedback) */}
+            <rect
+              className="bg-layer" width={PLAN_W} height={PLAN_H}
+              fill={editing ? 'url(#grid-edit)' : 'url(#grid2)'}
+              style={{ transition: 'fill 240ms ease' }}
+            />
             <Restaurant zones={zones} />
+
+            {/* Linee guida snap durante drag (croce verde sul tavolo selezionato) */}
+            {editing && selected && (() => {
+              const t = local.find(x => x.id === selected)
+              if (!t) return null
+              const cx = t.pos_x + (t.width || 60) / 2
+              const cy = t.pos_y + (t.height || 60) / 2
+              return (
+                <g style={{ pointerEvents: 'none' }} opacity="0.5">
+                  <line x1={cx} y1={0} x2={cx} y2={PLAN_H}
+                    stroke="#22C55E" strokeWidth="1" strokeDasharray="4 4">
+                    <animate attributeName="stroke-dashoffset"
+                      values="0;-8" dur="600ms" repeatCount="indefinite" />
+                  </line>
+                  <line x1={0} y1={cy} x2={PLAN_W} y2={cy}
+                    stroke="#22C55E" strokeWidth="1" strokeDasharray="4 4">
+                    <animate attributeName="stroke-dashoffset"
+                      values="0;-8" dur="600ms" repeatCount="indefinite" />
+                  </line>
+                </g>
+              )
+            })()}
+
             {local.map((t, i) => (
               <TableShape
                 key={t.id}
@@ -713,6 +869,7 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
                 onSelect={handleTableSelect}
                 onDrag={handleDrag}
                 editing={editing}
+                dimmed={spotlightZoneId != null && t.zone_id !== spotlightZoneId}
               />
             ))}
           </g>
