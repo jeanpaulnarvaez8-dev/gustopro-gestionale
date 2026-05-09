@@ -151,3 +151,23 @@ html, body, #root { height: 100%; }
   20% { box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.6); }
   100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   FloorPlan animations — SVG-friendly
+   ───────────────────────────────────────────────────────────────── */
+
+/* Entrata "stagger" dei tavoli al mount: scale + fade dal centro.
+   Compatibile con SVG <g> grazie a transform-box: fill-box.
+   `fp-enter` sostituisce `flash-gold` per i nodi SVG (le keyframes con
+   box-shadow non rendono dentro SVG). */
+@keyframes fp-enter {
+  0%   { opacity: 0; transform: scale(0.6); }
+  60%  { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Flash quando il tavolo cambia stato in realtime via socket.io. */
+@keyframes fp-flash {
+  0%, 100% { stroke-width: 1.5; }
+  35%      { stroke-width: 4; }
+}

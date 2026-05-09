@@ -16,13 +16,39 @@ const STATUS_COLORS = {
   parked:   { fill: 'rgba(168,85,247,0.18)', stroke: '#A855F7', glow: 'rgba(168,85,247,0.22)', text: '#D8B4FE' },
 }
 
-function TableShape({ table, zone, selected, onSelect, onDrag, editing }) {
+// Status text breve (3 lettere, daltonici-friendly: stato visibile anche senza colore)
+const STATUS_SHORT = {
+  free:     'FREE',
+  occupied: 'OCC',
+  reserved: 'RIS',
+  dirty:    'PUL',
+  parked:   'WAIT',
+}
+
+function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrder = 0 }) {
   const [dragging, setDragging] = useState(false)
+  const [hover, setHover] = useState(false)
+  const [tapping, setTapping] = useState(false)
   const startRef = useRef(null)
   const w = table.width || 60, h = table.height || 60
   const shape = table.shape || 'circle'
   const st = STATUS_COLORS[table.status] || STATUS_COLORS.free
   const isOccupied = table.status === 'occupied'
+  const isReserved = table.status === 'reserved'
+  const isDirty    = table.status === 'dirty'
+
+  // "since_min": minuti da quando il tavolo e' nello stato corrente. Se il
+  // backend non lo fornisce ancora, lo derivo da updated_at se presente.
+  const sinceMin = (() => {
+    if (typeof table.since_min === 'number') return table.since_min
+    if (table.updated_at) {
+      const ms = Date.now() - new Date(table.updated_at).getTime()
+      return Math.max(0, Math.floor(ms / 60000))
+    }
+    return null
+  })()
+  // Soglia "in ritardo": occupato da > 30 min senza ordine recente → halo rosso
+  const isLate = isOccupied && sinceMin !== null && sinceMin >= 30
 
   // Sedie attorno al tavolo
   const chairs = []
@@ -43,7 +69,16 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing }) {
     }
   }
 
+  // Haptic mobile su tap
+  const haptic = () => {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try { navigator.vibrate(8) } catch { /* ignore */ }
+    }
+  }
+
   const down = e => {
+    haptic()
+    setTapping(true)
     if (!editing) { onSelect(table); return }
     e.stopPropagation(); e.target.setPointerCapture(e.pointerId)
     setDragging(true); startRef.current = { x: e.clientX - table.pos_x, y: e.clientY - table.pos_y }
@@ -53,67 +88,181 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing }) {
     if (dragging && startRef.current)
       onDrag(table.id, snap(e.clientX - startRef.current.x), snap(e.clientY - startRef.current.y))
   }
-  const up = () => { setDragging(false); startRef.current = null }
+  const up = () => { setDragging(false); setTapping(false); startRef.current = null }
+  // Anche pointercancel/leave resettano il tap (no glove-stuck su tablet)
+  const cancel = () => { setTapping(false) }
+
+  // Scale del gruppo: hover, tap, drag (solo in editing mode)
+  const visualScale = dragging ? 1.06 : tapping ? 0.94 : hover ? 1.04 : 1
+
+  // Animazione di stagger entrance: ogni tavolo appare con delay = i * 25ms
+  const enterDelay = `${Math.min(indexOrder * 25, 600)}ms`
 
   return (
     <g
       transform={`translate(${table.pos_x},${table.pos_y}) rotate(${table.rotation||0},${w/2},${h/2})`}
       onPointerDown={down} onPointerMove={move} onPointerUp={up}
-      style={{ cursor: editing ? 'grab' : 'pointer', touchAction: 'none' }}
-      className={isOccupied ? 'animate-[pulse-gold_2.4s_ease-in-out_infinite]' : ''}
+      onPointerCancel={cancel} onPointerLeave={cancel}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{
+        cursor: editing ? (dragging ? 'grabbing' : 'grab') : 'pointer',
+        touchAction: 'none',
+        // SVG transform-origin mid → scale "dal centro" del tavolo
+        transformBox: 'fill-box',
+        transformOrigin: 'center',
+        transition: 'opacity 250ms ease, filter 200ms ease',
+        opacity: 0,
+        filter: dragging ? 'drop-shadow(0 6px 12px rgba(212,175,55,0.4))' : 'none',
+        animation: `fp-enter 350ms cubic-bezier(0.34, 1.4, 0.64, 1) ${enterDelay} forwards`,
+      }}
     >
-      {/* Glow per occupato */}
-      {isOccupied && shape === 'circle' && (
-        <ellipse cx={w/2} cy={h/2} rx={w/2+6} ry={h/2+6} fill={st.glow} />
+      {/* Halo "in ritardo" — pulsa rosso, animazione SVG-native (NO box-shadow) */}
+      {isLate && (
+        <>
+          {shape === 'circle' ? (
+            <circle cx={w/2} cy={h/2} r={Math.max(w,h)/2 + 6}
+              fill="none" stroke="#EF4444" strokeWidth="2.2" opacity="0.55">
+              <animate attributeName="r"
+                values={`${Math.max(w,h)/2 + 6};${Math.max(w,h)/2 + 18};${Math.max(w,h)/2 + 6}`}
+                dur="1.6s" repeatCount="indefinite" />
+              <animate attributeName="opacity"
+                values="0.6;0.05;0.6" dur="1.6s" repeatCount="indefinite" />
+            </circle>
+          ) : (
+            <rect x={-8} y={-8} width={w+16} height={h+16} rx={12}
+              fill="none" stroke="#EF4444" strokeWidth="2.2" opacity="0.55">
+              <animate attributeName="opacity"
+                values="0.65;0.1;0.65" dur="1.6s" repeatCount="indefinite" />
+            </rect>
+          )}
+        </>
       )}
-      {isOccupied && shape !== 'circle' && (
-        <rect x={-6} y={-6} width={w+12} height={h+12} rx={10} fill={st.glow} />
+
+      {/* Glow soft per occupato/reserved (pulsa morbidamente) */}
+      {(isOccupied || isReserved) && shape === 'circle' && (
+        <ellipse cx={w/2} cy={h/2} rx={w/2+6} ry={h/2+6} fill={st.glow}>
+          <animate attributeName="opacity" values="0.6;0.95;0.6" dur="2.4s" repeatCount="indefinite" />
+        </ellipse>
       )}
-      {/* Sedie — toni warm ivory soft */}
-      {chairs.map((c, i) => (
-        <rect
-          key={i} x={c.cx-5} y={c.cy-5} width={10} height={10} rx={3}
-          fill={isOccupied ? '#2a2418' : '#181D22'}
-          stroke={isOccupied ? '#5c4d2a' : '#2c3137'}
-          strokeWidth="0.8"
-        />
-      ))}
-      {/* Tavolo */}
-      {shape === 'circle' ? (
-        <ellipse
-          cx={w/2} cy={h/2} rx={w/2} ry={h/2}
-          fill={st.fill}
-          stroke={selected ? '#D4AF37' : st.stroke}
-          strokeWidth={selected ? 2.5 : 1.5}
-        />
-      ) : (
-        <rect
-          x={0} y={0} width={w} height={h} rx={shape==='rect' ? 4 : 6}
-          fill={st.fill}
-          stroke={selected ? '#D4AF37' : st.stroke}
-          strokeWidth={selected ? 2.5 : 1.5}
-        />
+      {(isOccupied || isReserved) && shape !== 'circle' && (
+        <rect x={-6} y={-6} width={w+12} height={h+12} rx={10} fill={st.glow}>
+          <animate attributeName="opacity" values="0.6;0.95;0.6" dur="2.4s" repeatCount="indefinite" />
+        </rect>
       )}
-      {/* Numero tavolo */}
-      <text
-        x={w/2} y={h/2 + (seats > 0 ? -2 : 0)}
-        textAnchor="middle" dominantBaseline="middle"
-        fill="#F0E9D2" fontSize={w > 55 ? 14 : 11} fontWeight="800"
-        fontFamily="Inter, system-ui"
-      >
-        {table.table_number}
-      </text>
-      {/* Posti */}
-      <text
-        x={w/2} y={h/2 + 12}
-        textAnchor="middle" fill="rgba(240,233,210,0.42)"
-        fontSize="8" fontFamily="Inter, system-ui"
-      >
-        {table.seats}p
-      </text>
-      {/* Indicatore stato (pallino con halo) */}
-      <circle cx={w - 2} cy={4} r={5} fill={st.glow} />
-      <circle cx={w - 2} cy={4} r={3} fill={st.stroke} />
+
+      {/* Indicator alert "pulizia" — striscia diagonale animata (no colore solo!) */}
+      {isDirty && (
+        <g opacity="0.5">
+          <pattern id={`dirty-${table.id}`} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="6" stroke="#EAB308" strokeWidth="1.5" opacity="0.4" />
+          </pattern>
+          {shape === 'circle'
+            ? <ellipse cx={w/2} cy={h/2} rx={w/2-1} ry={h/2-1} fill={`url(#dirty-${table.id})`} />
+            : <rect x={1} y={1} width={w-2} height={h-2} rx={3} fill={`url(#dirty-${table.id})`} />
+          }
+        </g>
+      )}
+
+      {/* Wrapper interno con scale (hover/tap effect — NON eredita dal SVG transform parent) */}
+      <g style={{
+        transform: `scale(${visualScale})`,
+        transformBox: 'fill-box',
+        transformOrigin: 'center',
+        transition: 'transform 180ms cubic-bezier(0.34, 1.4, 0.64, 1)',
+      }}>
+        {/* Sedie con stato (più scure per occupied) */}
+        {chairs.map((c, i) => (
+          <rect
+            key={i} x={c.cx-5} y={c.cy-5} width={10} height={10} rx={3}
+            fill={isOccupied ? '#2a2418' : '#181D22'}
+            stroke={isOccupied ? '#5c4d2a' : '#2c3137'}
+            strokeWidth="0.8"
+            style={{ transition: 'fill 250ms ease, stroke 250ms ease' }}
+          />
+        ))}
+
+        {/* Tavolo (forma) */}
+        {shape === 'circle' ? (
+          <ellipse
+            cx={w/2} cy={h/2} rx={w/2} ry={h/2}
+            fill={st.fill}
+            stroke={selected ? '#D4AF37' : st.stroke}
+            strokeWidth={selected ? 3 : hover ? 2 : 1.5}
+            style={{ transition: 'fill 280ms ease, stroke 200ms ease, stroke-width 150ms ease' }}
+          />
+        ) : (
+          <rect
+            x={0} y={0} width={w} height={h} rx={shape==='rect' ? 4 : 6}
+            fill={st.fill}
+            stroke={selected ? '#D4AF37' : st.stroke}
+            strokeWidth={selected ? 3 : hover ? 2 : 1.5}
+            style={{ transition: 'fill 280ms ease, stroke 200ms ease, stroke-width 150ms ease' }}
+          />
+        )}
+
+        {/* Numero tavolo */}
+        <text
+          x={w/2} y={h/2 - 4}
+          textAnchor="middle" dominantBaseline="middle"
+          fill="#F0E9D2" fontSize={w > 55 ? 15 : 12} fontWeight="800"
+          fontFamily="Inter, system-ui"
+          style={{ pointerEvents: 'none' }}
+        >
+          {table.table_number}
+        </text>
+
+        {/* Status short (daltonici-friendly: testo SEMPRE visibile, non solo colore) */}
+        <text
+          x={w/2} y={h/2 + 8}
+          textAnchor="middle" dominantBaseline="middle"
+          fill={st.stroke} fontSize="7.5" fontWeight="800"
+          fontFamily="Inter, system-ui"
+          letterSpacing="0.8"
+          style={{ pointerEvents: 'none' }}
+        >
+          {STATUS_SHORT[table.status] || ''}
+        </text>
+
+        {/* Posti */}
+        <text
+          x={w/2} y={h/2 + 18}
+          textAnchor="middle" fill="rgba(240,233,210,0.42)"
+          fontSize="8" fontFamily="Inter, system-ui"
+          style={{ pointerEvents: 'none' }}
+        >
+          {table.seats}p
+        </text>
+
+        {/* Badge tempo (se occupato/parked) — bandina tonda sopra al tavolo */}
+        {(isOccupied || table.status === 'parked') && sinceMin !== null && sinceMin > 0 && (
+          <g style={{ pointerEvents: 'none' }}>
+            <rect
+              x={w/2 - 18} y={-12} width={36} height={16} rx={8}
+              fill="#0a0a0a"
+              stroke={isLate ? '#EF4444' : '#2c3137'}
+              strokeWidth="1"
+            />
+            <text
+              x={w/2} y={-1}
+              textAnchor="middle" dominantBaseline="middle"
+              fontSize="9.5" fontWeight="800"
+              fill={isLate ? '#EF4444' : 'rgba(240,233,210,0.7)'}
+              fontFamily="Inter, system-ui"
+              style={{ fontVariantNumeric: 'tabular-nums' }}
+            >
+              {sinceMin >= 60 ? `${Math.floor(sinceMin/60)}h${sinceMin%60}` : `${sinceMin}'`}
+            </text>
+          </g>
+        )}
+
+        {/* Indicatore status pallino con halo (alto-dx) */}
+        <circle cx={w - 2} cy={4} r={5} fill={st.glow}>
+          {(isOccupied || isReserved) && (
+            <animate attributeName="r" values="5;7;5" dur="1.6s" repeatCount="indefinite" />
+          )}
+        </circle>
+        <circle cx={w - 2} cy={4} r={3} fill={st.stroke} />
+      </g>
     </g>
   )
 }
@@ -554,9 +703,10 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
             </defs>
             <rect className="bg-layer" width={PLAN_W} height={PLAN_H} fill="url(#grid2)"/>
             <Restaurant zones={zones} />
-            {local.map(t => (
+            {local.map((t, i) => (
               <TableShape
                 key={t.id}
+                indexOrder={i}
                 table={t}
                 zone={zones.find(z => z.id === t.zone_id)}
                 selected={selected === t.id}
