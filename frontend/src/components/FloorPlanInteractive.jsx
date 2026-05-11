@@ -45,15 +45,41 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
   const isReserved = table.status === 'reserved'
   const isDirty    = table.status === 'dirty'
 
+  // Confetti particles: ogni transizione di stato genera 12 particelle che
+  // esplodono dal centro del tavolo. Colore e direzione dipendono dal tipo
+  // di transizione (apertura conto, chiusura, etc.).
+  const [confetti, setConfetti] = useState([]) // [{id, angle, distance, color, t}]
+
   // Live flash on socket-driven status change: confronta status precedente,
-  // se cambia → flash 600ms. NB: salta il primo render (mount).
+  // se cambia → flash 600ms + confetti. NB: salta il primo render (mount).
   useEffect(() => {
     if (prevStatus.current === table.status) return
     if (prevStatus.current !== undefined) {
       setStatusFlash(true)
-      const t = setTimeout(() => setStatusFlash(false), 700)
+      // Confetti palette dipendente dalla transizione
+      let palette = ['#D4AF37', '#F0E9D2'] // default oro+ivory
+      if (prevStatus.current === 'free' && table.status === 'occupied') {
+        // Apertura conto: oro+sea (celebrazione)
+        palette = ['#D4AF37', '#3E7A93', '#F0E9D2']
+      } else if (prevStatus.current === 'occupied' && table.status === 'free') {
+        // Chiusura conto (cassa): pine+sand (relax)
+        palette = ['#4A7A5C', '#C9A96E', '#F0E9D2']
+      } else if (table.status === 'reserved') {
+        palette = ['#3E7A93', '#F0E9D2']
+      }
+      const burst = Array.from({ length: 14 }, (_, i) => ({
+        id: `${Date.now()}-${i}`,
+        angle: (i / 14) * Math.PI * 2 + Math.random() * 0.3,
+        distance: 28 + Math.random() * 22, // 28-50 px
+        color: palette[i % palette.length],
+        size: 2 + Math.random() * 2,
+        t: Date.now(),
+      }))
+      setConfetti(burst)
+      const tFlash = setTimeout(() => setStatusFlash(false), 700)
+      const tConfetti = setTimeout(() => setConfetti([]), 1000)
       prevStatus.current = table.status
-      return () => clearTimeout(t)
+      return () => { clearTimeout(tFlash); clearTimeout(tConfetti) }
     }
     prevStatus.current = table.status
   }, [table.status])
@@ -242,6 +268,36 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
            di scale(1) e' invisibile. */
         animation: `fp-pop 450ms cubic-bezier(0.34, 1.4, 0.64, 1) ${enterDelay}`,
       }}>
+        {/* Confetti particles — esplosione 14 particle dal centro del tavolo
+            quando lo stato cambia (apertura/chiusura conto, riservazione). */}
+        {confetti.length > 0 && (
+          <g style={{ pointerEvents: 'none' }}>
+            {confetti.map((p) => {
+              const cx = w / 2
+              const cy = h / 2
+              const tx = cx + Math.cos(p.angle) * p.distance
+              const ty = cy + Math.sin(p.angle) * p.distance - 10 // bias verso l'alto (gravità inversa)
+              return (
+                <circle key={p.id} cx={cx} cy={cy} r={p.size}
+                  fill={p.color} opacity="0.95">
+                  <animate attributeName="cx"
+                    values={`${cx};${tx}`}
+                    dur="1000ms" repeatCount="1" fill="freeze"
+                    calcMode="spline" keySplines="0.16 1 0.3 1" />
+                  <animate attributeName="cy"
+                    values={`${cy};${ty};${ty + 18}`}
+                    keyTimes="0;0.6;1"
+                    dur="1000ms" repeatCount="1" fill="freeze"
+                    calcMode="spline" keySplines="0.16 1 0.3 1; 0.3 0 0.7 1" />
+                  <animate attributeName="opacity"
+                    values="0.95;0.95;0" dur="1000ms"
+                    keyTimes="0;0.55;1" repeatCount="1" fill="freeze" />
+                </circle>
+              )
+            })}
+          </g>
+        )}
+
         {/* Status flash overlay — pulsa oro quando arriva un cambio stato via socket */}
         {statusFlash && (
           shape === 'circle' ? (
