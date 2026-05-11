@@ -393,196 +393,343 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
 }
 
 // ─── Planimetria architettonica reale Riva Beach Salento ─────────────────────
-// Stessa struttura del FloorPlanEditor — tonalità Riva Beach (warm walls, sea blu)
+// Scala: 1 metro = 50 pixel. Origine: (60, 50) = angolo NW della Sala da Pranzo.
+// Riferimento: foto planimetria architettonica fornita dal proprietario
+// (2026-05-11). Tutte le coordinate sono derivate dalle quote reali del
+// disegno tecnico: 7.94×3.40 (sala pranzo), 5.60×3.61 (chiosco), 3.76
+// (apertura), + stima visiva delle altre quote non quotate.
 function Restaurant({ zones }) {
-  const WALL = '#0B0E11'           // canvas darker — pareti spesse
-  const WALL_LIGHT = '#181D22'      // surface-2 — riempimenti
+  const WALL = '#0B0E11'           // canvas darker — pareti portanti spesse
+  const WALL_LIGHT = '#181D22'      // surface-2 — riempimenti interni
   const ROOM_FILL = '#13181C'       // bg — pavimento sale
   const LABEL = 'rgba(240,233,210,0.42)' // text-3
   const LABEL_DIM = 'rgba(240,233,210,0.28)'
+  const QUOTE = '#D4AF37'           // oro — quote architettoniche stile CAD
+
+  // Helper quota architettonica orizzontale (linea + 2 frecce + testo numerico)
+  const HQuote = ({ x1, x2, y, label, offset = 18 }) => {
+    const yq = y - offset
+    return (
+      <g style={{ pointerEvents: 'none' }}>
+        {/* Linee di estensione verticali (dai muri alla quota) */}
+        <line x1={x1} y1={y} x2={x1} y2={yq - 4} stroke={QUOTE} strokeWidth="0.6" opacity="0.55" />
+        <line x1={x2} y1={y} x2={x2} y2={yq - 4} stroke={QUOTE} strokeWidth="0.6" opacity="0.55" />
+        {/* Linea quota con frecce */}
+        <line x1={x1} y1={yq} x2={x2} y2={yq} stroke={QUOTE} strokeWidth="0.8" opacity="0.7"
+          markerStart="url(#arrowL)" markerEnd="url(#arrowR)" />
+        {/* Label centrato */}
+        <text x={(x1+x2)/2} y={yq - 4} textAnchor="middle"
+          fill={QUOTE} fontSize="9" fontWeight="600"
+          fontFamily="Inter, system-ui" opacity="0.85"
+          style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {label}
+        </text>
+      </g>
+    )
+  }
+  // Quota verticale (specchio della HQuote)
+  const VQuote = ({ y1, y2, x, label, offset = 18 }) => {
+    const xq = x - offset
+    return (
+      <g style={{ pointerEvents: 'none' }}>
+        <line x1={x} y1={y1} x2={xq - 4} y2={y1} stroke={QUOTE} strokeWidth="0.6" opacity="0.55" />
+        <line x1={x} y1={y2} x2={xq - 4} y2={y2} stroke={QUOTE} strokeWidth="0.6" opacity="0.55" />
+        <line x1={xq} y1={y1} x2={xq} y2={y2} stroke={QUOTE} strokeWidth="0.8" opacity="0.7"
+          markerStart="url(#arrowU)" markerEnd="url(#arrowD)" />
+        <text x={xq - 4} y={(y1+y2)/2} textAnchor="middle"
+          fill={QUOTE} fontSize="9" fontWeight="600"
+          fontFamily="Inter, system-ui" opacity="0.85"
+          transform={`rotate(-90 ${xq - 4} ${(y1+y2)/2})`}
+          style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {label}
+        </text>
+      </g>
+    )
+  }
+
+  // Coordinate chiave (scala 1m=50px, origine (60,50) sala-pranzo NW)
+  // Calcolate da quote architettoniche reali + stima visiva sul resto
+  const M = 50          // 1 metro = 50 px
+  const X0 = 60         // origine x (angolo NW sala pranzo)
+  const Y0 = 50         // origine y
+  const SP_W = 7.94 * M // sala pranzo width = 397
+  const SP_H = 3.40 * M // sala pranzo height = 170
+  const CB_X = X0 + SP_W + 6 // chiosco x (muro condiviso 6px)
+  const CB_W = 5.60 * M // chiosco width = 280
+  const CB_H = 3.61 * M // chiosco height = 180.5
+  const AP_W = 3.76 * M // apertura 3.76 m = 188
+
+  // Punti chiave del bordo NETTUNO (forma irregolare)
+  // Tutti in coordinate svg assolute (X0+x*M, Y0+y*M)
+  const NX_W = X0                       // muro ovest Nettuno
+  const NY_N = Y0 + SP_H + 6            // muro nord Nettuno (sotto sala pranzo)
+  const NX_E = X0 + 10.6 * M            // muro est (verso bar, prima della diagonale)
+  const NY_S = Y0 + 12.4 * M            // muro sud Nettuno
 
   return (
     <g>
-      {/* ─── Mare lato est (tonalità sea Riva) ──────────────────────── */}
-      <rect x={1180} y={0} width={220} height={950} fill="rgba(62,122,147,0.18)" />
-      <text
-        x={1290} y={480} textAnchor="middle"
-        fill="#3E7A93" fontSize="28" fontWeight="800" fontStyle="italic"
+      {/* ─── Marker frecce per quote architettoniche (defs locali) ───── */}
+      <defs>
+        <marker id="arrowL" viewBox="0 0 10 10" refX="2" refY="5"
+          markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 9 2 L 2 5 L 9 8" fill="none" stroke={QUOTE} strokeWidth="1.2" />
+        </marker>
+        <marker id="arrowR" viewBox="0 0 10 10" refX="8" refY="5"
+          markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M 1 2 L 8 5 L 1 8" fill="none" stroke={QUOTE} strokeWidth="1.2" />
+        </marker>
+        <marker id="arrowU" viewBox="0 0 10 10" refX="5" refY="2"
+          markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 2 9 L 5 2 L 8 9" fill="none" stroke={QUOTE} strokeWidth="1.2" />
+        </marker>
+        <marker id="arrowD" viewBox="0 0 10 10" refX="5" refY="8"
+          markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M 2 1 L 5 8 L 8 1" fill="none" stroke={QUOTE} strokeWidth="1.2" />
+        </marker>
+        {/* Pattern tratteggio per area scoperta (Bar/dehor centrale) */}
+        <pattern id="dashed-floor" width="14" height="14" patternUnits="userSpaceOnUse">
+          <path d="M-2,4 l8,-8 M0,14 l14,-14 M10,16 l8,-8" stroke="rgba(232,219,180,0.06)" strokeWidth="1" />
+        </pattern>
+      </defs>
+
+      {/* ─── MARE est (tonalità sea Riva) ──────────────────────────── */}
+      <rect x={1280} y={0} width={220} height={1080} fill="rgba(62,122,147,0.18)" />
+      <text x={1390} y={540} textAnchor="middle"
+        fill="#3E7A93" fontSize="32" fontWeight="800" fontStyle="italic"
         fontFamily="Fraunces, Georgia, serif"
-        transform="rotate(90,1290,480)"
-        letterSpacing="8"
-        opacity="0.6"
-      >
+        transform="rotate(90,1390,540)" letterSpacing="10" opacity="0.55">
         Mare
       </text>
-      {/* Onde stilizzate */}
-      {[100,220,340,460,580,700,820].map(y => (
-        <path
-          key={y}
-          d={`M 1180 ${y} Q 1215 ${y-12} 1250 ${y} Q 1285 ${y+12} 1290 ${y}`}
-          stroke="#3E7A93" strokeWidth="1.5" fill="none" opacity="0.55"
-        />
+      {[80,200,320,440,560,680,800,920].map(y => (
+        <path key={y}
+          d={`M 1280 ${y} Q 1315 ${y-12} 1350 ${y} Q 1385 ${y+12} 1390 ${y}`}
+          stroke="#3E7A93" strokeWidth="1.5" fill="none" opacity="0.55" />
       ))}
 
-      {/* ─── SALA DA PRANZO (top-left, 7.94m × 3.40m) ────────────── */}
-      <rect x={60} y={50} width={476} height={204} fill={ROOM_FILL} stroke={WALL} strokeWidth="6" />
-      <text
-        x={298} y={150} textAnchor="middle"
-        fill={LABEL} fontSize="16" fontWeight="700"
-        fontFamily="Fraunces, Georgia, serif"
-      >
+      {/* ════════════════════════════════════════════════════════════
+          PIANO TERRA — interno (sale chiuse con muri portanti)
+          ════════════════════════════════════════════════════════════ */}
+
+      {/* SALA DA PRANZO (7.94 × 3.40 m) */}
+      <rect x={X0} y={Y0} width={SP_W} height={SP_H}
+        fill={ROOM_FILL} stroke={WALL} strokeWidth="6" />
+      <text x={X0 + SP_W/2} y={Y0 + SP_H/2 - 6} textAnchor="middle"
+        fill={LABEL} fontSize="15" fontWeight="700"
+        fontFamily="Fraunces, Georgia, serif" letterSpacing="2">
         SALA DA PRANZO
       </text>
-      <text x={298} y={170} textAnchor="middle" fill={LABEL_DIM} fontSize="9" fontFamily="Inter, system-ui">
-        7.94 × 3.40
+      <text x={X0 + SP_W/2} y={Y0 + SP_H/2 + 10} textAnchor="middle"
+        fill={LABEL_DIM} fontSize="9" fontFamily="Inter, system-ui">
+        7.94 × 3.40 m
       </text>
 
-      {/* ─── CHIOSCO BAR (top-right, 5.60m × 3.61m) ──────────────── */}
-      <rect x={560} y={50} width={336} height={217} fill={ROOM_FILL} stroke={WALL} strokeWidth="6" />
-      <text
-        x={728} y={150} textAnchor="middle"
-        fill={LABEL} fontSize="16" fontWeight="700"
-        fontFamily="Fraunces, Georgia, serif"
-      >
+      {/* CHIOSCO BAR (5.60 × 3.61 m) — accostato alla sala pranzo */}
+      <rect x={CB_X} y={Y0} width={CB_W} height={CB_H}
+        fill={ROOM_FILL} stroke={WALL} strokeWidth="6" />
+      <text x={CB_X + CB_W/2} y={Y0 + CB_H/2 - 6} textAnchor="middle"
+        fill={LABEL} fontSize="15" fontWeight="700"
+        fontFamily="Fraunces, Georgia, serif" letterSpacing="2">
         CHIOSCO BAR
       </text>
-      <text x={728} y={170} textAnchor="middle" fill={LABEL_DIM} fontSize="9" fontFamily="Inter, system-ui">
-        5.60 × 3.61
+      <text x={CB_X + CB_W/2} y={Y0 + CB_H/2 + 10} textAnchor="middle"
+        fill={LABEL_DIM} fontSize="9" fontFamily="Inter, system-ui">
+        5.60 × 3.61 m
       </text>
 
-      {/* Apertura 3.76m verso NETTUNO */}
-      <rect x={108} y={250} width={226} height={8} fill={WALL} />
+      {/* APERTURA 3.76 m sotto sala pranzo (accesso a NETTUNO) */}
+      {/* Il muro inferiore della sala pranzo NON è continuo: c'è un'apertura
+          larga 3.76m centrata verso l'interno della sala. */}
+      <line x1={X0} y1={Y0 + SP_H} x2={X0 + (7.94-3.76)*M/2} y2={Y0 + SP_H}
+        stroke={WALL} strokeWidth="6" />
+      <line x1={X0 + (7.94+3.76)*M/2} y1={Y0 + SP_H} x2={X0 + SP_W} y2={Y0 + SP_H}
+        stroke={WALL} strokeWidth="6" />
 
-      {/* ─── BAR area centrale + bancone con sgabelli (sand tone) ── */}
-      <text
-        x={620} y={420} fill={LABEL} fontSize="20" fontWeight="600"
-        fontFamily="Fraunces, Georgia, serif"
-      >
-        BAR
-      </text>
-      {/* Bancone bar — tonalità sand+terracotta */}
-      <rect x={500} y={290} width={250} height={60} fill="rgba(184,92,60,0.32)" stroke="#B85C3C" strokeWidth="2" rx="4" />
-      {[0,1,2,3,4,5].map(i => (
-        <circle key={`bs${i}`} cx={530 + i*38} cy={370} r={7} fill="#181D22" stroke="#2c3137" strokeWidth="1" />
-      ))}
-
-      {/* ─── NETTUNO (sala interna principale) ────────────────────── */}
+      {/* ════════════════════════════════════════════════════════════
+          NETTUNO — sala interna principale (forma irregolare)
+          ════════════════════════════════════════════════════════════
+          Bordo: NW da angolo SW sala-pranzo, scende a sud, va a est
+          fino al confine col VIP grande (diagonale), risale verso il
+          BAR centrale, poi all'apertura sotto sala-pranzo. */}
       <path
         d={`
-          M 60 254
-          L 60 700
-          L 250 700
-          L 250 880
-          L 540 880
-          L 540 700
-          L 800 700
-          L 800 480
-          L 540 480
-          L 540 254
-          L 60 254
+          M ${NX_W} ${NY_N}
+          L ${NX_W} ${NY_S}
+          L ${X0 + 8.5*M} ${NY_S}
+          L ${X0 + 11.5*M} ${Y0 + 9*M}
+          L ${X0 + 11.0*M} ${Y0 + 5*M}
+          L ${X0 + 9.8*M} ${Y0 + 4.6*M}
+          L ${NX_W} ${NY_N}
           Z
         `}
-        fill={ROOM_FILL} stroke={WALL} strokeWidth="5"
-      />
-      <text
-        x={350} y={520} textAnchor="middle"
-        fill={LABEL} fontSize="34" fontWeight="700"
-        fontFamily="Fraunces, Georgia, serif"
-        letterSpacing="6"
-      >
+        fill={ROOM_FILL} stroke={WALL} strokeWidth="5" />
+
+      <text x={X0 + 4*M} y={Y0 + 8*M} textAnchor="middle"
+        fill={LABEL} fontSize="40" fontWeight="700"
+        fontFamily="Fraunces, Georgia, serif" letterSpacing="8">
         NETTUNO
       </text>
 
-      {/* ─── VIP grande (terrazza ottagonale fronte mare) ─────────── */}
-      <g transform="translate(880, 350) rotate(-20, 150, 200)">
+      {/* ════════════════════════════════════════════════════════════
+          BAR centrale — area aperta/dehor (tra Nettuno e VIP grande)
+          ════════════════════════════════════════════════════════════ */}
+      <path
+        d={`
+          M ${X0 + 9.8*M} ${Y0 + 4.6*M}
+          L ${X0 + 11.0*M} ${Y0 + 5*M}
+          L ${X0 + 11.5*M} ${Y0 + 9*M}
+          L ${X0 + 14*M} ${Y0 + 7*M}
+          L ${X0 + 14*M} ${Y0 + 4*M}
+          L ${X0 + 11.2*M} ${Y0 + 4*M}
+          Z
+        `}
+        fill="url(#dashed-floor)" stroke="rgba(184,92,60,0.55)"
+        strokeWidth="1.5" strokeDasharray="6 4" />
+
+      <text x={X0 + 12.5*M} y={Y0 + 5.5*M} textAnchor="middle"
+        fill={LABEL} fontSize="22" fontWeight="600"
+        fontFamily="Fraunces, Georgia, serif" letterSpacing="4">
+        BAR
+      </text>
+
+      {/* Bancone bar + 6 sgabelli — tono terracotta */}
+      <rect x={X0 + 11.3*M} y={Y0 + 6*M} width={2.4*M} height={0.6*M}
+        fill="rgba(184,92,60,0.40)" stroke="#B85C3C" strokeWidth="2" rx="4" />
+      {[0,1,2,3,4,5].map(i => (
+        <circle key={`bs${i}`}
+          cx={X0 + 11.5*M + i*0.4*M} cy={Y0 + 6.95*M}
+          r={7} fill="#181D22" stroke="#2c3137" strokeWidth="1" />
+      ))}
+
+      {/* ════════════════════════════════════════════════════════════
+          VIP GRANDE — terrazza ottagonale fronte mare (ruotata -30°)
+          ════════════════════════════════════════════════════════════
+          Forma: ottagono allungato a "T" con un lato aperto verso il
+          Bar (lato NW). Il muro nord-ovest e' interrotto per accesso. */}
+      <g transform={`translate(${X0 + 11.5*M}, ${Y0 + 6*M}) rotate(-30)`}>
+        {/* Bordo principale dell'ottagono (con lato NW aperto) */}
         <path
           d={`
-            M 0 60
-            L 80 0
-            L 240 0
-            L 300 60
-            L 300 340
-            L 240 400
-            L 80 400
-            L 0 340
-            Z
+            M 60 0
+            L 220 0
+            L 280 60
+            L 280 280
+            L 220 340
+            L 60 340
+            L 0 280
+            L 0 80
           `}
           fill={ROOM_FILL} stroke={WALL} strokeWidth="5"
-        />
-        {/* badge gold "VIP" */}
-        <text
-          x={150} y={210} textAnchor="middle"
-          fill="#D4AF37" fontSize="32" fontWeight="700"
-          fontFamily="Fraunces, Georgia, serif"
-          letterSpacing="4"
-        >
+          strokeLinejoin="round" strokeLinecap="round" />
+        {/* Lato NW (apertura verso Bar) tratteggiato */}
+        <line x1="0" y1="80" x2="60" y2="0" stroke={WALL} strokeWidth="2"
+          strokeDasharray="6 4" opacity="0.5" />
+
+        <text x="140" y="180" textAnchor="middle"
+          fill="#D4AF37" fontSize="34" fontWeight="700"
+          fontFamily="Fraunces, Georgia, serif" letterSpacing="5">
           VIP
+        </text>
+        <text x="140" y="205" textAnchor="middle"
+          fill="rgba(212,175,55,0.55)" fontSize="9"
+          fontFamily="Inter, system-ui" letterSpacing="2">
+          TERRAZZA MARE
         </text>
       </g>
 
-      {/* ─── VIP piccola (basso-sx) ──────────────────────────────── */}
-      <g transform="translate(60, 760)">
+      {/* ════════════════════════════════════════════════════════════
+          VIP PICCOLO — basso-sx (sala secondaria con angoli smussati)
+          ════════════════════════════════════════════════════════════ */}
+      <g transform={`translate(${X0 + 0.5*M}, ${Y0 + 13.5*M})`}>
         <path
           d={`
             M 0 30
             L 30 0
-            L 180 0
-            L 200 25
-            L 200 130
-            L 180 160
-            L 30 160
-            L 0 130
+            L 200 0
+            L 220 25
+            L 220 140
+            L 200 165
+            L 30 165
+            L 0 140
             Z
           `}
           fill={ROOM_FILL} stroke={WALL} strokeWidth="4"
-        />
-        <text
-          x={100} y={88} textAnchor="middle"
-          fill="#D4AF37" fontSize="20" fontWeight="700"
-          fontFamily="Fraunces, Georgia, serif"
-          letterSpacing="3"
-        >
+          strokeLinejoin="round" strokeLinecap="round" />
+        <text x="110" y="92" textAnchor="middle"
+          fill="#D4AF37" fontSize="22" fontWeight="700"
+          fontFamily="Fraunces, Georgia, serif" letterSpacing="3">
           VIP
         </text>
       </g>
 
-      {/* ─── Cassa ────────────────────────────────────────────────── */}
-      <rect x={15} y={50} width={40} height={30} fill={WALL_LIGHT} stroke="#2c3137" strokeWidth="1" rx="3" />
-      <text x={35} y={68} textAnchor="middle" fill={LABEL} fontSize="8" fontWeight="600" fontFamily="Inter, system-ui">CASSA</text>
+      {/* ════════════════════════════════════════════════════════════
+          SERVIZI: Cassa, WC ×2, Cucina, Veranda
+          ════════════════════════════════════════════════════════════ */}
+      {/* Cassa (angolo NW) */}
+      <rect x={15} y={Y0} width={40} height={30}
+        fill={WALL_LIGHT} stroke="#2c3137" strokeWidth="1" rx="3" />
+      <text x={35} y={Y0 + 18} textAnchor="middle"
+        fill={LABEL} fontSize="8" fontWeight="600" fontFamily="Inter, system-ui">
+        CASSA
+      </text>
 
-      {/* ─── WC ───────────────────────────────────────────────────── */}
-      <rect x={15} y={290} width={40} height={28} fill={WALL_LIGHT} stroke="#2c3137" strokeWidth="1" rx="3" />
-      <text x={35} y={308} textAnchor="middle" fill={LABEL_DIM} fontSize="8" fontFamily="Inter, system-ui">WC</text>
-      <rect x={15} y={325} width={40} height={28} fill={WALL_LIGHT} stroke="#2c3137" strokeWidth="1" rx="3" />
-      <text x={35} y={343} textAnchor="middle" fill={LABEL_DIM} fontSize="8" fontFamily="Inter, system-ui">WC</text>
+      {/* WC ×2 (lato ovest, sotto cassa) */}
+      <rect x={15} y={Y0 + 4.8*M} width={40} height={28}
+        fill={WALL_LIGHT} stroke="#2c3137" strokeWidth="1" rx="3" />
+      <text x={35} y={Y0 + 4.8*M + 18} textAnchor="middle"
+        fill={LABEL_DIM} fontSize="8" fontFamily="Inter, system-ui">
+        WC
+      </text>
+      <rect x={15} y={Y0 + 5.5*M} width={40} height={28}
+        fill={WALL_LIGHT} stroke="#2c3137" strokeWidth="1" rx="3" />
+      <text x={35} y={Y0 + 5.5*M + 18} textAnchor="middle"
+        fill={LABEL_DIM} fontSize="8" fontFamily="Inter, system-ui">
+        WC
+      </text>
 
-      {/* ─── Cucina (dietro al chiosco bar) ──────────────────────── */}
-      <rect x={900} y={50} width={120} height={217} fill={WALL_LIGHT} stroke={WALL} strokeWidth="3" rx="2" />
-      <text
-        x={960} y={150} textAnchor="middle"
-        fill={LABEL} fontSize="13" fontWeight="600"
-        fontFamily="Fraunces, Georgia, serif"
-      >
+      {/* CUCINA (dietro chiosco bar, comunicante) */}
+      <rect x={CB_X + CB_W + 4} y={Y0} width={2.4*M} height={CB_H}
+        fill={WALL_LIGHT} stroke={WALL} strokeWidth="3" rx="2" />
+      <text x={CB_X + CB_W + 4 + 1.2*M} y={Y0 + CB_H/2 + 4}
+        textAnchor="middle" fill={LABEL} fontSize="13" fontWeight="600"
+        fontFamily="Fraunces, Georgia, serif" letterSpacing="2">
         CUCINA
       </text>
 
-      {/* ─── Veranda fronte mare (tono pine) ──────────────────────── */}
-      <rect x={810} y={280} width={70} height={420} fill="rgba(74,122,92,0.10)" stroke="#4A7A5C" strokeWidth="1" rx="2" opacity="0.7" />
-      <text
-        x={845} y={490} textAnchor="middle"
-        fill="#4A7A5C" fontSize="11" fontWeight="600"
+      {/* VERANDA fronte mare (tono pine) */}
+      <rect x={CB_X + CB_W + 4} y={Y0 + CB_H + 10}
+        width={1.4*M} height={8*M}
+        fill="rgba(74,122,92,0.10)" stroke="#4A7A5C" strokeWidth="1"
+        rx="2" opacity="0.75" />
+      <text x={CB_X + CB_W + 4 + 0.7*M} y={Y0 + CB_H + 10 + 4*M}
+        textAnchor="middle" fill="#4A7A5C" fontSize="11" fontWeight="600"
         fontFamily="Fraunces, Georgia, serif"
-        transform="rotate(-90,845,490)"
-        opacity="0.8"
-      >
+        transform={`rotate(-90 ${CB_X + CB_W + 4 + 0.7*M} ${Y0 + CB_H + 10 + 4*M})`}
+        opacity="0.85" letterSpacing="3">
         VERANDA
       </text>
+
+      {/* ════════════════════════════════════════════════════════════
+          QUOTE ARCHITETTONICHE — stile CAD oro
+          ════════════════════════════════════════════════════════════ */}
+      {/* Sala pranzo: 7.94m larghezza (sopra) + 3.40m altezza (sx) */}
+      <HQuote x1={X0} x2={X0 + SP_W} y={Y0} label="7.94" offset={22} />
+      <VQuote y1={Y0} y2={Y0 + SP_H} x={X0} label="3.40" offset={22} />
+
+      {/* Chiosco bar: 5.60m larghezza (sopra) + 3.61m altezza (dx) */}
+      <HQuote x1={CB_X} x2={CB_X + CB_W} y={Y0} label="5.60" offset={22} />
+      <VQuote y1={Y0} y2={Y0 + CB_H} x={CB_X + CB_W} label="3.61" offset={-22} />
+
+      {/* Apertura 3.76m (sotto sala pranzo) */}
+      <HQuote
+        x1={X0 + (7.94-3.76)*M/2}
+        x2={X0 + (7.94+3.76)*M/2}
+        y={Y0 + SP_H} label="3.76" offset={-22} />
     </g>
   )
 }
 
-const PLAN_W = 1450
-const PLAN_H = 950
+const PLAN_W = 1500
+const PLAN_H = 1080
 
 export default function FloorPlanInteractive({ tables, zones, onTableClick, canEdit, onRefresh, spotlightZoneId = null }) {
   const { toast } = useToast()
