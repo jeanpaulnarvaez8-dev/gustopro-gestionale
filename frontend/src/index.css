@@ -156,14 +156,25 @@ html, body, #root { height: 100%; }
    FloorPlan animations — SVG-friendly
    ───────────────────────────────────────────────────────────────── */
 
-/* Entrata "stagger" dei tavoli al mount: scale + fade dal centro.
-   Compatibile con SVG <g> grazie a transform-box: fill-box.
-   `fp-enter` sostituisce `flash-gold` per i nodi SVG (le keyframes con
-   box-shadow non rendono dentro SVG). */
+/* Entrata "stagger" dei tavoli al mount: solo OPACITY sul <g> parent.
+   ⚠️ NON usare `transform` qui: il <g> parent ha gia' l'attribute SVG
+   `transform="translate(x,y) rotate(...)"`. Una CSS keyframe con
+   `transform: scale()` lo sovrascriverebbe e i tavoli finirebbero
+   tutti a coords (0,0) sovrapposti. Lo scale del "pop" lo applichiamo
+   in un sub-<g> interno con `fp-pop` qui sotto. */
 @keyframes fp-enter {
-  0%   { opacity: 0; transform: scale(0.6); }
-  60%  { opacity: 1; transform: scale(1.06); }
-  100% { opacity: 1; transform: scale(1); }
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Scale "pop" dell'entrata, applicato al sub-<g> interno (che NON ha
+   transform SVG attribute). Si compone con `scale(visualScale)` del JS:
+   il sub-<g> interno deve essere wrappato in un altro sub-<g> per non
+   avere conflitti. */
+@keyframes fp-pop {
+  0%   { transform: scale(0.6); }
+  60%  { transform: scale(1.06); }
+  100% { transform: scale(1); }
 }
 
 /* Flash quando il tavolo cambia stato in realtime via socket.io. */

@@ -225,12 +225,18 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
         </g>
       )}
 
-      {/* Wrapper interno con scale (hover/tap effect — NON eredita dal SVG transform parent) */}
+      {/* Wrapper interno con scale (hover/tap + entry "pop"). NB: il pop
+          animation modifica solo `scale` (no translate), quindi non rompe
+          il transform del <g> parent. Si compone con visualScale via JS. */}
       <g style={{
         transform: `scale(${visualScale})`,
         transformBox: 'fill-box',
         transformOrigin: 'center',
         transition: 'transform 180ms cubic-bezier(0.34, 1.4, 0.64, 1)',
+        /* NO `forwards` / `both`: dopo l'animation, lo style ritorna a
+           `scale(visualScale)` inline → hover/tap continuano a funzionare.
+           Visivo: nessun "flash" perché visualScale default = 1 = end keyframe. */
+        animation: `fp-pop 450ms cubic-bezier(0.34, 1.4, 0.64, 1) ${enterDelay}`,
       }}>
         {/* Status flash overlay — pulsa oro quando arriva un cambio stato via socket */}
         {statusFlash && (
