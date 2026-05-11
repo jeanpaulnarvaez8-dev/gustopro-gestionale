@@ -16,8 +16,17 @@ export function connectSocket(token) {
     auth: { token },
     transports: ['websocket', 'polling'],
     autoConnect: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
+    // Reconnection con backoff ESPONENZIALE:
+    //   delay 1s → 2s → 4s → 8s → max 30s
+    //   randomization 0.5 (jitter ±50%) per evitare thundering herd
+    // Infiniti tentativi: il cameriere non perde mai la connessione, anche
+    // se WiFi cade per 10 minuti.
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,         // base delay 1s
+    reconnectionDelayMax: 30_000,    // max 30s tra tentativi
+    randomizationFactor: 0.5,        // jitter ±50%
+    timeout: 10_000,                 // 10s per ogni tentativo
   });
 
   return socket;

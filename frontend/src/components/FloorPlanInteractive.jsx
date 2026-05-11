@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Move, Save, Plus, Minus } from 'lucide-react'
 import { tablesAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { playUrgentBeep } from '../lib/kdsBeep'
 
 const GRID = 10
 const snap = v => Math.round(v / GRID) * GRID
@@ -25,7 +26,7 @@ const STATUS_SHORT = {
   parked:   'WAIT',
 }
 
-function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrder = 0, dimmed = false }) {
+function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrder = 0, dimmed = false, alertLevel = 'none' }) {
   const [dragging, setDragging] = useState(false)
   const [hover, setHover] = useState(false)
   const [tapping, setTapping] = useState(false)
@@ -106,6 +107,21 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
   })()
   // Soglia "in ritardo": occupato da > 30 min senza ordine recente → halo rosso
   const isLate = isOccupied && sinceMin !== null && sinceMin >= 30
+
+  // Alert escalation: service alert con manager_25min su questo tavolo →
+  // halo rosso MASSIMO pulsante (>= rispetto a isLate) per attirare attenzione
+  // istantanea. Beep urgente al primo render con alertLevel === 'escalation'.
+  const isEscalation = alertLevel === 'escalation'
+  const isWarnAlert  = alertLevel === 'warn'
+
+  // Beep urgente quando passa da NO-escalation a SI-escalation (one-shot per transition)
+  const prevAlertLevel = useRef(alertLevel)
+  useEffect(() => {
+    if (prevAlertLevel.current !== 'escalation' && alertLevel === 'escalation') {
+      playUrgentBeep()
+    }
+    prevAlertLevel.current = alertLevel
+  }, [alertLevel])
 
   // Sedie attorno al tavolo
   const chairs = []
@@ -227,6 +243,69 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
             </rect>
           )}
         </>
+      )}
+
+      {/* Halo ESCALATION — service alert manager_25min su questo tavolo.
+          Piu' aggressivo di isLate: 2 anelli concentrici, dur 1s (faster),
+          opacity 0.8, strokeWidth 3.5. Beep urgente al trigger (vedi useEffect). */}
+      {isEscalation && (
+        <>
+          {shape === 'circle' ? (
+            <>
+              <circle cx={w/2} cy={h/2} r={Math.max(w,h)/2 + 4}
+                fill="none" stroke="#EF4444" strokeWidth="3.5" opacity="0.85">
+                <animate attributeName="r"
+                  values={`${Math.max(w,h)/2+4};${Math.max(w,h)/2+22};${Math.max(w,h)/2+4}`}
+                  dur="1s" repeatCount="indefinite" />
+                <animate attributeName="opacity"
+                  values="0.85;0;0.85" dur="1s" repeatCount="indefinite" />
+              </circle>
+              <circle cx={w/2} cy={h/2} r={Math.max(w,h)/2 + 4}
+                fill="none" stroke="#EF4444" strokeWidth="3.5" opacity="0.85">
+                <animate attributeName="r"
+                  values={`${Math.max(w,h)/2+4};${Math.max(w,h)/2+22};${Math.max(w,h)/2+4}`}
+                  dur="1s" begin="0.5s" repeatCount="indefinite" />
+                <animate attributeName="opacity"
+                  values="0.85;0;0.85" dur="1s" begin="0.5s" repeatCount="indefinite" />
+              </circle>
+            </>
+          ) : (
+            <rect x={-10} y={-10} width={w+20} height={h+20} rx={14}
+              fill="none" stroke="#EF4444" strokeWidth="3.5" opacity="0.85">
+              <animate attributeName="opacity"
+                values="0.9;0.1;0.9" dur="1s" repeatCount="indefinite" />
+            </rect>
+          )}
+          {/* Badge "ALERT" sopra il tavolo */}
+          <g style={{ pointerEvents: 'none' }}>
+            <rect x={w/2 - 22} y={-30} width={44} height={14} rx={7}
+              fill="#EF4444" />
+            <text x={w/2} y={-20} textAnchor="middle" dominantBaseline="middle"
+              fontSize="9" fontWeight="800" fill="#FFF"
+              fontFamily="Inter, system-ui" letterSpacing="0.5">
+              ALERT
+              <animate attributeName="opacity"
+                values="1;0.4;1" dur="1s" repeatCount="indefinite" />
+            </text>
+          </g>
+        </>
+      )}
+
+      {/* Halo WARN (alert non escalation) — più morbido, ambra */}
+      {isWarnAlert && !isEscalation && (
+        shape === 'circle' ? (
+          <circle cx={w/2} cy={h/2} r={Math.max(w,h)/2 + 5}
+            fill="none" stroke="#EAB308" strokeWidth="2.5" opacity="0.65">
+            <animate attributeName="opacity"
+              values="0.7;0.2;0.7" dur="2s" repeatCount="indefinite" />
+          </circle>
+        ) : (
+          <rect x={-7} y={-7} width={w+14} height={h+14} rx={11}
+            fill="none" stroke="#EAB308" strokeWidth="2.5" opacity="0.65">
+            <animate attributeName="opacity"
+              values="0.7;0.2;0.7" dur="2s" repeatCount="indefinite" />
+          </rect>
+        )
       )}
 
       {/* Glow soft per occupato/reserved (pulsa morbidamente) */}
@@ -828,7 +907,7 @@ function Restaurant({ zones }) {
 const PLAN_W = 1500
 const PLAN_H = 1080
 
-export default function FloorPlanInteractive({ tables, zones, onTableClick, canEdit, onRefresh, spotlightZoneId = null }) {
+export default function FloorPlanInteractive({ tables, zones, onTableClick, canEdit, onRefresh, spotlightZoneId = null, serviceAlerts = [] }) {
   const { toast } = useToast()
   const containerRef = useRef(null)
   const [zoom, setZoom] = useState(1)
@@ -1113,19 +1192,34 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
               )
             })()}
 
-            {local.map((t, i) => (
-              <TableShape
-                key={t.id}
-                indexOrder={i}
-                table={t}
-                zone={zones.find(z => z.id === t.zone_id)}
-                selected={selected === t.id}
-                onSelect={handleTableSelect}
-                onDrag={handleDrag}
-                editing={editing}
-                dimmed={spotlightZoneId != null && t.zone_id !== spotlightZoneId}
-              />
-            ))}
+            {local.map((t, i) => {
+              // Calcola il "peggior" alert su questo tavolo:
+              // - escalation: il piatto e' lì da >25min (urgente!)
+              // - warn: >20min food / >5min beverage
+              const alertsHere = serviceAlerts.filter(
+                (a) => a.tableNumber === t.table_number ||
+                       a.tableId === t.id
+              )
+              const alertLevel = alertsHere.some((a) => a.alertType === 'manager_25min' || a.elapsedMinutes >= 25)
+                ? 'escalation'
+                : alertsHere.length > 0
+                ? 'warn'
+                : 'none'
+              return (
+                <TableShape
+                  key={t.id}
+                  indexOrder={i}
+                  table={t}
+                  zone={zones.find(z => z.id === t.zone_id)}
+                  selected={selected === t.id}
+                  onSelect={handleTableSelect}
+                  onDrag={handleDrag}
+                  editing={editing}
+                  dimmed={spotlightZoneId != null && t.zone_id !== spotlightZoneId}
+                  alertLevel={alertLevel}
+                />
+              )
+            })}
           </g>
         </svg>
       </div>

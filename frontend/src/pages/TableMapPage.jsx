@@ -332,6 +332,7 @@ export default function TableMapPage() {
                     canEdit={false /* niente edit da mobile: schermo troppo piccolo */}
                     onRefresh={loadData}
                     spotlightZoneId={user?.role === 'waiter' ? activeZone : null}
+                    serviceAlerts={serviceAlerts}
                   />
                 )}
               </div>
@@ -345,10 +346,10 @@ export default function TableMapPage() {
                 onTableClick={handleNavigate}
                 canEdit={canEdit}
                 onRefresh={loadData}
-                /* Spotlight (sbiadisce le zone non attive): solo per camerieri,
-                   che hanno UNA zona assegnata. Admin/manager vedono tutto
-                   indistinto perche' supervisionano. */
                 spotlightZoneId={user?.role === 'waiter' ? activeZone : null}
+                /* Service alerts realtime: TableShape mostra halo escalation
+                   rosso + beep per tavoli con piatti pronti da troppo. */
+                serviceAlerts={serviceAlerts}
               />
             </div>
           </>
