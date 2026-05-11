@@ -267,24 +267,7 @@ BAD_IDEM=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/orders" \
 check_eq "Idempotency-Key non UUID → 400" "$BAD_IDEM" "400"
 
 # ════════════════════════════════════════════════════════════════════
-section "11. Rate limiting (login)"
-# ════════════════════════════════════════════════════════════════════
-# 6 login con PIN sbagliato rapidi → almeno l'ultimo deve essere 429
-HIT_429=false
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/login" \
-    -H 'Content-Type: application/json' \
-    -d '{"username":"admin","pin":"9999"}')
-  if [ "$CODE" = "429" ]; then HIT_429=true; break; fi
-done
-if [ "$HIT_429" = true ]; then
-  ok "Rate limit attivo su /auth/login" "429 dopo brute-force"
-else
-  fail "Rate limit /auth/login" "non e' scattato dopo 10 tentativi"
-fi
-
-# ════════════════════════════════════════════════════════════════════
-section "12. Backend: containers + logs"
+section "11. Backend: containers + logs"
 # ════════════════════════════════════════════════════════════════════
 CONTAINERS_UP=$(ssh -i ~/.ssh/qubitrex-deploy gustopro@178.104.106.143 \
   "docker ps --filter name=gestionale --format '{{.Names}}'" | wc -l | tr -d ' ')
@@ -301,7 +284,7 @@ BACKEND_ERRORS=$(ssh -i ~/.ssh/qubitrex-deploy gustopro@178.104.106.143 \
 ok "Backend log accessibile" "level 50+ entries: $BACKEND_ERRORS"
 
 # ════════════════════════════════════════════════════════════════════
-section "13. Database + pg_stat_statements"
+section "12. Database + pg_stat_statements"
 # ════════════════════════════════════════════════════════════════════
 PG_VERSION=$(ssh -i ~/.ssh/qubitrex-deploy gustopro@178.104.106.143 \
   "docker exec gestionale-postgres psql -U gustopro -d gustopro -tAc 'SELECT version()'" 2>/dev/null)
@@ -324,7 +307,7 @@ SLOW_QUERIES=$(ssh -i ~/.ssh/qubitrex-deploy gustopro@178.104.106.143 \
 check_lte "Query con mean_exec_time > 100ms" "$SLOW_QUERIES" "5"
 
 # ════════════════════════════════════════════════════════════════════
-section "14. Backup + auto-deploy + cron"
+section "13. Backup + auto-deploy + cron"
 # ════════════════════════════════════════════════════════════════════
 BACKUP_COUNT=$(ssh -i ~/.ssh/qubitrex-deploy gustopro@178.104.106.143 \
   "ls /home/gustopro/backups/gustopro_*.sql.gz 2>/dev/null | wc -l")
@@ -346,7 +329,7 @@ CRON_ENTRIES=$(ssh -i ~/.ssh/qubitrex-deploy gustopro@178.104.106.143 'crontab -
 check_gte "Cron entries (backup/deploy/offsite) ≥ 3" "$CRON_ENTRIES" "3"
 
 # ════════════════════════════════════════════════════════════════════
-section "15. Auto-deploy infrastructure"
+section "14. Auto-deploy infrastructure"
 # ════════════════════════════════════════════════════════════════════
 DEPLOY_LOG_EXISTS=$(ssh -i ~/.ssh/qubitrex-deploy gustopro@178.104.106.143 \
   "test -f /home/gustopro/logs/auto-deploy.log && echo yes || echo no")
@@ -357,6 +340,29 @@ LIVE_HEAD=$(ssh -i ~/.ssh/qubitrex-deploy gustopro@178.104.106.143 \
   "cd /home/gustopro/app && git rev-parse --short HEAD")
 LOCAL_HEAD=$(cd /Users/jeanpaulnarvaez/gustopro-gestionale && git rev-parse --short HEAD)
 check_eq "VPS commit = locale commit" "$LIVE_HEAD" "$LOCAL_HEAD"
+
+# ════════════════════════════════════════════════════════════════════
+section "15. Rate limiting (login) — ESEGUITO PER ULTIMO"
+# ════════════════════════════════════════════════════════════════════
+# ⚠️ ATTENZIONE: questo test esaurisce il bucket rate-limit (5 tentativi /
+# 15min per IP). Tenerlo PER ULTIMO evita di compromettere i test che usano
+# login. Skip con SKIP_RATELIMIT=1 se ri-esegui la suite entro 15min.
+if [ "${SKIP_RATELIMIT:-0}" = "1" ]; then
+  echo "  ⊘ skip (SKIP_RATELIMIT=1)"
+else
+  HIT_429=false
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/login" \
+      -H 'Content-Type: application/json' \
+      -d '{"username":"admin","pin":"9999"}')
+    if [ "$CODE" = "429" ]; then HIT_429=true; break; fi
+  done
+  if [ "$HIT_429" = true ]; then
+    ok "Rate limit attivo su /auth/login" "429 dopo brute-force"
+  else
+    fail "Rate limit /auth/login" "non e' scattato dopo 10 tentativi"
+  fi
+fi
 
 # ════════════════════════════════════════════════════════════════════
 # Final report
