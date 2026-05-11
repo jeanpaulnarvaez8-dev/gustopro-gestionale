@@ -65,10 +65,12 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 
-// Rate limit on login — 15 tentativi ogni 15 minuti per IP
+// Rate limit globale su /auth/login (anti-DDoS, ALL requests inclusi success):
+// 30 totali / 15min — sopra c'e' anche il limit specifico in auth.routes.js
+// che conta solo i FAIL (skipSuccessfulRequests=true). Layered defense.
 app.use('/api/auth/login', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 15,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Troppi tentativi di accesso. Riprova tra 15 minuti.' },

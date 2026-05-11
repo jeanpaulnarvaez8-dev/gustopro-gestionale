@@ -6,7 +6,11 @@ const router = Router();
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
+  max: 10,                  // 10 tentativi failed in 15min (era 5: troppo aggressivo)
+  // ⚡ Conta SOLO le risposte non-2xx (PIN errato, errori). Un utente che
+  // sbaglia PIN 3 volte poi indovina al 4° NON si banna da solo. Il limit
+  // protegge brute-force vero (10+ tentativi sbagliati consecutivi).
+  skipSuccessfulRequests: true,
   message: { error: 'Troppi tentativi. Riprova tra 15 minuti.' },
   standardHeaders: true,
   legacyHeaders: false,
