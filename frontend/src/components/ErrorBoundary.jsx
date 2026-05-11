@@ -1,5 +1,6 @@
 import { Component } from 'react'
 import { RefreshCw, AlertTriangle } from 'lucide-react'
+import { reportError } from '../lib/errorReporter'
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -15,6 +16,8 @@ export default class ErrorBoundary extends Component {
     if (import.meta.env.DEV) {
       console.error('[ErrorBoundary]', error, info)
     }
+    // Riporta al backend (fire-and-forget, no throw)
+    reportError(error, info, 'errorBoundary')
   }
 
   render() {

@@ -12,6 +12,10 @@ router.use('/superadmin', require('./superadmin.routes'));
 // Public — tenant resolved from X-Tenant-Slug header or default fallback.
 router.use('/auth', resolveTenant, require('./auth.routes'));
 
+// Client error tracking — pubblico (il client puo' crashare anche pre-login).
+// Rate-limited a 30 report/min per IP. Vedi clientError.routes.js.
+router.use('/_client-error', require('./clientError.routes'));
+
 // Protected (all routes below require JWT). Tenant is resolved from the
 // JWT claim set at login; falls back to header / default if missing
 // (covers tokens issued before the tenant_id claim was added).

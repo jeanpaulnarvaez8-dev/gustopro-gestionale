@@ -48,6 +48,11 @@ window.__SW_APPLY_UPDATE = () => updateSW(true)
 import { startBackgroundSync } from './lib/offlineSync'
 startBackgroundSync()
 
+// Client error reporting → backend (window.onerror + unhandledrejection).
+// ErrorBoundary chiama reportError() separatamente per i crash React.
+import { setupClientErrorReporting } from './lib/errorReporter'
+setupClientErrorReporting()
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
