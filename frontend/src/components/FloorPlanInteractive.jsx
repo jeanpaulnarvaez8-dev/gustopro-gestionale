@@ -156,14 +156,17 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
         touchAction: 'none',
         transformBox: 'fill-box',
         transformOrigin: 'center',
+        /* opacity gestita dalla keyframe `fp-enter` con animation-fill-mode
+           `both` (mantiene opacity:0 durante delay E opacity:1 dopo).
+           Se dimmed (spotlight), override post-animation a 0.28 via class. */
+        opacity: dimmed ? 0.28 : undefined,
         transition: 'opacity 350ms ease, filter 200ms ease',
-        opacity: dimmed ? 0.28 : 0,  // dimmed = fuori zona attiva (spotlight)
         filter: dragging
           ? 'drop-shadow(0 6px 18px rgba(212,175,55,0.55))'
           : statusFlash
           ? 'drop-shadow(0 0 12px rgba(212,175,55,0.85))'
           : 'none',
-        animation: `fp-enter 350ms cubic-bezier(0.34, 1.4, 0.64, 1) ${enterDelay} forwards`,
+        animation: `fp-enter 350ms ease-out ${enterDelay} both`,
       }}
     >
       {/* Clip-path interno (per ripple) — segue la forma del tavolo */}
@@ -233,9 +236,10 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
         transformBox: 'fill-box',
         transformOrigin: 'center',
         transition: 'transform 180ms cubic-bezier(0.34, 1.4, 0.64, 1)',
-        /* NO `forwards` / `both`: dopo l'animation, lo style ritorna a
-           `scale(visualScale)` inline → hover/tap continuano a funzionare.
-           Visivo: nessun "flash" perché visualScale default = 1 = end keyframe. */
+        /* NO fill-mode: dopo l'animation lo style ritorna a `scale(visualScale)`
+           inline → hover/tap continuano a funzionare. Durante il delay il
+           parent ha opacity:0 (fp-enter keyframe 0%) quindi il "flash" iniziale
+           di scale(1) e' invisibile. */
         animation: `fp-pop 450ms cubic-bezier(0.34, 1.4, 0.64, 1) ${enterDelay}`,
       }}>
         {/* Status flash overlay — pulsa oro quando arriva un cambio stato via socket */}
