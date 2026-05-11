@@ -9,11 +9,38 @@ const TENANT = (req) => req.tenant.id;
 
 async function listTables(req, res, next) {
   try {
+    // Aggrega la prossima prenotazione imminente per ogni tavolo (entro 4h).
+    // Schema reservations: reserved_date (date) + reserved_time (time) →
+    // unisco in timestamp per il filtro temporale + sorting.
+    // Frontend usa `next_reservation_at` per mostrare countdown pre-arrival.
     const { rows } = await pool.query(
-      `SELECT * FROM tables_with_active_order WHERE tenant_id = $1 ORDER BY table_number`,
+      `SELECT t.*,
+              r.reservation_at,
+              r.customer_name AS next_reservation_guest,
+              r.party_size    AS next_reservation_party_size
+       FROM tables_with_active_order t
+       LEFT JOIN LATERAL (
+         SELECT
+           (reserved_date + reserved_time) AT TIME ZONE 'Europe/Rome' AS reservation_at,
+           customer_name, party_size
+         FROM reservations
+         WHERE table_id = t.id
+           AND tenant_id = $1
+           AND status = 'confirmed'
+           AND (reserved_date + reserved_time) AT TIME ZONE 'Europe/Rome' >= NOW()
+           AND (reserved_date + reserved_time) AT TIME ZONE 'Europe/Rome' < NOW() + INTERVAL '4 hours'
+         ORDER BY reserved_date, reserved_time
+         LIMIT 1
+       ) r ON true
+       WHERE t.tenant_id = $1
+       ORDER BY t.table_number`,
       [TENANT(req)]
     );
-    res.json(rows);
+    res.json(rows.map((row) => ({
+      ...row,
+      // Alias clean per il frontend (camelCase)
+      next_reservation_at: row.reservation_at,
+    })));
   } catch (err) { next(err); }
 }
 

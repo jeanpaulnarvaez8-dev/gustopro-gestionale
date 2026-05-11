@@ -436,6 +436,47 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
           </g>
         )}
 
+        {/* Pre-arrival countdown — tavolo riservato con prenotazione imminente.
+            Mostra "−12'" (minuti al cliente) sopra al tavolo, oro pulsante se
+            ≤15 min (il cameriere deve preparare). */}
+        {isReserved && table.next_reservation_at && (() => {
+          const arriveMs = new Date(table.next_reservation_at).getTime() - Date.now()
+          const arriveMin = Math.floor(arriveMs / 60000)
+          if (arriveMin > 120 || arriveMin < -30) return null
+          const isImminent = arriveMin >= 0 && arriveMin <= 15
+          const isLatePast = arriveMin < 0
+          const stroke = isImminent ? '#D4AF37' : isLatePast ? '#EF4444' : '#3E7A93'
+          const label = isLatePast
+            ? `+${Math.abs(arriveMin)}'`
+            : arriveMin >= 60
+            ? `${Math.floor(arriveMin/60)}h${arriveMin%60}`
+            : `${arriveMin}'`
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <rect
+                x={w/2 - 22} y={-12} width={44} height={16} rx={8}
+                fill="#0a0a0a" stroke={stroke} strokeWidth="1"
+              />
+              <text x={w/2} y={-1}
+                textAnchor="middle" dominantBaseline="middle"
+                fontSize="9.5" fontWeight="800"
+                fill={stroke}
+                fontFamily="Inter, system-ui"
+                style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {label}
+              </text>
+              {/* Pulse oro se imminente */}
+              {isImminent && (
+                <rect x={w/2 - 22} y={-12} width={44} height={16} rx={8}
+                  fill="none" stroke="#D4AF37" strokeWidth="1.5" opacity="0.8">
+                  <animate attributeName="opacity"
+                    values="0.8;0.1;0.8" dur="1.6s" repeatCount="indefinite" />
+                </rect>
+              )}
+            </g>
+          )
+        })()}
+
         {/* Indicatore status pallino con halo (alto-dx) */}
         <circle cx={w - 2} cy={4} r={5} fill={st.glow}>
           {(isOccupied || isReserved) && (
