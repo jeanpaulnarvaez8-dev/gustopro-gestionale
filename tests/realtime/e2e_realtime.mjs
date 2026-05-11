@@ -242,14 +242,145 @@ const cleanupTasks = []
     }
 
     // Ready
+    const itemReadyPromise = waitForEvent(sockWaiter, 'item-status-updated', 5000)
     const readyRes = await api('PATCH', `/api/kds/items/${itemId}/status`, {
       token: adminToken,
       body: { status: 'ready' },
     })
     ok('PATCH status=ready', `HTTP ${readyRes.status}`)
+    try {
+      const readyEvent = await itemReadyPromise
+      ok('Socket "item-status-updated" → ready', `payload.status=${readyEvent?.status || '?'}`)
+    } catch (e) {
+      err('Socket ready NON ricevuto', e.message)
+    }
 
     // ──────────────────────────────────────────────────────────────
-    sec('7. Cleanup automatico')
+    sec('7. Cameriere serve l\'item → status=served (table → libero)')
+    // ──────────────────────────────────────────────────────────────
+    const servedRes = await api('PATCH', `/api/kds/items/${itemId}/status`, {
+      token: adminToken,
+      body: { status: 'served' },
+    })
+    if (servedRes.status === 200) ok('PATCH status=served', '200')
+    else err('PATCH status=served', `HTTP ${servedRes.status}`)
+
+    // ──────────────────────────────────────────────────────────────
+    sec('8. Workflow waiting items — endpoint API consistency')
+    // ──────────────────────────────────────────────────────────────
+    // GET /api/workflow/waiting deve riflettere lo stato del nostro ordine
+    // (questo item e' stato 'production' tutto il tempo → NON in waiting).
+    const waitingRes = await api('GET', '/api/workflow/waiting', { token: adminToken })
+    if (waitingRes.status === 200) {
+      const ourOrder = waitingRes.data.find((o) => o.order_id === createdOrderId)
+      if (!ourOrder) {
+        ok('Ordine NON in /workflow/waiting', 'corretto (era production, non waiting)')
+      } else {
+        // se appare e' bug: l'ordine non doveva essere in waiting
+        err('Ordine inaspettatamente in /workflow/waiting', `items: ${ourOrder.items?.length}`)
+      }
+    } else {
+      err('GET /workflow/waiting', `HTTP ${waitingRes.status}`)
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    sec('9. Cancellazione ordine + socket table-status-changed')
+    // ──────────────────────────────────────────────────────────────
+    // Admin cancella ordine → table torna 'free' + socket evento.
+    // NB: NON usiamo cleanupTasks per questo perche' lo testiamo esplicitamente.
+    const tableStatusPromise = waitForEvent(sockWaiter, 'table-status-changed', 5000)
+    const deleteRes = await api('DELETE', `/api/orders/${createdOrderId}`, { token: adminToken })
+    if (deleteRes.status === 200 || deleteRes.status === 204) {
+      ok('DELETE /api/orders/:id', `HTTP ${deleteRes.status}`)
+      // Rimuovi cleanup task: l'ordine è già stato cancellato
+      cleanupTasks.length = cleanupTasks.length > 0
+        ? (cleanupTasks.pop(), cleanupTasks.length)
+        : 0
+    } else {
+      err('DELETE order', `HTTP ${deleteRes.status} body=${JSON.stringify(deleteRes.data).slice(0, 100)}`)
+    }
+
+    try {
+      const tableEvent = await tableStatusPromise
+      ok('Socket "table-status-changed" ricevuto', `payload.status=${tableEvent?.status || '?'}`)
+      if (tableEvent?.status === 'free' || tableEvent?.status === 'dirty') {
+        ok('Table status post-DELETE', `${tableEvent.status} (corretto)`)
+      }
+    } catch (e) {
+      err('Socket table-status-changed NON ricevuto', e.message)
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    sec('10. Verifica DB consistency post-DELETE')
+    // ──────────────────────────────────────────────────────────────
+    const tableAfterRes = await api('GET', '/api/tables', { token: adminToken })
+    const tableAfter = tableAfterRes.data.find((t) => t.id === freeTable.id)
+    if (tableAfter && (tableAfter.status === 'free' || tableAfter.status === 'dirty')) {
+      ok('Table status DB', `${tableAfter.status}`)
+    } else {
+      err('Table status DB inconsistente', `status=${tableAfter?.status}`)
+    }
+    const kdsAfterRes = await api('GET', '/api/kds/pending', { token: adminToken })
+    const orderStillInKds = kdsAfterRes.data.find((o) => o.order_id === createdOrderId)
+    if (!orderStillInKds) {
+      ok('Ordine sparito dal KDS', 'corretto')
+    } else {
+      err('Ordine ancora in KDS post-DELETE', 'inconsistenza')
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    sec('11. Performance metrics — 5 nuovi ordini consecutivi (latency)')
+    // ──────────────────────────────────────────────────────────────
+    // Misura latency socket "new-order" per 5 ordini distinti.
+    // NB: Non posso fare flip status pending↔cooking (state machine non
+    // valida). Faccio invece 5 create+delete per pattern realistico.
+    const latencies = []
+    const lat_tablesRes = await api('GET', '/api/tables', { token: adminToken })
+    const lat_freeTables = lat_tablesRes.data.filter((t) => t.status === 'free').slice(0, 5)
+    if (lat_freeTables.length < 5) {
+      err('Latency test', `solo ${lat_freeTables.length} tavoli liberi (servono 5)`)
+    } else {
+      for (let i = 0; i < 5; i++) {
+        const tbl = lat_freeTables[i]
+        const promise = waitForEvent(sockKitchen, 'new-order', 4000)
+        const t0 = Date.now()
+        const r = await api('POST', '/api/orders', {
+          token: adminToken,
+          body: {
+            table_id: tbl.id,
+            covers: 1,
+            items: [{
+              menu_item_id: foodItem.id,
+              quantity: 1,
+              workflow_status: 'production',
+              notes: `[E2E latency #${i}]`,
+            }],
+          },
+        })
+        if (r.status === 201) {
+          try {
+            await promise
+            latencies.push(Date.now() - t0)
+            // Cleanup immediato per liberare tavolo per loop successivi
+            await api('DELETE', `/api/orders/${r.data.id}`, { token: adminToken })
+          } catch { /* timeout — count come miss */ }
+        }
+      }
+      if (latencies.length >= 4) {
+        const avg = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
+        const min = Math.min(...latencies)
+        const max = Math.max(...latencies)
+        const p99 = latencies.sort((a, b) => a - b)[Math.floor(latencies.length * 0.99)] || max
+        ok(`Socket round-trip × ${latencies.length}`, `avg=${avg}ms min=${min}ms max=${max}ms p99=${p99}ms`)
+        if (avg < 300) ok('Latency budget avg < 300ms', `${avg}ms`)
+        else err('Latency budget exceeded', `avg=${avg}ms ≥ 300ms`)
+      } else {
+        err('Latency test', `solo ${latencies.length}/5 ordini completati`)
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    sec('12. Cleanup automatico')
     // ──────────────────────────────────────────────────────────────
     // (gestito nel finally)
 

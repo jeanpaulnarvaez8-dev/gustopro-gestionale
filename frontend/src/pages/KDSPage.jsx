@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock,
-  LayoutDashboard, Package, LogOut,
+  LayoutDashboard, Package, LogOut, Volume2, VolumeX,
 } from 'lucide-react'
 import { useSocket } from '../context/SocketContext'
 import { useToast } from '../context/ToastContext'
@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext'
 import { kdsAPI, workflowAPI } from '../lib/api'
 import { formatElapsed, elapsedMinutes } from '../lib/utils'
 import { Card, Badge } from '../components/v2'
+import { playNewOrderBeep, isSoundEnabled, toggleSound } from '../lib/kdsBeep'
 
 // ─── Status config (tokens Riva) ─────────────────────────────────────────────
 // pending=warn (giallo), cooking=terracotta (arancio caldo), ready=ok (verde)
@@ -97,6 +98,11 @@ export default function KDSPage() {
   const [updating, setUpdating] = useState({})
   const loadedRef = useRef(false)
   const updatingRef = useRef({})
+  // Set degli orderId arrivati negli ultimi 8s → mostrare flash oro
+  const [recentOrderIds, setRecentOrderIds] = useState(() => new Set())
+  // Toggle audio: stato React + LocalStorage. Default 'on'.
+  const [soundOn, setSoundOn] = useState(() => isSoundEnabled())
+  const handleToggleSound = () => setSoundOn(toggleSound())
 
   const loadOrders = useCallback(async () => {
     try {
@@ -146,7 +152,27 @@ export default function KDSPage() {
   useEffect(() => {
     if (!socket) return
 
-    const onNewOrder = () => loadOrders()
+    const onNewOrder = (payload) => {
+      // Beep audio (no-op se utente ha disattivato)
+      playNewOrderBeep()
+      // Flash visivo sulla card del nuovo ordine per 8s
+      const orderId = payload?.orderId || payload?.id
+      if (orderId) {
+        setRecentOrderIds((prev) => {
+          const next = new Set(prev)
+          next.add(orderId)
+          return next
+        })
+        setTimeout(() => {
+          setRecentOrderIds((prev) => {
+            const next = new Set(prev)
+            next.delete(orderId)
+            return next
+          })
+        }, 8000)
+      }
+      loadOrders()
+    }
     const onItemAdded = () => loadOrders()
 
     const onItemUpdated = ({ orderId, itemId, status }) => {
@@ -261,6 +287,18 @@ export default function KDSPage() {
             </>
           )}
           <button
+            onClick={handleToggleSound}
+            title={soundOn ? 'Audio attivo (click per disattivare)' : 'Audio disattivo (click per attivare)'}
+            aria-label={soundOn ? 'Disattiva audio' : 'Attiva audio'}
+            className={`p-1.5 rounded-lg transition ${
+              soundOn
+                ? 'text-[var(--color-gold)] hover:bg-[rgba(212,175,55,0.08)]'
+                : 'text-[var(--color-text-3)] hover:bg-[rgba(255,255,255,0.04)]'
+            }`}
+          >
+            {soundOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
+          </button>
+          <button
             onClick={loadOrders}
             className="text-[var(--color-text-2)] hover:text-[var(--color-gold)] transition p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.04)]"
             aria-label="Ricarica"
@@ -351,6 +389,7 @@ export default function KDSPage() {
                   !min || new Date(it.sent_at) < new Date(min) ? it.sent_at : min, null)
                 const mins = elapsedMinutes(oldest)
                 const urgency = elapsedTone(mins) // ok | warn | err
+                const isFresh = recentOrderIds.has(order.order_id) // 8s gold flash post-arrival
 
                 return (
                   <motion.div
@@ -360,6 +399,9 @@ export default function KDSPage() {
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.2 }}
                     className={`bg-[var(--color-surface)] rounded-xl border-2 flex flex-col overflow-hidden ${
+                      // Priorità: isFresh (8s post-arrival) → halo oro pulsante,
+                      // poi urgency rosso/giallo, infine border soft.
+                      isFresh ? 'border-[var(--color-gold)] shadow-[0_0_0_4px_rgba(212,175,55,0.25)] animate-[pulse-gold_1.4s_ease-in-out_infinite]' :
                       urgency === 'err'  ? 'border-[var(--color-err)]/60 animate-[pulse-err_2.4s_ease-in-out_infinite]' :
                       urgency === 'warn' ? 'border-[var(--color-warn)]/40' :
                                             'border-[var(--color-border-soft)]'
