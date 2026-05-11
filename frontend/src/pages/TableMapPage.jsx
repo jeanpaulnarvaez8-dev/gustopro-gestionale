@@ -12,6 +12,8 @@ import { tablesAPI, zonesAPI, assignmentsAPI } from '../lib/api'
 import FloorPlanInteractive from '../components/FloorPlanInteractive'
 import MobileTableList from '../components/MobileTableList'
 import { BottomSheet, Badge, StatusDot } from '../components/v2'
+import { storage } from '../lib/storage'
+import { List, Map as MapIcon } from 'lucide-react'
 
 // Status config: usa i tokens Riva Beach.
 // free=ok(verde), occupied=gold(oro Riva), reserved=sea(mare), dirty=warn(giallo), parked=park(viola)
@@ -104,6 +106,16 @@ export default function TableMapPage() {
   }, [socket])
 
   const [coversSheet, setCoversSheet] = useState(null) // table object o null
+
+  // Toggle Lista ↔ Pianta su mobile. Persistito in localStorage per ricordare
+  // la preferenza del cameriere tra sessioni.
+  const [mobileView, setMobileView] = useState(() =>
+    storage.get('gustopro_mobile_view', 'list')
+  )
+  const switchMobileView = (v) => {
+    setMobileView(v)
+    storage.set('gustopro_mobile_view', v)
+  }
 
   function handleNavigate(table) {
     const isCashier = ['cashier', 'admin', 'manager'].includes(user?.role)
@@ -230,15 +242,70 @@ export default function TableMapPage() {
           </div>
         ) : (
           <>
-            {/* Mobile: lista card grandi */}
+            {/* ─── Mobile: toggle Lista ↔ Pianta + container ──────────────── */}
             <div className="md:hidden h-full flex flex-col">
-              <MobileTableList
-                tables={tables}
-                zones={zones}
-                onTableClick={handleNavigate}
-              />
+              {/* Toolbar mobile con segmented control oro/nero */}
+              <div className="px-3 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] flex items-center gap-2 shrink-0">
+                <div className="inline-flex rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-0.5 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => switchMobileView('list')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition min-h-[36px] ${
+                      mobileView === 'list'
+                        ? 'bg-[var(--color-gold)] text-[#13181C] shadow-sm'
+                        : 'text-[var(--color-text-2)]'
+                    }`}
+                    aria-pressed={mobileView === 'list'}
+                  >
+                    <List size={13} />
+                    Lista
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchMobileView('plan')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition min-h-[36px] ${
+                      mobileView === 'plan'
+                        ? 'bg-[var(--color-gold)] text-[#13181C] shadow-sm'
+                        : 'text-[var(--color-text-2)]'
+                    }`}
+                    aria-pressed={mobileView === 'plan'}
+                  >
+                    <MapIcon size={13} />
+                    Pianta
+                  </button>
+                </div>
+                <div className="ml-auto flex items-center gap-2 text-[10px] text-[var(--color-text-3)]">
+                  <span className="flex items-center gap-1 tnum">
+                    <StatusDot tone="ok" size="xs" />{stats.free}
+                  </span>
+                  <span className="flex items-center gap-1 tnum">
+                    <StatusDot tone="gold" size="xs" />{stats.occupied}
+                  </span>
+                  <span className="text-[var(--color-text-3)]">/ {stats.total}</span>
+                </div>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-hidden">
+                {mobileView === 'list' ? (
+                  <MobileTableList
+                    tables={tables}
+                    zones={zones}
+                    onTableClick={handleNavigate}
+                  />
+                ) : (
+                  <FloorPlanInteractive
+                    tables={tables}
+                    zones={zones}
+                    onTableClick={handleNavigate}
+                    canEdit={false /* niente edit da mobile: schermo troppo piccolo */}
+                    onRefresh={loadData}
+                    spotlightZoneId={user?.role === 'waiter' ? activeZone : null}
+                  />
+                )}
+              </div>
             </div>
-            {/* Desktop: pianta SVG architettonica reale Riva Beach */}
+
+            {/* ─── Desktop: pianta SVG sempre ──────────────────────────── */}
             <div className="hidden md:block h-full">
               <FloorPlanInteractive
                 tables={tables}
