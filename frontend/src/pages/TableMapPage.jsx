@@ -13,7 +13,7 @@ import FloorPlanInteractive from '../components/FloorPlanInteractive'
 import MobileTableList from '../components/MobileTableList'
 import { BottomSheet, Badge, StatusDot } from '../components/v2'
 import { storage } from '../lib/storage'
-import { List, Map as MapIcon } from 'lucide-react'
+import { List, Map as MapIcon, Bell, AlertTriangle, Wine, Clock as ClockIcon } from 'lucide-react'
 
 // Status config: usa i tokens Riva Beach.
 // free=ok(verde), occupied=gold(oro Riva), reserved=sea(mare), dirty=warn(giallo), parked=park(viola)
@@ -41,8 +41,9 @@ function NavButton({ icon: Icon, label, onClick }) {
 // ── Main page ────────────────────────────────────────────────────────────────
 export default function TableMapPage() {
   const { user, logout } = useAuth()
-  const { socket, isConnected } = useSocket()
+  const { socket, isConnected, serviceAlerts, setServiceAlerts } = useSocket()
   const navigate = useNavigate()
+  const [bellOpen, setBellOpen] = useState(false)
 
   const [zones, setZones] = useState([])
   const [tables, setTables] = useState([])
@@ -104,6 +105,19 @@ export default function TableMapPage() {
     socket.on('table-status-changed', handler)
     return () => socket.off('table-status-changed', handler)
   }, [socket])
+
+  // Polling fallback: se il socket e' disconnesso (WiFi cade, server restart,
+  // backend SIGTERM), facciamo refresh dei tavoli ogni 30s per non lasciare
+  // il cameriere con stato stale. Skip quando socket connesso (real-time).
+  useEffect(() => {
+    if (isConnected) return
+    const interval = setInterval(() => {
+      // Refresh silenzioso (no loading spinner, no overlay) — l'utente non
+      // deve sapere che il fallback e' in atto, solo che i dati restano freschi.
+      tablesAPI.list().then(r => setTables(r.data)).catch(() => { /* offline ok */ })
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [isConnected])
 
   const [coversSheet, setCoversSheet] = useState(null) // table object o null
 
@@ -212,6 +226,24 @@ export default function TableMapPage() {
             <NavButton icon={UserCog} label="Staff" onClick={() => navigate('/users')} />
           )}
         </nav>
+
+        {/* Notification bell con badge */}
+        <button
+          type="button"
+          onClick={() => setBellOpen(true)}
+          aria-label={`Notifiche (${serviceAlerts.length})`}
+          className="relative w-9 h-9 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] flex items-center justify-center text-[var(--color-text-2)] hover:text-[var(--color-gold)] hover:border-[var(--color-gold-ring)] transition shrink-0"
+        >
+          <Bell size={16} />
+          {serviceAlerts.length > 0 && (
+            <span
+              className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-err)] text-white text-[10px] font-extrabold flex items-center justify-center tnum"
+              style={{ animation: 'pulse-err 1.4s ease-in-out infinite' }}
+            >
+              {serviceAlerts.length > 9 ? '9+' : serviceAlerts.length}
+            </span>
+          )}
+        </button>
 
         {/* User info + logout */}
         <div className="flex items-center gap-2 shrink-0 pl-2 border-l border-[var(--color-border-soft)]">
@@ -347,7 +379,74 @@ export default function TableMapPage() {
         </p>
       </BottomSheet>
 
-      {/* Esponiamo STATUS_CONFIG come no-op su window per debug — non rendiamo nulla */}
+      {/* ─── BottomSheet notifiche (campanella header) ───────────────── */}
+      <BottomSheet
+        open={bellOpen}
+        onClose={() => setBellOpen(false)}
+        title={`Notifiche · ${serviceAlerts.length} attive`}
+      >
+        {serviceAlerts.length === 0 ? (
+          <div className="py-8 text-center text-[var(--color-text-3)]">
+            <Bell size={28} className="mx-auto mb-2 opacity-50" />
+            <p className="serif italic text-sm">Nessuna notifica al momento</p>
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {serviceAlerts.map((alert) => {
+              const isWine = alert.isBeverage
+              const isLate = alert.elapsedMinutes >= 20
+              const Icon = isWine ? Wine : isLate ? AlertTriangle : ClockIcon
+              const tone = isLate ? 'err' : isWine ? 'sea' : 'warn'
+              return (
+                <div
+                  key={alert.alertId}
+                  className="bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] rounded-xl p-3 flex items-start gap-3"
+                  style={{
+                    borderLeftWidth: 4,
+                    borderLeftColor: `var(--color-${tone})`,
+                  }}
+                >
+                  <Icon size={18} className={`text-[var(--color-${tone})] shrink-0 mt-0.5`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-[var(--color-text)]">
+                        Tavolo {alert.tableNumber}
+                      </span>
+                      <Badge tone={tone} size="sm" pulse={isLate}>
+                        {alert.elapsedMinutes} min
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-[var(--color-text-2)]">
+                      {alert.quantity}× {alert.itemName}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServiceAlerts((prev) => prev.filter((a) => a.alertId !== alert.alertId))
+                    }}
+                    className="text-[var(--color-text-3)] hover:text-[var(--color-text)] text-xs px-2 py-1 shrink-0"
+                    aria-label="Rimuovi notifica"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )
+            })}
+            {serviceAlerts.length > 0 && (
+              <button
+                type="button"
+                onClick={() => { setServiceAlerts([]); setBellOpen(false) }}
+                className="w-full mt-3 py-2 text-xs text-[var(--color-text-3)] hover:text-[var(--color-text-2)] border border-[var(--color-border-soft)] rounded-lg transition"
+              >
+                Pulisci tutte
+              </button>
+            )}
+          </div>
+        )}
+      </BottomSheet>
+
+      {/* Placeholder esistente — non rendiamo nulla */}
       <AnimatePresence>{null}</AnimatePresence>
     </div>
   )
