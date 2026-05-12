@@ -44,6 +44,12 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       SUPERADMIN_API_KEY: ${SUPERADMIN_API_KEY:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://gestione.gustopro.it,https://gestione.gustopro.it}
+      # DB pool tuning (Riva venerdì sera = 5+ camerieri concorrenti):
+      #  max 30 connessioni (postgres max_connections=100, ampio margine)
+      #  connectionTimeout 5s (era 2s, troppo poco per burst writes paralleli)
+      DB_POOL_MAX: ${DB_POOL_MAX:-30}
+      DB_POOL_CONNECTION_TIMEOUT_MS: ${DB_POOL_CONNECTION_TIMEOUT_MS:-5000}
+      DB_POOL_IDLE_TIMEOUT_MS: ${DB_POOL_IDLE_TIMEOUT_MS:-10000}
     depends_on:
       postgres:
         condition: service_healthy
