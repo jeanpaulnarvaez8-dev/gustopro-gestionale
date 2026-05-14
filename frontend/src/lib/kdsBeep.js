@@ -16,7 +16,8 @@
  */
 import { storage } from './storage'
 
-const KEY = 'gustopro_kds_sound'
+const KEY = 'gustopro_kds_sound'         // toggle KDS (chef)
+const KEY_WAITER = 'gustopro_waiter_sound' // toggle cameriere
 
 let audioCtx = null
 
@@ -86,4 +87,34 @@ export function toggleSound() {
   const next = isSoundEnabled() ? 'off' : 'on'
   storage.set(KEY, next)
   return next === 'on'
+}
+
+// ─── Cameriere: beep "piatto pronto" + toggle separato ──────────────
+export function isWaiterSoundEnabled() {
+  return storage.get(KEY_WAITER, 'on') !== 'off'
+}
+
+export function toggleWaiterSound() {
+  const next = isWaiterSoundEnabled() ? 'off' : 'on'
+  storage.set(KEY_WAITER, next)
+  return next === 'on'
+}
+
+/**
+ * Beep "campanellino" — squilla quando lo chef segna un piatto pronto
+ * e il cameriere lo riceve via socket item-ready-notify.
+ * Toni 1320Hz + 990Hz (squillanti) per distinguersi dal beep KDS
+ * (880Hz + 660Hz, "ding-dong" più basso).
+ */
+export function playReadyBeep() {
+  if (!isWaiterSoundEnabled()) return
+  const ctx = getCtx()
+  if (!ctx) return
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {})
+  }
+  try {
+    tone(ctx, 1320, 0,   120, 0.16) // campanellino acuto
+    tone(ctx, 990,  130, 140, 0.14) // risonanza più morbida
+  } catch { /* ignore */ }
 }

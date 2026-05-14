@@ -13,7 +13,8 @@ import FloorPlanInteractive from '../components/FloorPlanInteractive'
 import MobileTableList from '../components/MobileTableList'
 import { BottomSheet, Badge, StatusDot } from '../components/v2'
 import { storage } from '../lib/storage'
-import { List, Map as MapIcon, Bell, AlertTriangle, Wine, Clock as ClockIcon } from 'lucide-react'
+import { isWaiterSoundEnabled, toggleWaiterSound } from '../lib/kdsBeep'
+import { List, Map as MapIcon, Bell, AlertTriangle, Wine, Clock as ClockIcon, Volume2, VolumeX } from 'lucide-react'
 
 // Status config: usa i tokens Riva Beach.
 // free=ok(verde), occupied=gold(oro Riva), reserved=sea(mare), dirty=warn(giallo), parked=park(viola)
@@ -121,6 +122,11 @@ export default function TableMapPage() {
 
   const [coversSheet, setCoversSheet] = useState(null) // table object o null
 
+  // Toggle audio "piatto pronto" per i camerieri (default ON).
+  // Persistito in localStorage tramite kdsBeep helpers.
+  const [waiterSoundOn, setWaiterSoundOn] = useState(() => isWaiterSoundEnabled())
+  const handleToggleWaiterSound = () => setWaiterSoundOn(toggleWaiterSound())
+
   // Toggle Lista ↔ Pianta su mobile. Persistito in localStorage per ricordare
   // la preferenza del cameriere tra sessioni.
   const [mobileView, setMobileView] = useState(() =>
@@ -226,6 +232,21 @@ export default function TableMapPage() {
             <NavButton icon={UserCog} label="Staff" onClick={() => navigate('/users')} />
           )}
         </nav>
+
+        {/* Toggle audio "piatto pronto" — per camerieri (squilla quando chef segna ready) */}
+        <button
+          type="button"
+          onClick={handleToggleWaiterSound}
+          aria-label={waiterSoundOn ? 'Disattiva audio piatti pronti' : 'Attiva audio piatti pronti'}
+          title={waiterSoundOn ? '🔔 Audio ON · suono quando i piatti sono pronti' : '🔕 Audio OFF · click per attivare'}
+          className={`w-9 h-9 rounded-lg border flex items-center justify-center transition shrink-0 ${
+            waiterSoundOn
+              ? 'border-[var(--color-gold-ring)] bg-[var(--color-gold-soft)] text-[var(--color-gold)]'
+              : 'border-[var(--color-border-strong)] bg-[var(--color-surface-2)] text-[var(--color-text-3)]'
+          }`}
+        >
+          {waiterSoundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+        </button>
 
         {/* Notification bell con badge */}
         <button

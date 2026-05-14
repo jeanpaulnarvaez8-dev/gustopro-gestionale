@@ -3,6 +3,7 @@ import { connectSocket, disconnectSocket } from '../lib/socket';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { storage } from '../lib/storage';
+import { playReadyBeep } from '../lib/kdsBeep';
 
 const SocketContext = createContext(null);
 
@@ -59,14 +60,47 @@ export function SocketProvider({ children }) {
       toast({ type: 'success', title: 'Merce confermata', message: `Confermato da ${confirmedBy}` });
     });
 
-    // Notifica al cameriere: piatto pronto in cucina
+    // Notifica al cameriere: piatto pronto in cucina.
+    // Backend emette SOLO al room user:${waiter_id} → solo il cameriere
+    // dell'ordine riceve. Beep + toast + (se PWA installata e in background)
+    // Web Notification opzionale.
     socket.on('item-ready-notify', ({ itemName, quantity, tableNumber }) => {
+      // 🔔 Beep audio (configurable via toggle in TableMap header)
+      playReadyBeep();
+
       toast({
         type: 'success',
         title: `🍽️ Pronto — Tavolo ${tableNumber}`,
         message: `${quantity}× ${itemName} è pronto per il servizio`,
         duration: 8000,
       });
+
+      // Web Notification opt-in (browser fuori focus o PWA in background).
+      // Permission richiesta solo se l'utente non ha mai risposto.
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        const showNotif = () => {
+          try {
+            // Solo se la tab NON è visibile (utente sta facendo altro)
+            if (document.visibilityState !== 'visible') {
+              new Notification(`🍽️ Tavolo ${tableNumber} — pronto`, {
+                body: `${quantity}× ${itemName}`,
+                icon: '/icon-192.png',
+                tag: `ready-${tableNumber}-${itemName}`,
+                requireInteraction: false,
+                silent: false,
+              });
+            }
+          } catch { /* ignore */ }
+        };
+        if (Notification.permission === 'granted') {
+          showNotif();
+        } else if (Notification.permission !== 'denied') {
+          // Richiesta one-shot — il browser la cache, no spam
+          Notification.requestPermission().then((p) => {
+            if (p === 'granted') showNotif();
+          }).catch(() => {});
+        }
+      }
     });
 
     // Alert servizio: piatto pronto da troppo tempo (20min cibo / 5min bevande)
