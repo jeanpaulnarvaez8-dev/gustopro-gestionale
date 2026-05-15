@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Package, Plus, Pencil, RefreshCw, Check, X,
-  ArrowUp, AlertTriangle, TrendingDown, History, ScanLine,
+  ArrowUp, AlertTriangle, TrendingDown, History, ScanLine, Upload,
 } from 'lucide-react'
 import { ingredientsAPI, inventoryAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
 import { Card, Badge, Button, Modal } from '../components/v2'
 import BarcodeScanner from '../components/BarcodeScanner'
+import { parseCSV } from '../lib/csvParser'
 
 const UNITS = ['kg', 'g', 'lt', 'ml', 'pz', 'bt', 'sc']
 
@@ -287,6 +288,69 @@ export default function IngredientsPage() {
   // Scanner workflow state: 'lookup' | 'quick-receive' | 'new-ingredient'
   const [scanFlow, setScanFlow]       = useState(null) // { mode, barcode, ingredient? }
 
+  // Bulk import (CSV catalogo fornitore)
+  const [importOpen, setImportOpen]       = useState(false)
+  const [importText, setImportText]       = useState('')
+  const [importPreview, setImportPreview] = useState(null) // { rows, mapping, headers }
+  const [importing, setImporting]         = useState(false)
+
+  const handleImportParse = () => {
+    if (!importText.trim()) {
+      toast({ type: 'warning', title: 'Incolla un CSV o seleziona un file' })
+      return
+    }
+    try {
+      const parsed = parseCSV(importText)
+      if (parsed.rows.length === 0) {
+        toast({ type: 'warning', title: 'Nessuna riga valida trovata',
+                message: 'Verifica che ci sia una colonna "Descrizione" o "Nome"' })
+        return
+      }
+      setImportPreview(parsed)
+    } catch (e) {
+      toast({ type: 'error', title: 'Parse CSV fallito', message: e.message })
+    }
+  }
+
+  const handleImportFile = async (file) => {
+    if (!file) return
+    if (file.size > 5_000_000) {
+      toast({ type: 'error', title: 'File troppo grande (max 5MB)' })
+      return
+    }
+    const text = await file.text()
+    setImportText(text)
+    // Auto-parse
+    try {
+      const parsed = parseCSV(text)
+      setImportPreview(parsed)
+    } catch (e) {
+      toast({ type: 'error', title: 'Parse fallito', message: e.message })
+    }
+  }
+
+  const handleImportCommit = async () => {
+    if (!importPreview?.rows?.length) return
+    setImporting(true)
+    try {
+      const r = await ingredientsAPI.bulkImport(importPreview.rows, false)
+      const { created, updated, skipped, errors } = r.data
+      toast({
+        type: errors?.length ? 'warning' : 'success',
+        title: `Import: ${created} nuovi, ${updated} aggiornati`,
+        message: skipped > 0 ? `${skipped} saltati (vedi console)` : 'Tutto OK',
+        duration: 6000,
+      })
+      if (errors?.length) console.warn('[Import errors]', errors)
+      setImportOpen(false)
+      setImportText(''); setImportPreview(null)
+      load()
+    } catch (e) {
+      toast({ type: 'error', title: 'Import fallito',
+              message: e.response?.data?.error || e.message })
+    } finally { setImporting(false) }
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -411,6 +475,15 @@ export default function IngredientsPage() {
           <Button
             size="sm"
             variant="secondary"
+            leftIcon={<Upload size={13} />}
+            onClick={() => setImportOpen(true)}
+            title="Importa catalogo fornitore (CSV)"
+          >
+            Importa
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
             leftIcon={<ScanLine size={13} />}
             onClick={() => setScannerOpen(true)}
             title="Scansiona codice a barre per carico veloce"
@@ -426,6 +499,148 @@ export default function IngredientsPage() {
           </Button>
         </div>
       </header>
+
+      {/* Bulk import modal */}
+      <Modal
+        open={importOpen}
+        onClose={() => { setImportOpen(false); setImportText(''); setImportPreview(null) }}
+        title={
+          <span className="flex items-center gap-2">
+            <Upload size={18} className="text-[var(--color-gold)]" />
+            Importa catalogo fornitore
+          </span>
+        }
+        size="lg"
+        footer={
+          <Modal.Actions>
+            <Button variant="ghost" onClick={() => {
+              setImportOpen(false); setImportText(''); setImportPreview(null)
+            }}>Annulla</Button>
+            {!importPreview && (
+              <Button onClick={handleImportParse} disabled={!importText.trim()}>
+                Analizza
+              </Button>
+            )}
+            {importPreview && (
+              <Button
+                loading={importing}
+                leftIcon={<Check size={16} />}
+                onClick={handleImportCommit}
+                disabled={importPreview.rows.length === 0}
+              >
+                Importa {importPreview.rows.length} righe
+              </Button>
+            )}
+          </Modal.Actions>
+        }
+      >
+        <div className="space-y-3">
+          {!importPreview && (
+            <>
+              <p className="text-[var(--color-text-2)] text-sm leading-relaxed">
+                Incolla qui il <b>CSV</b> del fornitore (MARR, Metro, ecc.) oppure
+                carica un file <code className="text-[var(--color-gold)]">.csv</code>.
+              </p>
+              <div className="text-[var(--color-text-3)] text-xs leading-relaxed bg-[var(--color-surface-2)] rounded-lg p-3">
+                <b className="text-[var(--color-text)]">Colonne riconosciute automaticamente:</b>
+                <ul className="mt-1.5 space-y-0.5 list-disc list-inside">
+                  <li><b>Descrizione</b> / Nome / Articolo → <code>name</code> (obbligatorio)</li>
+                  <li><b>Codice Art</b> / Cod. MARR → <code>supplier_code</code></li>
+                  <li><b>EAN</b> / GTIN / Barcode → <code>barcode</code></li>
+                  <li><b>UM</b> / Unità → <code>unit</code> (pz, kg, lt…)</li>
+                  <li><b>Prezzo</b> / Costo / Netto → <code>cost_per_unit</code></li>
+                  <li><b>Stock</b> / Giacenza → <code>current_stock</code></li>
+                </ul>
+                <p className="mt-2">
+                  Separatore: <code>;</code> (Excel italiano), <code>,</code> o tab — auto-detect.
+                  Header riga 1. Decimali virgola o punto.
+                </p>
+              </div>
+
+              <input
+                type="file"
+                accept=".csv,.tsv,.txt"
+                onChange={(e) => handleImportFile(e.target.files?.[0])}
+                className="block w-full text-sm text-[var(--color-text-2)]
+                           file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0
+                           file:bg-[var(--color-gold)] file:text-[#13181C] file:font-semibold
+                           file:cursor-pointer hover:file:brightness-110"
+              />
+
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder="Oppure incolla qui il CSV...&#10;&#10;Codice;Descrizione;EAN;UM;Prezzo&#10;047314;GELATINA FOGLI ORO 1 kg;800123456789;PZ;25,00"
+                rows={8}
+                className={`${inputCls} font-mono text-xs leading-relaxed w-full`}
+                spellCheck={false}
+              />
+            </>
+          )}
+
+          {importPreview && (
+            <>
+              <div className="bg-[var(--color-surface-2)] rounded-lg p-3 text-xs">
+                <div className="text-[var(--color-text)] mb-2 font-semibold">
+                  Anteprima · {importPreview.rows.length} righe pronte all'import
+                </div>
+                <div className="text-[var(--color-text-3)] mb-1">
+                  Mapping colonne rilevato:
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-[11px]">
+                  {Object.entries(importPreview.mapping).map(([field, idx]) => (
+                    <div key={field}>
+                      <code className="text-[var(--color-gold)]">{field}</code>
+                      {' ← '}
+                      <span className="text-[var(--color-text-2)]">
+                        {importPreview.headers[idx] || `col ${idx}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="max-h-64 overflow-auto border border-[var(--color-border-soft)] rounded-lg">
+                <table className="w-full text-xs">
+                  <thead className="bg-[var(--color-surface-2)] text-[var(--color-text-3)] sticky top-0">
+                    <tr>
+                      <th className="text-left px-2 py-1.5">Nome</th>
+                      <th className="text-left px-2 py-1.5">UM</th>
+                      <th className="text-left px-2 py-1.5">Cod. Forn.</th>
+                      <th className="text-left px-2 py-1.5">Barcode</th>
+                      <th className="text-right px-2 py-1.5">€/u</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.rows.slice(0, 50).map((r, i) => (
+                      <tr key={i} className="border-t border-[var(--color-border-soft)]">
+                        <td className="px-2 py-1.5 text-[var(--color-text)]">{r.name}</td>
+                        <td className="px-2 py-1.5 text-[var(--color-text-2)]">{r.unit || '—'}</td>
+                        <td className="px-2 py-1.5 text-[var(--color-text-2)] font-mono text-[10px]">{r.supplier_code || '—'}</td>
+                        <td className="px-2 py-1.5 text-[var(--color-text-2)] font-mono text-[10px]">{r.barcode || '—'}</td>
+                        <td className="px-2 py-1.5 text-right tnum text-[var(--color-gold)]">
+                          {r.cost_per_unit ? r.cost_per_unit.toFixed(2) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {importPreview.rows.length > 50 && (
+                  <div className="text-center text-[var(--color-text-3)] text-xs py-2 bg-[var(--color-surface-2)]">
+                    … e altre {importPreview.rows.length - 50} righe (tutte verranno importate)
+                  </div>
+                )}
+              </div>
+
+              <p className="text-[var(--color-text-3)] text-xs">
+                Strategia: se il <b>barcode</b> esiste già nel sistema → <b>aggiorna</b> nome/
+                costo/cod.fornitore. Altrimenti <b>crea nuovo</b> ingrediente.
+                Niente duplicati.
+              </p>
+            </>
+          )}
+        </div>
+      </Modal>
 
       {/* Scanner camera modal */}
       <BarcodeScanner

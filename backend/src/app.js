@@ -63,7 +63,9 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json({ limit: '1mb' }));
+// 5 MB consente bulk-import catalogo fornitore (es. MARR con ~2000 articoli
+// in CSV ≈ 500KB JSON). Il global protegge da payload bomb (era 1mb).
+app.use(express.json({ limit: '5mb' }));
 
 // Rate limit globale su /auth/login (anti-DDoS, ALL requests inclusi success):
 // 30 totali / 15min — sopra c'e' anche il limit specifico in auth.routes.js

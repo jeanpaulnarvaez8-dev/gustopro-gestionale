@@ -163,9 +163,116 @@ async function getMovements(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// ── BULK IMPORT ──────────────────────────────────────────────
+// Importa una lista di ingredienti da catalogo fornitore (MARR, Metro, ecc.).
+// Body: { items: [{name, unit?, barcode?, supplier_code?, cost_per_unit?,
+//                   min_stock?, current_stock?, supplier_id?}], dry_run?: bool }
+//
+// Strategy: per ogni item, se `barcode` esiste gia' nel tenant → UPDATE
+// (rinomina, aggiorna costo, ecc.); se barcode nuovo o assente → INSERT.
+// Quando barcode è null e name match esistente (case-insensitive), UPDATE
+// per evitare duplicati.
+//
+// Tutto in una transazione. Risposta: { created, updated, skipped, errors[] }.
+// dry_run=true: simula senza scrivere, utile per anteprima frontend.
+async function bulkImport(req, res, next) {
+  const client = await pool.connect();
+  const tenantId = TENANT(req);
+  try {
+    const { items, dry_run = false } = req.body || {};
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'items array obbligatorio' });
+    }
+    if (items.length > 5000) {
+      return res.status(400).json({ error: 'max 5000 items per batch' });
+    }
+
+    let created = 0, updated = 0, skipped = 0;
+    const errors = [];
+
+    await client.query('BEGIN');
+    for (let idx = 0; idx < items.length; idx++) {
+      const it = items[idx] || {};
+      const name = String(it.name || '').trim();
+      if (!name) { skipped++; errors.push({ idx, error: 'name vuoto' }); continue; }
+
+      const unit          = String(it.unit || 'pz').trim().toLowerCase();
+      const barcode       = it.barcode ? String(it.barcode).trim() : null;
+      const supplierCode  = it.supplier_code ? String(it.supplier_code).trim() : null;
+      const cost          = Number(it.cost_per_unit) || 0;
+      const minStock      = Number(it.min_stock) || 0;
+      const currentStock  = Number(it.current_stock) || 0;
+      const supplierId    = it.supplier_id || null;
+
+      try {
+        // Match precedente per UPDATE (priorita': barcode > name)
+        let existingId = null;
+        if (barcode) {
+          const { rows } = await client.query(
+            'SELECT id FROM ingredients WHERE tenant_id = $1 AND barcode = $2 LIMIT 1',
+            [tenantId, barcode]
+          );
+          if (rows[0]) existingId = rows[0].id;
+        }
+        if (!existingId) {
+          const { rows } = await client.query(
+            'SELECT id FROM ingredients WHERE tenant_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1',
+            [tenantId, name]
+          );
+          if (rows[0]) existingId = rows[0].id;
+        }
+
+        if (existingId) {
+          if (!dry_run) {
+            await client.query(
+              `UPDATE ingredients SET
+                 name = $1, unit = $2,
+                 barcode = COALESCE($3, barcode),
+                 supplier_code = COALESCE($4, supplier_code),
+                 cost_per_unit = CASE WHEN $5 > 0 THEN $5 ELSE cost_per_unit END,
+                 min_stock = CASE WHEN $6 > 0 THEN $6 ELSE min_stock END,
+                 supplier_id = COALESCE($7, supplier_id),
+                 is_active = true,
+                 updated_at = NOW()
+               WHERE id = $8 AND tenant_id = $9`,
+              [name, unit, barcode, supplierCode, cost, minStock, supplierId, existingId, tenantId]
+            );
+          }
+          updated++;
+        } else {
+          if (!dry_run) {
+            await client.query(
+              `INSERT INTO ingredients
+                 (tenant_id, name, unit, current_stock, min_stock, cost_per_unit,
+                  supplier_id, barcode, supplier_code)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+              [tenantId, name, unit, currentStock, minStock, cost, supplierId, barcode, supplierCode]
+            );
+          }
+          created++;
+        }
+      } catch (e) {
+        skipped++;
+        errors.push({ idx, name, error: e.message.slice(0, 120) });
+      }
+    }
+
+    if (dry_run) await client.query('ROLLBACK');
+    else         await client.query('COMMIT');
+
+    res.json({
+      dry_run, total: items.length, created, updated, skipped,
+      errors: errors.slice(0, 50), // cap a 50 per response size
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally { client.release(); }
+}
+
 module.exports = {
   listIngredients, getLowStock,
   createIngredient, updateIngredient,
   adjustStock, getMovements,
-  findByBarcode,
+  findByBarcode, bulkImport,
 };

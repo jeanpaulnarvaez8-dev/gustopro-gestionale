@@ -265,6 +265,9 @@ export const ingredientsAPI = {
   update:      (id, data)      => api.put(`/ingredients/${id}`, data),
   adjust:      (id, data)      => api.post(`/ingredients/${id}/adjust`, data),
   movements:   (id)            => api.get(`/ingredients/${id}/movements`),
+  // Bulk import catalogo fornitore. dry_run=true per anteprima.
+  bulkImport:  (items, dryRun = false) =>
+    api.post('/ingredients/bulk-import', { items, dry_run: dryRun }),
 };
 
 // Recipes
