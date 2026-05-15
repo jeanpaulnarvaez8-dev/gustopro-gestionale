@@ -37,6 +37,12 @@ async function generatePreConto(req, res, next) {
       [order.table_id, tenantId]
     );
 
+    // Tenant info (nome ristorante + dati fiscali) per la ricevuta
+    const { rows: [tenant] } = await pool.query(
+      'SELECT name, fiscal_data FROM tenants WHERE id=$1',
+      [tenantId]
+    );
+
     res.json({
       order_id: order.id,
       table_number: tableInfo.rows[0]?.table_number,
@@ -44,7 +50,16 @@ async function generatePreConto(req, res, next) {
       tax_amount: parseFloat(order.tax_amount),
       total_amount: parseFloat(order.total_amount),
       payment_status: order.payment_status,
+      order_type: order.order_type,           // takeaway / dine-in
+      customer_name: order.customer_name,     // per asporto
+      customer_phone: order.customer_phone,
+      covers: order.covers,
+      created_at: order.created_at,
       items,
+      tenant: {
+        name: tenant?.name,
+        fiscal_data: tenant?.fiscal_data || {},
+      },
     });
   } catch (err) { next(err); }
 }

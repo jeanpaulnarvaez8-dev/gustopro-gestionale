@@ -4,11 +4,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Banknote, CreditCard, Smartphone, Receipt, RefreshCw,
   CheckCircle2, Users, SplitSquareVertical, Pencil, Plus, Minus, X, Zap,
+  Printer,
 } from 'lucide-react'
 import { billingAPI, tablesAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
+import { useAuth } from '../context/AuthContext'
 import { Card, Badge, Button } from '../components/v2'
+import ReceiptPrint from '../components/ReceiptPrint'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const PAY_METHODS = [
@@ -440,6 +443,7 @@ export default function CheckoutPage() {
   const { orderId } = useParams()
   const navigate    = useNavigate()
   const { toast }   = useToast()
+  const { user }    = useAuth()
 
   const [bill, setBill]       = useState(null)
   const [loading, setLoading] = useState(true)
@@ -448,6 +452,8 @@ export default function CheckoutPage() {
   const [method, setMethod]   = useState(null)
   const [paying, setPaying]   = useState(false)
   const [done, setDone]       = useState(false)
+  // Ricevuta finale: dati dell'ultimo payment + receipt + bill snapshot
+  const [finalReceipt, setFinalReceipt] = useState(null) // { bill, payment, receipt }
 
   useEffect(() => {
     billingAPI.preConto(orderId)
@@ -470,22 +476,30 @@ export default function CheckoutPage() {
     if (!payMethod) return
     setPaying(true)
     try {
-      await billingAPI.pay({
+      // Salva la response del pagamento: { payment, receipt, payment_status }
+      const payResp = await billingAPI.pay({
         order_id: orderId,
         amount,
         payment_method: payMethod,
         is_split: isSplit,
         split_index: splitIndex,
         split_total: splitTotal,
-      })
+      }).then(r => r.data)
 
       const updatedBill = await billingAPI.preConto(orderId).then(r => r.data)
       setBill(updatedBill)
 
       if (updatedBill.payment_status === 'paid') {
+        // Salva snapshot ricevuta per la print view (snapshot evita race
+        // condition se l'utente preme "Stampa" dopo che il bill cambia)
+        setFinalReceipt({
+          bill: updatedBill,
+          payment: payResp.payment,
+          receipt: payResp.receipt,
+        })
         await freeTable()
         setDone(true)
-        setTimeout(() => navigate('/tables'), 2200)
+        // NB: NESSUN auto-redirect — l'utente deve poter stampare o chiudere
       } else {
         toast({
           type: 'success',
@@ -500,19 +514,57 @@ export default function CheckoutPage() {
     }
   }
 
-  // ── Done splash ───────────────────────────────────────────
-  if (done) {
+  // ── Done splash con RICEVUTA STAMPABILE ───────────────────
+  if (done && finalReceipt) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 200 }}
-        >
-          <CheckCircle2 size={72} className="text-[var(--color-ok)]" />
-        </motion.div>
-        <p className="serif text-[var(--color-text)] text-2xl font-bold">Pagamento completato!</p>
-        <p className="text-[var(--color-text-2)] text-sm">Tavolo liberato — ritorno alla mappa…</p>
+      <div className="min-h-screen flex flex-col items-center py-6 px-3 gap-4">
+        {/* Header celebrativo (nascosto in stampa via .no-print) */}
+        <div className="no-print flex flex-col items-center gap-2">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 200 }}
+          >
+            <CheckCircle2 size={56} className="text-[var(--color-ok)]" />
+          </motion.div>
+          <p className="serif text-[var(--color-text)] text-xl font-bold">
+            Pagamento completato!
+          </p>
+          <p className="text-[var(--color-text-3)] text-xs">
+            Stampa la ricevuta o chiudi per tornare ai tavoli
+          </p>
+        </div>
+
+        {/* Anteprima ricevuta su schermo (look POS thermal) */}
+        <div className="bg-white rounded-lg shadow-2xl my-2" style={{ width: 'auto' }}>
+          <ReceiptPrint
+            bill={finalReceipt.bill}
+            payment={finalReceipt.payment}
+            receipt={finalReceipt.receipt}
+            cashierName={user?.name}
+          />
+        </div>
+
+        {/* Pulsanti azione (nascosti in stampa) */}
+        <div className="no-print flex gap-3 mt-2 sticky bottom-4">
+          <Button
+            variant="primary"
+            size="lg"
+            leftIcon={<Printer size={18} />}
+            onClick={() => window.print()}
+            className="shadow-lg"
+          >
+            Stampa ricevuta
+          </Button>
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => navigate('/tables')}
+            className="shadow-lg"
+          >
+            Chiudi
+          </Button>
+        </div>
       </div>
     )
   }

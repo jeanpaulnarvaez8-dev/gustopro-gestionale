@@ -182,3 +182,41 @@ html, body, #root { height: 100%; }
   0%, 100% { stroke-width: 1.5; }
   35%      { stroke-width: 4; }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   Print styles — ottimizzato per stampante POS 80mm thermal
+   ───────────────────────────────────────────────────────────────── */
+@media print {
+  /* Nascondi tutto tranne la ricevuta */
+  body * {
+    visibility: hidden;
+  }
+  .receipt-print,
+  .receipt-print * {
+    visibility: visible;
+  }
+  .receipt-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 !important;
+    padding: 4mm !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+  /* Pagina @page: 80mm × auto, no margini stampante */
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+  /* Esplicitamente nascondi i pulsanti, header app, modali */
+  .no-print,
+  header,
+  nav,
+  button:not(.receipt-print button) {
+    display: none !important;
+  }
+}
