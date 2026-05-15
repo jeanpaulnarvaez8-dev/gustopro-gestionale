@@ -256,12 +256,15 @@ export const reservationsAPI = {
 
 // Ingredients (stock)
 export const ingredientsAPI = {
-  list:      ()              => api.get('/ingredients'),
-  lowStock:  ()              => api.get('/ingredients/low-stock'),
-  create:    (data)          => api.post('/ingredients', data),
-  update:    (id, data)      => api.put(`/ingredients/${id}`, data),
-  adjust:    (id, data)      => api.post(`/ingredients/${id}/adjust`, data),
-  movements: (id)            => api.get(`/ingredients/${id}/movements`),
+  list:        ()              => api.get('/ingredients'),
+  lowStock:    ()              => api.get('/ingredients/low-stock'),
+  // Scanner camera: cerca prodotto per barcode (EAN/GS1/QR).
+  // 200 → ingredient trovato; 404 → barcode sconosciuto (frontend apre form new).
+  byBarcode:   (code)          => api.get(`/ingredients/barcode/${encodeURIComponent(code)}`),
+  create:      (data)          => api.post('/ingredients', data),
+  update:      (id, data)      => api.put(`/ingredients/${id}`, data),
+  adjust:      (id, data)      => api.post(`/ingredients/${id}/adjust`, data),
+  movements:   (id)            => api.get(`/ingredients/${id}/movements`),
 };
 
 // Recipes

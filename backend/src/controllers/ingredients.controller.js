@@ -38,12 +38,17 @@ async function getLowStock(req, res, next) {
 // ── CREATE ───────────────────────────────────────────────────
 async function createIngredient(req, res, next) {
   try {
-    const { name, unit = 'kg', current_stock = 0, min_stock = 0, cost_per_unit = 0, supplier_id } = req.body;
+    const {
+      name, unit = 'kg', current_stock = 0, min_stock = 0, cost_per_unit = 0,
+      supplier_id, barcode, supplier_code,
+    } = req.body;
     if (!name) return res.status(400).json({ error: 'name obbligatorio' });
     const { rows } = await pool.query(
-      `INSERT INTO ingredients (tenant_id, name, unit, current_stock, min_stock, cost_per_unit, supplier_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [TENANT(req), name, unit, current_stock, min_stock, cost_per_unit, supplier_id || null]
+      `INSERT INTO ingredients
+         (tenant_id, name, unit, current_stock, min_stock, cost_per_unit, supplier_id, barcode, supplier_code)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [TENANT(req), name, unit, current_stock, min_stock, cost_per_unit,
+       supplier_id || null, barcode || null, supplier_code || null]
     );
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -53,7 +58,8 @@ async function createIngredient(req, res, next) {
 async function updateIngredient(req, res, next) {
   try {
     const { id } = req.params;
-    const { name, unit, min_stock, cost_per_unit, supplier_id, is_active } = req.body;
+    const { name, unit, min_stock, cost_per_unit, supplier_id, is_active,
+            barcode, supplier_code } = req.body;
     const { rows } = await pool.query(
       `UPDATE ingredients SET
          name          = COALESCE($1, name),
@@ -61,12 +67,44 @@ async function updateIngredient(req, res, next) {
          min_stock     = COALESCE($3, min_stock),
          cost_per_unit = COALESCE($4, cost_per_unit),
          supplier_id   = COALESCE($5, supplier_id),
-         is_active     = COALESCE($6, is_active)
-       WHERE id=$7 AND tenant_id=$8 RETURNING *`,
+         is_active     = COALESCE($6, is_active),
+         barcode       = COALESCE($7, barcode),
+         supplier_code = COALESCE($8, supplier_code)
+       WHERE id=$9 AND tenant_id=$10 RETURNING *`,
       [name || null, unit || null, min_stock ?? null, cost_per_unit ?? null,
-       supplier_id || null, is_active ?? null, id, TENANT(req)]
+       supplier_id || null, is_active ?? null,
+       barcode || null, supplier_code || null,
+       id, TENANT(req)]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Ingrediente non trovato' });
+    res.json(rows[0]);
+  } catch (err) { next(err); }
+}
+
+// ── LOOKUP BY BARCODE ────────────────────────────────────────
+// Use case: magazziniere scansiona etichetta MARR con la camera del telefono
+// → frontend chiama questo endpoint con il codice EAN/GS1 letto.
+// Risposta:
+//   200 + ingredient JSON  → trovato, lato client mostra +1 stock o edit
+//   404 + { error, barcode } → non trovato, lato client apre form "nuovo prodotto"
+//                              con il barcode pre-popolato
+async function findByBarcode(req, res, next) {
+  try {
+    const { code } = req.params;
+    if (!code || code.length < 4) {
+      return res.status(400).json({ error: 'barcode troppo corto' });
+    }
+    const { rows } = await pool.query(
+      `SELECT i.*, s.name AS supplier_name
+       FROM ingredients i
+       LEFT JOIN suppliers s ON s.id = i.supplier_id
+       WHERE i.tenant_id = $1 AND i.barcode = $2 AND i.is_active = true
+       LIMIT 1`,
+      [TENANT(req), code]
+    );
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'Barcode non trovato', barcode: code });
+    }
     res.json(rows[0]);
   } catch (err) { next(err); }
 }
@@ -129,4 +167,5 @@ module.exports = {
   listIngredients, getLowStock,
   createIngredient, updateIngredient,
   adjustStock, getMovements,
+  findByBarcode,
 };

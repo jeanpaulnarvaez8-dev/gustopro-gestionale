@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Package, Plus, Pencil, RefreshCw, Check, X,
-  ArrowUp, AlertTriangle, TrendingDown, History,
+  ArrowUp, AlertTriangle, TrendingDown, History, ScanLine,
 } from 'lucide-react'
 import { ingredientsAPI, inventoryAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
 import { Card, Badge, Button, Modal } from '../components/v2'
+import BarcodeScanner from '../components/BarcodeScanner'
 
 const UNITS = ['kg', 'g', 'lt', 'ml', 'pz', 'bt', 'sc']
 
@@ -279,7 +280,12 @@ export default function IngredientsPage() {
   const [newStock, setNewStock]       = useState('')
   const [newMin, setNewMin]           = useState('')
   const [newCost, setNewCost]         = useState('')
+  const [newBarcode, setNewBarcode]   = useState('')
+  const [newSupplierCode, setNewSupplierCode] = useState('')
   const [saving, setSaving]           = useState(false)
+  const [scannerOpen, setScannerOpen] = useState(false)
+  // Scanner workflow state: 'lookup' | 'quick-receive' | 'new-ingredient'
+  const [scanFlow, setScanFlow]       = useState(null) // { mode, barcode, ingredient? }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -305,12 +311,66 @@ export default function IngredientsPage() {
         current_stock: parseFloat(newStock) || 0,
         min_stock: parseFloat(newMin) || 0,
         cost_per_unit: parseFloat(newCost) || 0,
+        barcode: newBarcode.trim() || null,
+        supplier_code: newSupplierCode.trim() || null,
       })
       setNewName(''); setNewUnit('kg'); setNewStock(''); setNewMin(''); setNewCost('')
+      setNewBarcode(''); setNewSupplierCode('')
       setAdding(false)
       load()
       toast({ type: 'success', title: 'Ingrediente creato' })
-    } catch { toast({ type: 'error', title: 'Errore' }) }
+    } catch (err) {
+      const msg = err?.response?.data?.error
+      toast({ type: 'error', title: msg && /duplicate/i.test(msg) ? 'Barcode già usato' : 'Errore' })
+    }
+    finally { setSaving(false) }
+  }
+
+  // ─── Scanner: callback quando il codice viene letto ───────────
+  // Flow:
+  //   1. Codice scansionato → lookup backend GET /ingredients/barcode/:code
+  //   2a. Trovato → mostra dialog rapido "carica N unità" (default +1)
+  //   2b. Non trovato → apre form "Nuovo ingrediente" con barcode pre-popolato
+  const handleScanned = async (code) => {
+    setScannerOpen(false)
+    try {
+      const r = await ingredientsAPI.byBarcode(code)
+      setScanFlow({ mode: 'quick-receive', barcode: code, ingredient: r.data })
+    } catch (err) {
+      if (err?.response?.status === 404) {
+        // Sconosciuto: pre-popola form new ingredient
+        setNewBarcode(code)
+        setAdding(true)
+        setScanFlow(null)
+        toast({
+          type: 'info',
+          title: 'Barcode nuovo',
+          message: `${code} non in archivio. Compila i dati per crearlo.`,
+        })
+      } else {
+        toast({ type: 'error', title: 'Errore lookup barcode' })
+      }
+    }
+  }
+
+  // Quick-receive: +N stock all'ingrediente trovato via scan
+  const handleQuickReceive = async (delta) => {
+    if (!scanFlow?.ingredient) return
+    setSaving(true)
+    try {
+      await ingredientsAPI.adjust(scanFlow.ingredient.id, {
+        type: 'in',
+        quantity: Math.abs(delta),
+        notes: `Scan ${scanFlow.barcode}`,
+      })
+      toast({
+        type: 'success',
+        title: `+${delta} ${scanFlow.ingredient.unit}`,
+        message: `${scanFlow.ingredient.name} caricato`,
+      })
+      setScanFlow(null)
+      load()
+    } catch { toast({ type: 'error', title: 'Errore carico stock' }) }
     finally { setSaving(false) }
   }
 
@@ -350,6 +410,15 @@ export default function IngredientsPage() {
           </button>
           <Button
             size="sm"
+            variant="secondary"
+            leftIcon={<ScanLine size={13} />}
+            onClick={() => setScannerOpen(true)}
+            title="Scansiona codice a barre per carico veloce"
+          >
+            Scansiona
+          </Button>
+          <Button
+            size="sm"
             leftIcon={adding ? <X size={13} /> : <Plus size={13} />}
             onClick={() => setAdding(p => !p)}
           >
@@ -357,6 +426,61 @@ export default function IngredientsPage() {
           </Button>
         </div>
       </header>
+
+      {/* Scanner camera modal */}
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleScanned}
+        title="Scansiona prodotto"
+      />
+
+      {/* Quick-receive modal: barcode esistente → +N stock con un tap */}
+      <Modal
+        open={!!scanFlow && scanFlow.mode === 'quick-receive'}
+        onClose={() => setScanFlow(null)}
+        title="Carico veloce"
+        size="sm"
+      >
+        {scanFlow?.ingredient && (
+          <div className="flex flex-col gap-3">
+            <div className="text-center">
+              <p className="text-[var(--color-text)] serif text-lg font-bold">
+                {scanFlow.ingredient.name}
+              </p>
+              <p className="text-[var(--color-text-3)] text-xs tnum mt-1">
+                Stock attuale: <b className="text-[var(--color-text)]">
+                  {scanFlow.ingredient.current_stock} {scanFlow.ingredient.unit}
+                </b>
+              </p>
+              <p className="text-[var(--color-text-3)] text-[10px] mt-1">
+                Barcode: <code className="text-[var(--color-gold)]">{scanFlow.barcode}</code>
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {[1, 2, 5, 10, 12, 24].map((n) => (
+                <Button
+                  key={n}
+                  size="lg"
+                  loading={saving}
+                  onClick={() => handleQuickReceive(n)}
+                  className="text-lg"
+                >
+                  +{n}
+                </Button>
+              ))}
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setScanFlow(null)}
+              className="mt-2"
+            >
+              Annulla
+            </Button>
+          </div>
+        )}
+      </Modal>
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-3 max-w-3xl mx-auto w-full">
         {loading ? (
@@ -393,8 +517,40 @@ export default function IngredientsPage() {
                       <input type="number" step="0.001" value={newMin} onChange={e => setNewMin(e.target.value)} placeholder="Stock minimo" className={`${inputCls} tnum`} />
                       <input type="number" step="0.01" value={newCost} onChange={e => setNewCost(e.target.value)} placeholder="Costo €/unità" className={`${inputCls} tnum`} />
                     </div>
+                    {/* Barcode + codice fornitore — pre-popolati se arrivi da scan */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newBarcode}
+                          onChange={e => setNewBarcode(e.target.value)}
+                          placeholder="Barcode (EAN/GS1)"
+                          className={`${inputCls} flex-1 font-mono text-xs`}
+                          autoCapitalize="off"
+                          autoComplete="off"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setScannerOpen(true)}
+                          className="p-2 rounded-lg border border-[var(--color-border-strong)] text-[var(--color-gold)] hover:bg-[var(--color-gold-soft)]"
+                          title="Scansiona barcode"
+                          aria-label="Scansiona barcode"
+                        >
+                          <ScanLine size={14} />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={newSupplierCode}
+                        onChange={e => setNewSupplierCode(e.target.value)}
+                        placeholder="Cod. fornitore (es. MARR 047314)"
+                        className={`${inputCls} font-mono text-xs`}
+                        autoCapitalize="off"
+                        autoComplete="off"
+                      />
+                    </div>
                     <div className="flex gap-2">
-                      <Button variant="secondary" fullWidth onClick={() => setAdding(false)}>Annulla</Button>
+                      <Button variant="secondary" fullWidth onClick={() => { setAdding(false); setNewBarcode(''); setNewSupplierCode('') }}>Annulla</Button>
                       <Button fullWidth loading={saving} disabled={!newName.trim()} leftIcon={<Check size={13} />} onClick={handleCreate}>
                         Crea
                       </Button>
