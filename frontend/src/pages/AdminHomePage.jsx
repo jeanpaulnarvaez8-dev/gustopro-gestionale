@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { adminAPI, assignmentsAPI, usersAPI, zonesAPI, serviceAPI } from '../lib/api'
 import { useSocket } from '../context/SocketContext'
+import { getSocket } from '../lib/socket'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { Card, Badge, Button } from '../components/v2'
@@ -95,8 +96,28 @@ export default function AdminHomePage() {
   }, [toast])
 
   useEffect(() => { load() }, [load])
-  // Auto refresh ogni 30s
+  // Auto refresh ogni 30s (fallback se socket disconnesso o eventi persi)
   useEffect(() => { const i = setInterval(load, 30000); return () => clearInterval(i) }, [load])
+
+  // Real-time: ricarica stats quando arrivano eventi rilevanti dal socket.
+  // Senza questo, la dashboard si aggiorna solo via polling (max 30s di lag).
+  // Eventi che impattano KPI: tavoli, ordini, pagamenti, piatti pronti, alert.
+  useEffect(() => {
+    const socket = getSocket()
+    if (!socket) return
+    const refresh = () => load()
+    const events = [
+      'table-status-changed',  // cambio stato tavolo (occupied/free/dirty)
+      'new-order',             // nuovo ordine → tavolo occupato + scontrino
+      'order-settled',         // pagamento concluso → incasso + scontrino medio
+      'item-ready-notify',     // piatto pronto → readyItems
+      'item-served',           // piatto servito → readyItems
+      'service-alert',         // alert servizio in ritardo
+      'service-escalation',    // escalation manager
+    ]
+    events.forEach(ev => socket.on(ev, refresh))
+    return () => events.forEach(ev => socket.off(ev, refresh))
+  }, [load])
 
   const assignedWaiterIds = new Set(assignments.map(a => a.user_id))
   const unassignedWaiters = waiters.filter(w => !assignedWaiterIds.has(w.id))

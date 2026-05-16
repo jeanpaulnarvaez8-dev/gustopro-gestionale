@@ -6,7 +6,10 @@ const TENANT = (req) => req.tenant.id;
 
 async function getDashboardStats(req, res, next) {
   try {
-    const { rows: [stats] } = await pool.query(
+    const tenantId = TENANT(req);
+
+    // Query 1: aggregati su orders (revenue, scontrino medio, copertí)
+    const { rows: [oStats] } = await pool.query(
       `SELECT
          COALESCE(SUM(total_amount) FILTER (
            WHERE status='completed' AND DATE(created_at AT TIME ZONE 'Europe/Rome') = CURRENT_DATE
@@ -14,24 +17,39 @@ async function getDashboardStats(req, res, next) {
          COALESCE(SUM(total_amount) FILTER (
            WHERE status='completed' AND DATE(created_at AT TIME ZONE 'Europe/Rome') = CURRENT_DATE - 1
          ), 0) AS revenue_yesterday,
-         COUNT(*) FILTER (WHERE status='open') AS tables_open,
          COUNT(*) FILTER (
            WHERE payment_status='paid' AND DATE(created_at AT TIME ZONE 'Europe/Rome') = CURRENT_DATE
          ) AS covers_today,
          COALESCE(AVG(total_amount) FILTER (
            WHERE status='completed' AND DATE(created_at AT TIME ZONE 'Europe/Rome') = CURRENT_DATE
-         ), 0) AS avg_ticket_today
+         ), 0) AS avg_ticket
        FROM orders
        WHERE tenant_id = $1`,
-      [TENANT(req)]
+      [tenantId]
+    );
+
+    // Query 2: conteggio reale dei tavoli (occupied vs totali) dalla tabella
+    // tables — non da orders. Cosi' "tavoli occupati" riflette davvero la
+    // status del tavolo (occupied/dirty/reserved), che l'admin vede in mappa.
+    const { rows: [tStats] } = await pool.query(
+      `SELECT
+         COUNT(*) AS total_tables,
+         COUNT(*) FILTER (WHERE status='occupied') AS open_tables
+       FROM tables
+       WHERE tenant_id = $1`,
+      [tenantId]
     );
 
     res.json({
-      revenue_today: parseFloat(stats.revenue_today),
-      revenue_yesterday: parseFloat(stats.revenue_yesterday),
-      tables_open: parseInt(stats.tables_open, 10),
-      covers_today: parseInt(stats.covers_today, 10),
-      avg_ticket_today: parseFloat(stats.avg_ticket_today),
+      revenue_today:     parseFloat(oStats.revenue_today),
+      revenue_yesterday: parseFloat(oStats.revenue_yesterday),
+      covers_today:      parseInt(oStats.covers_today, 10),
+      avg_ticket:        parseFloat(oStats.avg_ticket),
+      open_tables:       parseInt(tStats.open_tables, 10),
+      total_tables:      parseInt(tStats.total_tables, 10),
+      // alias legacy (non rompere consumer esistenti)
+      tables_open:       parseInt(tStats.open_tables, 10),
+      avg_ticket_today:  parseFloat(oStats.avg_ticket),
     });
   } catch (err) { next(err); }
 }
