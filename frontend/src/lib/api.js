@@ -203,10 +203,11 @@ export const ordersAPI = {
   cancelItem: (id, itemId)    => api.delete(`/orders/${id}/items/${itemId}`),
 };
 
-// KDS — cucina (tutti gli item non-bevanda)
+// KDS — cucina principale (default station=cucina; supporta anche
+// /kds/pending?station=pizzeria|crudi|pasticceria per coda dedicata).
 export const kdsAPI = {
-  pending:          ()              => api.get('/kds/pending'),
-  updateItemStatus: (id, status)    => api.patch(`/kds/items/${id}/status`, { status }),
+  pending:          (station = 'cucina') => api.get('/kds/pending', { params: { station } }),
+  updateItemStatus: (id, status)         => api.patch(`/kds/items/${id}/status`, { status }),
 };
 
 // BAR — solo item con category.is_beverage = true (cocktail, vini, caffè, ...)

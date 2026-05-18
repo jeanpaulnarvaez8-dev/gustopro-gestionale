@@ -11,6 +11,9 @@ const TableMapPage           = lazy(() => import('./pages/TableMapPage'))
 const OrderPage              = lazy(() => import('./pages/OrderPage'))
 const CheckoutPage           = lazy(() => import('./pages/CheckoutPage'))
 const KDSPage                = lazy(() => import('./pages/KDSPage'))
+const KDSPizzeriaPage        = lazy(() => import('./pages/KDSPizzeriaPage'))
+const KDSCrudiPage           = lazy(() => import('./pages/KDSCrudiPage'))
+const KDSPasticceriaPage     = lazy(() => import('./pages/KDSPasticceriaPage'))
 const BarPage                = lazy(() => import('./pages/BarPage'))
 const DashboardPage          = lazy(() => import('./pages/DashboardPage'))
 const AnalyticsPage          = lazy(() => import('./pages/AnalyticsPage'))
@@ -103,7 +106,13 @@ function QRTableRedirect() {
 
 function HomeRedirect() {
   const { user } = useAuth()
-  if (user?.role === 'kitchen') return <Navigate to="/kds" replace />
+  if (user?.role === 'kitchen') {
+    // Kitchen con sub_role specifico → atterra sul KDS della propria stazione
+    if (user?.sub_role === 'pizzeria')    return <Navigate to="/kds/pizzeria" replace />
+    if (user?.sub_role === 'pasticceria') return <Navigate to="/kds/pasticceria" replace />
+    // chef / aiuto cucina / nessuno → KDS cucina principale (default)
+    return <Navigate to="/kds" replace />
+  }
   if (['admin', 'manager'].includes(user?.role)) return <Navigate to="/admin-home" replace />
   // Waiter al bar: landing diretto sulla coda bar invece di /tables.
   if (user?.role === 'waiter' && (user?.sub_role === 'bar' || user?.sub_role === 'bar/caffetteria')) {
@@ -139,6 +148,21 @@ export default function App() {
             <Route path="/kds" element={
               <RoleRoute roles={['kitchen', 'admin', 'manager']}>
                 <KDSPage />
+              </RoleRoute>
+            } />
+            <Route path="/kds/pizzeria" element={
+              <RoleRoute roles={['kitchen', 'admin', 'manager']}>
+                <KDSPizzeriaPage />
+              </RoleRoute>
+            } />
+            <Route path="/kds/crudi" element={
+              <RoleRoute roles={['kitchen', 'admin', 'manager']}>
+                <KDSCrudiPage />
+              </RoleRoute>
+            } />
+            <Route path="/kds/pasticceria" element={
+              <RoleRoute roles={['kitchen', 'admin', 'manager']}>
+                <KDSPasticceriaPage />
               </RoleRoute>
             } />
             <Route path="/bar" element={

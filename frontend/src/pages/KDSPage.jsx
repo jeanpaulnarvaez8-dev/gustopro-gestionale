@@ -91,15 +91,26 @@ function NavButton({ icon: Icon, label, onClick, hoverColor = 'gold' }) {
  * KDSPage — coda comande con stati pending/cooking/ready.
  *
  * Props:
- *   - mode: 'kitchen' (default) o 'bar'
- *           'kitchen' usa kdsAPI (item non-bevanda, role kitchen/manager/admin).
- *           'bar'     usa barAPI (item is_beverage=true, role waiter/manager/admin).
- *           Resto della UI identico.
+ *   - mode:    'kitchen' (default) o 'bar'
+ *   - station: opzionale, solo se mode='kitchen'. Default 'cucina'.
+ *              Valori: 'cucina', 'pizzeria', 'crudi', 'pasticceria'.
+ *              Filtra il KDS per la prep_station della categoria.
  */
-export default function KDSPage({ mode = 'kitchen' }) {
+const STATION_TITLES = {
+  cucina:      'KDS Cucina',
+  pizzeria:    'KDS Pizzeria',
+  crudi:       'KDS Crudi',
+  pasticceria: 'KDS Pasticceria',
+}
+
+export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
   const isBar = mode === 'bar'
-  const dataAPI = isBar ? barAPI : kdsAPI
-  const pageTitle = isBar ? 'Bar' : 'KDS Cucina'
+  const pageTitle = isBar ? 'Bar' : (STATION_TITLES[station] || 'KDS Cucina')
+  // Wrapper attorno a kdsAPI.pending(station) per non passare il param ovunque
+  const dataAPI = isBar ? barAPI : {
+    pending: () => kdsAPI.pending(station),
+    updateItemStatus: kdsAPI.updateItemStatus,
+  }
 
   const navigate = useNavigate()
   const { socket, isConnected } = useSocket()

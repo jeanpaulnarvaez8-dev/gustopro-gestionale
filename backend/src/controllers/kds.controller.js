@@ -10,6 +10,20 @@ const TENANT = (req) => req.tenant.id;
 
 async function getPendingOrders(req, res, next) {
   try {
+    // Filtro per stazione KDS. Default 'cucina' = NULL (backward compat).
+    // Stazioni valide: cucina (default), pizzeria, crudi, pasticceria.
+    // Bevande sempre escluse (vanno in /bar).
+    const stationParam = (req.query.station || 'cucina').toLowerCase();
+    const validStations = ['cucina', 'pizzeria', 'crudi', 'pasticceria'];
+    if (!validStations.includes(stationParam)) {
+      return res.status(400).json({ error: `station non valido. Valori: ${validStations.join(', ')}` });
+    }
+    // 'cucina' = NULL o esplicito 'cucina' (categorie senza prep_station)
+    const stationFilter = stationParam === 'cucina'
+      ? `(c.prep_station IS NULL OR c.prep_station = 'cucina')`
+      : `c.prep_station = $2`;
+    const params = stationParam === 'cucina' ? [TENANT(req)] : [TENANT(req), stationParam];
+
     const { rows } = await pool.query(
       `SELECT
          o.id             AS order_id,
@@ -31,6 +45,7 @@ async function getPendingOrders(req, res, next) {
          COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name,
          mi.prep_time_mins,
          COALESCE(c.course_type, 'altro')   AS course_type,
+         COALESCE(c.prep_station, 'cucina') AS prep_station,
          COALESCE(
            json_agg(m.name ORDER BY m.name) FILTER (WHERE m.id IS NOT NULL),
            '[]'
@@ -47,18 +62,17 @@ async function getPendingOrders(req, res, next) {
          AND oi.status NOT IN ('served','cancelled')
          AND oi.workflow_status = 'production'
          AND oi.tenant_id = $1
-         -- Esclude le bevande (sono in coda /bar) ma include item senza
-         -- categoria (combo, voci legacy senza menu_item_id).
          AND (c.is_beverage IS NULL OR c.is_beverage = false)
+         AND ${stationFilter}
        GROUP BY o.id, o.created_at, o.order_type, o.customer_name, o.pickup_time,
                 t.table_number, z.name,
                 oi.id, oi.quantity, oi.status, oi.display_status, oi.workflow_status, oi.notes, oi.sent_at,
                 oi.combo_menu_name, oi.combo_selections,
-                mi.name, mi.prep_time_mins, c.course_type
+                mi.name, mi.prep_time_mins, c.course_type, c.prep_station
        ORDER BY
          CASE oi.display_status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 ELSE 2 END,
          oi.sent_at ASC`,
-      [TENANT(req)]
+      params
     );
 
     // Group by order
@@ -84,6 +98,7 @@ async function getPendingOrders(req, res, next) {
         display_status:   row.display_status,
         workflow_status:  row.workflow_status,
         course_type:      row.course_type,
+        prep_station:     row.prep_station,
         notes:            row.item_notes,
         sent_at:          row.sent_at,
         prep_time_mins:   row.prep_time_mins,
