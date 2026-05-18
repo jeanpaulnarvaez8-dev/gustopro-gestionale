@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const { getIO } = require('../socket');
 const { ORDER_ITEM_STATUSES } = require('../config/constants');
 const { trackItemServed } = require('../services/performanceTracker');
+const pushService = require('../services/pushService');
 
 // Tenant isolation: KDS deve mostrare SOLO ticket della propria cucina.
 // Senza filtro, una pizzeria vedrebbe gli ordini di un ristorante diverso.
@@ -158,6 +159,16 @@ async function updateItemStatus(req, res, next) {
           quantity: info.quantity,
           tableNumber: info.table_number,
         });
+        // Web Push: anche se l'app del cameriere e' chiusa, riceve push.
+        // tag = orderId per non duplicare alert sullo stesso ordine.
+        pushService.sendToUser(info.waiter_id, {
+          title: `🍽️ Tavolo ${info.table_number} — Pronto`,
+          body: `${info.quantity}× ${info.item_name}`,
+          tag: `ready-${item.order_id}`,
+          url: `/order/${item.order_id}`,
+          vibrate: [200, 100, 200],
+          requireInteraction: true,
+        }).catch(() => {});
       }
     }
 

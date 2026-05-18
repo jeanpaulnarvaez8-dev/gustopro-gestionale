@@ -6,6 +6,7 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'https://loyal-eagerness-production.up.railway.app/api',
   withCredentials: false,
 });
+export { api }
 
 // ─── Endpoint offline-aware ──────────────────────────────────
 // Lista delle mutazioni che, in caso di errore di rete, vengono messe

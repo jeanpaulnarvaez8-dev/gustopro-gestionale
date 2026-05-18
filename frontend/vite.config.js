@@ -13,6 +13,11 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Strategy injectManifest: custom SW in src/sw.js (per Web Push handler)
+      // + precache automatico via __WB_MANIFEST.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       // Manifest gestito dal plugin (sostituisce public/manifest.json esistente).
       manifest: {
         name: 'GustoPro Gestionale',
@@ -28,32 +33,10 @@ export default defineConfig({
           { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
         ],
       },
-      workbox: {
-        // Precache di tutti gli asset hashed di Vite (HTML, JS, CSS, immagini)
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
-        // index.html è una SPA: redirect navigation requests al cache hit
-        navigateFallback: '/index.html',
-        // Non precacheare /api: gestito a runtime (NetworkFirst con fallback)
-        navigateFallbackDenylist: [/^\/api\//, /^\/socket\.io\//, /^\/health$/],
-        runtimeCaching: [
-          {
-            // Risposte GET API → network first, fallback cache (per resilienza temporanea)
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-            handler: 'NetworkFirst',
-            method: 'GET',
-            options: {
-              cacheName: 'gustopro-api-get',
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 }, // 1 giorno
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
-        // Backend POST/PUT/DELETE non vanno cachati: gestiti dalla queue offline
-        // (ancora da implementare in mini-step C)
       },
       devOptions: {
-        // SW NON attivo in dev di default (causa problemi HMR); abilitato solo in build
         enabled: false,
       },
     }),

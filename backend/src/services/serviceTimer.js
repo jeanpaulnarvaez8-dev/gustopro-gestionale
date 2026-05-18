@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { getIO } = require('../socket');
 const { trackAlertReceived, trackEscalation } = require('./performanceTracker');
+const pushService = require('./pushService');
 const logger = require('../lib/logger').child({ component: 'serviceTimer' });
 
 const INTERVAL_MS = 30_000; // controlla ogni 30 secondi
@@ -111,6 +112,16 @@ async function checkReadyItemsForTenant(client, tenantId) {
           elapsedMinutes: Math.round(elapsedMin),
           isBeverage: row.is_beverage,
         });
+        // Push native (anche se l'app e' chiusa)
+        const emoji = row.is_beverage ? '🍷' : '⏰';
+        pushService.sendToUser(row.waiter_id, {
+          title: `${emoji} Tavolo ${row.table_number} — ${Math.round(elapsedMin)}min`,
+          body: `${row.quantity}× ${row.item_name} in attesa di servizio!`,
+          tag: `alert-${row.item_id}`,
+          url: '/tables',
+          vibrate: [300, 100, 300, 100, 300],
+          requireInteraction: true,
+        }).catch(() => {});
         trackAlertReceived(tenantId, row.waiter_id);
       } else {
         await maybeResendAlert(client, tenantId, io, row, alertType, elapsedMin);
@@ -134,6 +145,15 @@ async function checkReadyItemsForTenant(client, tenantId) {
           elapsedMinutes: Math.round(elapsedMin),
           isBeverage: row.is_beverage,
         });
+        // Push escalation a tutti admin/manager attivi del tenant
+        pushService.sendToRole(tenantId, ['admin','manager'], {
+          title: `🚨 Tavolo ${row.table_number} — ESCALATION`,
+          body: `${row.waiter_name} non ha servito ${row.item_name} (${Math.round(elapsedMin)}min)`,
+          tag: `escalation-${row.item_id}`,
+          url: '/admin-home',
+          vibrate: [500, 200, 500],
+          requireInteraction: true,
+        }).catch(() => {});
         trackEscalation(tenantId, row.waiter_id);
       }
     }
