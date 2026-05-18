@@ -46,6 +46,9 @@ async function getPendingOrders(req, res, next) {
          AND oi.status NOT IN ('served','cancelled')
          AND oi.workflow_status = 'production'
          AND oi.tenant_id = $1
+         -- Esclude le bevande (sono in coda /bar) ma include item senza
+         -- categoria (combo, voci legacy senza menu_item_id).
+         AND (c.is_beverage IS NULL OR c.is_beverage = false)
        GROUP BY o.id, o.created_at, o.order_type, o.customer_name, o.pickup_time,
                 t.table_number, z.name,
                 oi.id, oi.quantity, oi.status, oi.display_status, oi.workflow_status, oi.notes, oi.sent_at,
