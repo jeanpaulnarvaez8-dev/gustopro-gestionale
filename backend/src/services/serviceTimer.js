@@ -5,10 +5,18 @@ const logger = require('../lib/logger').child({ component: 'serviceTimer' });
 
 const INTERVAL_MS = 30_000; // controlla ogni 30 secondi
 
-// Soglie in minuti
+// Soglie in MINUTI per emettere alert "item ready non servito".
+// waiter  = soglia bassa, alert sul tablet del cameriere assegnato.
+// manager = escalation, alert anche su admin/manager.
+//
+// Riva (operational tuning): 3min/6min uniforme. Il responsabile della
+// sala vuole feedback rapido sia su piatti che su drink — un cocktail
+// "ready" da 5 minuti su servizio spiaggia estivo e' gia' annacquato.
+// Erano 20/25 food + 5/10 beverage, ma il personale "impazziva" perche'
+// la latenza era troppo alta per reagire (test reale 2026-05-18).
 const THRESHOLDS = {
-  food:     { waiter: 20, manager: 25 },
-  beverage: { waiter: 5,  manager: 10 },
+  food:     { waiter: 3, manager: 6 },
+  beverage: { waiter: 3, manager: 6 },
 };
 
 let timer = null;
