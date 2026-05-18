@@ -491,15 +491,19 @@ async function transferOrder(req, res, next) {
         [to_waiter_id, id, tenantId]
       );
       await client.query(
-        `INSERT INTO order_audit_log (tenant_id, order_id, user_id, action, payload)
-         VALUES ($1, $2, $3, 'transfer', $4::jsonb)`,
-        [tenantId, id, req.user.id, JSON.stringify({
-          from_waiter_id: order.waiter_id,
-          from_waiter_name: order.from_waiter_name,
-          to_waiter_id,
-          to_waiter_name: target.name,
-          reason: reason || 'codice 32',
-        })]
+        `INSERT INTO order_audit_log
+           (tenant_id, order_id, user_id, user_name, action, from_value, to_value, metadata)
+         VALUES ($1, $2, $3, $4, 'transfer', $5, $6, $7::jsonb)`,
+        [
+          tenantId, id, req.user.id, req.user.name,
+          order.from_waiter_name || '',
+          target.name,
+          JSON.stringify({
+            from_waiter_id: order.waiter_id,
+            to_waiter_id,
+            reason: reason || 'codice 32',
+          }),
+        ]
       );
       await client.query('COMMIT');
     } catch (e) {
