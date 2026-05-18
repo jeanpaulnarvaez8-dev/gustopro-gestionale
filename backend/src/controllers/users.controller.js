@@ -19,6 +19,23 @@ async function listUsers(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// Lista camerieri (waiter attivi) — accessibile a tutti i ruoli loggati.
+// Usato per: dropdown "Codice 32" (delega ordine), assegnazioni zone,
+// futuro picker "passa il tavolo a...". Niente PIN, niente created_at —
+// solo info pubbliche internamente.
+async function listWaiters(req, res, next) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, sub_role
+         FROM users
+         WHERE tenant_id = $1 AND role = 'waiter' AND is_active = true
+         ORDER BY name`,
+      [TENANT(req)]
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+}
+
 async function createUser(req, res, next) {
   try {
     const { name, pin, role, sub_role } = req.body;
@@ -91,4 +108,4 @@ async function deleteUser(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { listUsers, createUser, updateUser, deleteUser };
+module.exports = { listUsers, listWaiters, createUser, updateUser, deleteUser };

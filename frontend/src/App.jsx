@@ -37,6 +37,7 @@ const DesignSystemPage       = lazy(() => import('./pages/DesignSystemPage'))
 
 // Componenti UI eager (sempre montati nelle route protette).
 import ServiceAlertBanner from './components/ServiceAlertBanner'
+import InstallPrompt from './components/InstallPrompt'
 import MobileBottomNav from './components/MobileBottomNav'
 import MandatoryAlertModal from './components/MandatoryAlertModal'
 import DirectDeliveredAlerts from './components/DirectDeliveredAlerts'
@@ -74,6 +75,8 @@ function ProtectedRoute() {
         <Outlet />
       </div>
       <MobileBottomNav />
+      {/* PWA: prompt installazione (Chrome/Edge nativo, iOS istruzioni manuali) */}
+      <InstallPrompt />
     </>
   )
 }

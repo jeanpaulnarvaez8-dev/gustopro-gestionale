@@ -3,11 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Plus, Minus, Trash2, Send, ShoppingCart, RefreshCw,
-  CheckCircle2, BookOpen, ChevronRight, Building, Clock, Zap, PackageCheck,
+  CheckCircle2, BookOpen, ChevronRight, Building, Clock, Zap, PackageCheck, UserPlus2,
 } from 'lucide-react'
 import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
-import { menuAPI, ordersAPI, tablesAPI, comboAPI } from '../lib/api'
+import { useAuth } from '../context/AuthContext'
+import { menuAPI, ordersAPI, tablesAPI, comboAPI, waitersAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { AllergenBadges } from '../lib/allergens'
 import { Card, Badge, Modal, BottomSheet, Button } from '../components/v2'
@@ -173,6 +174,27 @@ export default function OrderPage() {
   const [weightSheet, setWeightSheet] = useState(null)
   const [weightInput, setWeightInput] = useState('')
   const [showMobileCart, setShowMobileCart] = useState(false)
+  // "Codice 32" — modal delega ordine ad altro cameriere
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [waiters, setWaiters] = useState([])
+  const [transferTo, setTransferTo] = useState('')
+  const [transferring, setTransferring] = useState(false)
+  const { user: authUser } = useAuth()
+
+  // Acqua + pane reminder: SOP Riva chiede di portarli SUBITO all'apertura.
+  // Banner visivo dismissibile, persistito per tavolo in localStorage cosi'
+  // non riappare ad ogni nav back. Se l'ordine e' gia' aperto (active_order_id)
+  // si assume che il cameriere abbia gia' gestito acqua/pane.
+  const wbKey = tableId ? `gustopro_wb_${tableId}` : null
+  const [wbDismissed, setWbDismissed] = useState(() => {
+    try { return wbKey ? localStorage.getItem(wbKey) === '1' : false } catch { return false }
+  })
+  const acquaInCart = cartItems.some(ci => /acqua/i.test(ci.item?.name || ''))
+  const showWaterBreadBanner = !wbDismissed && !table?.active_order_id && !acquaInCart
+  const dismissWB = () => {
+    setWbDismissed(true)
+    try { wbKey && localStorage.setItem(wbKey, '1') } catch {}
+  }
 
   // Load table + categories + combos on mount
   useEffect(() => {
@@ -323,7 +345,100 @@ export default function OrderPage() {
             <span>{itemCount}</span>
           </div>
         )}
+
+        {/* Codice 32: passa ordine ad altro cameriere (solo se ordine aperto) */}
+        {table?.active_order_id && (
+          <button
+            onClick={async () => {
+              setTransferOpen(true)
+              if (waiters.length === 0) {
+                try {
+                  const { data } = await waitersAPI.list()
+                  setWaiters(data.filter(u => u.id !== authUser?.id))
+                } catch { /* show empty list */ }
+              }
+            }}
+            className="shrink-0 px-2.5 py-1.5 rounded-lg bg-[var(--color-warn-soft)] border border-[var(--color-warn)]/40 text-[var(--color-warn)] text-xs font-semibold flex items-center gap-1 hover:brightness-110 active:scale-95 transition"
+            title="Codice 32 — passa l'ordine ad altro cameriere"
+          >
+            <UserPlus2 size={13} /> 32
+          </button>
+        )}
       </header>
+
+      {/* ─── Banner acqua + pane (apertura tavolo) ─────────────── */}
+      {showWaterBreadBanner && (
+        <div className="bg-[var(--color-warn-soft)] border-b-2 border-[var(--color-warn)]/40 px-4 py-2.5 flex items-center gap-3 text-sm shrink-0">
+          <span className="text-2xl">🥖</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-[var(--color-warn)]">Hai portato acqua e pane?</p>
+            <p className="text-[10px] text-[var(--color-text-3)] mt-0.5">
+              SOP Riva: vanno serviti SUBITO all'apertura del tavolo. Aggiungi acqua al carrello sotto.
+            </p>
+          </div>
+          <button
+            onClick={dismissWB}
+            className="px-3 py-1.5 rounded-md bg-[var(--color-warn)] text-black text-xs font-bold hover:brightness-110 shrink-0"
+          >
+            OK fatto
+          </button>
+        </div>
+      )}
+
+      {/* ─── Modal Codice 32 (delega ordine) ──────────────────── */}
+      {transferOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => !transferring && setTransferOpen(false)}>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border-strong)] rounded-2xl p-5 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="serif text-lg font-bold text-[var(--color-text)] mb-1 flex items-center gap-2">
+              <UserPlus2 size={18} className="text-[var(--color-warn)]" /> Codice 32 — Delega
+            </h3>
+            <p className="text-xs text-[var(--color-text-3)] mb-4">
+              Passi la responsabilità del Tavolo {table?.table_number} ad un altro cameriere. L'azione è tracciata nell'audit.
+            </p>
+            <label className="text-[10px] uppercase tracking-wider text-[var(--color-text-2)] font-semibold">Cameriere destinatario</label>
+            <select
+              value={transferTo}
+              onChange={e => setTransferTo(e.target.value)}
+              className="mt-1 w-full bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] rounded-lg px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-gold)]"
+              disabled={transferring}
+            >
+              <option value="">— scegli —</option>
+              {waiters.map(w => (
+                <option key={w.id} value={w.id}>
+                  {w.name}{w.sub_role ? ` (${w.sub_role})` : ''}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setTransferOpen(false)}
+                disabled={transferring}
+                className="flex-1 px-4 py-2 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] text-sm font-semibold hover:text-[var(--color-text)]"
+              >
+                Annulla
+              </button>
+              <button
+                disabled={!transferTo || transferring}
+                onClick={async () => {
+                  setTransferring(true)
+                  try {
+                    await ordersAPI.transfer(table.active_order_id, transferTo, 'codice 32')
+                    toast({ type: 'success', title: 'Codice 32', message: 'Ordine passato. Audit registrato.' })
+                    setTransferOpen(false)
+                    setTransferTo('')
+                    navigate('/tables')
+                  } catch (e) {
+                    toast({ type: 'error', title: 'Errore delega', message: e?.response?.data?.error || 'Riprova' })
+                  } finally { setTransferring(false) }
+                }}
+                className="flex-1 px-4 py-2 rounded-lg bg-[var(--color-warn)] text-black text-sm font-bold disabled:opacity-40 hover:brightness-110"
+              >
+                {transferring ? 'Passo…' : 'Conferma 32'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
 

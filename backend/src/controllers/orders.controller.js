@@ -440,4 +440,96 @@ async function cancelOrder(req, res, next) {
   }
 }
 
-module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder };
+// "Codice 32" — passa la responsabilita' di un ordine ad un altro cameriere.
+// Tipico: Marco prende il tavolo ma e' occupato col tavolo successivo,
+// chiama 32 → Umberto eredita l'ordine. Logga in order_audit_log per
+// audit trail (esiste obbligo policy interno di tracciare il passaggio).
+async function transferOrder(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { to_waiter_id, reason } = req.body;
+    const tenantId = req.tenant.id;
+
+    if (!to_waiter_id) {
+      return res.status(400).json({ error: 'to_waiter_id obbligatorio' });
+    }
+
+    // 1. Verifica destinatario: deve essere un waiter ATTIVO dello stesso tenant
+    const { rows: [target] } = await pool.query(
+      `SELECT id, name, role, sub_role FROM users
+        WHERE id = $1 AND tenant_id = $2 AND is_active = true`,
+      [to_waiter_id, tenantId]
+    );
+    if (!target) return res.status(404).json({ error: 'Cameriere destinatario non valido' });
+    if (target.role !== 'waiter') {
+      return res.status(400).json({ error: `Il destinatario deve essere un cameriere (ruolo attuale: ${target.role})` });
+    }
+
+    // 2. Recupera ordine + verifica appartenenza tenant + status aperto
+    const { rows: [order] } = await pool.query(
+      `SELECT o.id, o.waiter_id, o.table_id, o.status, t.table_number, u.name AS from_waiter_name
+         FROM orders o
+         LEFT JOIN tables t ON t.id = o.table_id
+         LEFT JOIN users u ON u.id = o.waiter_id
+        WHERE o.id = $1 AND o.tenant_id = $2`,
+      [id, tenantId]
+    );
+    if (!order) return res.status(404).json({ error: 'Ordine non trovato' });
+    if (order.status !== 'open') {
+      return res.status(409).json({ error: `Ordine in stato '${order.status}' non trasferibile` });
+    }
+    if (order.waiter_id === to_waiter_id) {
+      return res.status(409).json({ error: 'Stesso cameriere — nessun trasferimento' });
+    }
+
+    // 3. UPDATE + audit log atomico
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE orders SET waiter_id = $1 WHERE id = $2 AND tenant_id = $3`,
+        [to_waiter_id, id, tenantId]
+      );
+      await client.query(
+        `INSERT INTO order_audit_log (tenant_id, order_id, user_id, action, payload)
+         VALUES ($1, $2, $3, 'transfer', $4::jsonb)`,
+        [tenantId, id, req.user.id, JSON.stringify({
+          from_waiter_id: order.waiter_id,
+          from_waiter_name: order.from_waiter_name,
+          to_waiter_id,
+          to_waiter_name: target.name,
+          reason: reason || 'codice 32',
+        })]
+      );
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    // 4. Emissione socket: notifica entrambi (vecchio + nuovo waiter) +
+    //    admin/manager per audit visivo.
+    const { getIO } = require('../socket');
+    const io = getIO();
+    io?.to(`user:${order.waiter_id}`).emit('order-transferred-out', {
+      orderId: id, tableNumber: order.table_number, toWaiterName: target.name,
+    });
+    io?.to(`user:${to_waiter_id}`).emit('order-transferred-in', {
+      orderId: id, tableNumber: order.table_number, fromWaiterName: order.from_waiter_name,
+    });
+    io?.to('role:admin').to('role:manager').emit('order-transferred', {
+      orderId: id, tableNumber: order.table_number,
+      fromWaiterName: order.from_waiter_name, toWaiterName: target.name,
+      byUserName: req.user.name, reason: reason || 'codice 32',
+    });
+    // Aggiorna anche la mappa tavoli (view tables_with_active_order ha
+    // active_waiter_name che ora cambia → forza refresh client)
+    io?.emit('table-status-changed', { tableId: order.table_id });
+
+    res.json({ ok: true, order_id: id, new_waiter: { id: target.id, name: target.name } });
+  } catch (err) { next(err); }
+}
+
+module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder };

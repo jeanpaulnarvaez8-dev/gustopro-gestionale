@@ -147,6 +147,11 @@ export const authAPI = {
 };
 
 // Users (admin)
+// Endpoint pubblico per codice 32 / assegnazioni: lista waiter attivi.
+export const waitersAPI = {
+  list: () => api.get('/users/waiters'),
+}
+
 export const usersAPI = {
   list:   ()         => api.get('/users'),
   create: (data)     => api.post('/users', data),
@@ -192,6 +197,8 @@ export const ordersAPI = {
   create:     (data)          => api.post('/orders', data),
   get:        (id)            => api.get(`/orders/${id}`),
   addItems:   (id, items)     => api.post(`/orders/${id}/items`, { items }),
+  // "Codice 32": passa l'ordine ad altro cameriere (delega).
+  transfer:   (id, toWaiterId, reason) => api.post(`/orders/${id}/transfer`, { to_waiter_id: toWaiterId, reason }),
   cancelItem: (id, itemId)    => api.delete(`/orders/${id}/items/${itemId}`),
 };
 
