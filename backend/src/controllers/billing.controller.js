@@ -68,8 +68,11 @@ async function processPayment(req, res, next) {
   const client = await pool.connect();
   const tenantId = TENANT(req);
   try {
-    const { order_id, amount, payment_method, is_split = false, split_index = 1, split_total = 1 } = req.body;
+    const { order_id, amount, payment_method, is_split = false, split_index = 1, split_total = 1, register } = req.body;
     const VALID_METHODS = ['cash', 'card', 'digital', 'room_charge'];
+    // register: identificativo cassa fisica (cassa_1/cassa_2/...). Free-form
+    // ma normalizzato lowercase per consistenza analytics. Nullable.
+    const registerNorm = register ? String(register).toLowerCase().trim().slice(0, 32) : null;
     if (!order_id || amount == null || !payment_method) {
       return res.status(400).json({ error: 'order_id, amount, payment_method obbligatori' });
     }
@@ -102,9 +105,9 @@ async function processPayment(req, res, next) {
 
     // Insert payment (amount = importo effettivo incassato, eventuale resto già dedotto)
     const { rows: [payment] } = await client.query(
-      `INSERT INTO payments (tenant_id, order_id, amount, payment_method, processed_by)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [tenantId, order_id, effectiveAmount, payment_method, req.user.id]
+      `INSERT INTO payments (tenant_id, order_id, amount, payment_method, processed_by, register)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [tenantId, order_id, effectiveAmount, payment_method, req.user.id, registerNorm]
     );
     payment.change_given = changeGiven;
     payment.received_amount = parseFloat(amount);
@@ -119,11 +122,11 @@ async function processPayment(req, res, next) {
       [order_id, tenantId]
     );
 
-    // Insert receipt
+    // Insert receipt (con register per audit cassa incrociato con payment)
     const { rows: [receipt] } = await client.query(
-      `INSERT INTO receipts (tenant_id, order_id, issued_by, total_amount, tax_amount, is_split, split_index, split_total, receipt_data)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [tenantId, order_id, req.user.id, amount, order.tax_amount, is_split, split_index, split_total, JSON.stringify({ items })]
+      `INSERT INTO receipts (tenant_id, order_id, issued_by, total_amount, tax_amount, is_split, split_index, split_total, receipt_data, register)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [tenantId, order_id, req.user.id, amount, order.tax_amount, is_split, split_index, split_total, JSON.stringify({ items }), registerNorm]
     );
 
     // Check if fully paid

@@ -8,7 +8,9 @@ router.post('/',                    requireRole('waiter','manager','admin'), cre
 router.get('/:id',                  getOrder);
 router.post('/:id/items',           requireRole('waiter','manager','admin'), addItems);
 router.post('/:id/transfer',        requireRole('waiter','manager','admin'), transferOrder);
-router.delete('/:id/items/:itemId', requireRole('manager','admin'), cancelItem);
+// cancelItem: il controller gestisce autorizzazione manager/admin OR
+// override PIN responsabile (per richiesta cancellazione di un waiter).
+router.delete('/:id/items/:itemId', requireRole('waiter','manager','admin'), cancelItem);
 router.delete('/:id',               requireRole('manager','admin'),          cancelOrder);
 
 module.exports = router;

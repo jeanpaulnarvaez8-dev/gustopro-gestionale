@@ -455,6 +455,20 @@ export default function CheckoutPage() {
   // Ricevuta finale: dati dell'ultimo payment + receipt + bill snapshot
   const [finalReceipt, setFinalReceipt] = useState(null) // { bill, payment, receipt }
 
+  // Cassa fisica: persistita in localStorage per device. Default null,
+  // l'utente la seleziona dalla pillola in alto. Inviata al backend con
+  // ogni payment per audit (tabella payments.register).
+  const [activeRegister, setActiveRegister] = useState(() => {
+    try { return localStorage.getItem('gustopro_register') || null } catch { return null }
+  })
+  function switchRegister(r) {
+    setActiveRegister(r)
+    try {
+      if (r) localStorage.setItem('gustopro_register', r)
+      else localStorage.removeItem('gustopro_register')
+    } catch {}
+  }
+
   useEffect(() => {
     billingAPI.preConto(orderId)
       .then(r => setBill(r.data))
@@ -477,6 +491,10 @@ export default function CheckoutPage() {
     setPaying(true)
     try {
       // Salva la response del pagamento: { payment, receipt, payment_status }
+      // Identificatore cassa fisica: usa il valore corrente dello state
+      // (sincronizzato con localStorage). Il selettore C1/C2 nell'header
+      // permette di switchare. Inviato col payment per audit.
+      const register = activeRegister
       const payResp = await billingAPI.pay({
         order_id: orderId,
         amount,
@@ -484,6 +502,7 @@ export default function CheckoutPage() {
         is_split: isSplit,
         split_index: splitIndex,
         split_total: splitTotal,
+        register,
       }).then(r => r.data)
 
       const updatedBill = await billingAPI.preConto(orderId).then(r => r.data)
@@ -585,6 +604,25 @@ export default function CheckoutPage() {
         <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">
           Cassa {bill?.table_number ? `· Tavolo ${bill.table_number}` : '· Asporto'}
         </h1>
+
+        {/* Register switcher: cassa 1 / cassa 2 / nessuna. Persistito per device. */}
+        <div className="ml-3 inline-flex items-center rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-0.5 text-[10px]">
+          {['cassa_1','cassa_2'].map(r => (
+            <button
+              key={r}
+              onClick={() => switchRegister(activeRegister === r ? null : r)}
+              className={`px-2 py-1 rounded-md font-semibold transition uppercase tracking-wider ${
+                activeRegister === r
+                  ? 'bg-[var(--color-gold)] text-[#13181C]'
+                  : 'text-[var(--color-text-3)] hover:text-[var(--color-text)]'
+              }`}
+              title={`Identifica questo device come ${r.replace('_', ' ')}`}
+            >
+              {r.replace('cassa_', 'C')}
+            </button>
+          ))}
+        </div>
+
         {bill && (
           <span className="ml-auto serif text-[var(--color-gold)] font-bold text-xl tnum">
             {formatPrice(bill.total_amount)}

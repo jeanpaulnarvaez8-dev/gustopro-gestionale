@@ -408,12 +408,43 @@ async function addItems(req, res, next) {
 // ── cancelItem ───────────────────────────────────────────────
 
 async function cancelItem(req, res, next) {
+  const bcrypt = require('bcrypt');
   try {
     const { id: order_id, itemId } = req.params;
     const tenantId = TENANT(req);
+    // Body opzionale: { override: { pin, reason } } — permette al WAITER
+    // di cancellare un item se fornisce il PIN di un manager/admin presente.
+    const override = req.body?.override;
+
+    let authorizer = req.user; // di default chi chiama
+    let overrideUsed = false;
+    let overrideReason = null;
 
     if (!['admin', 'manager'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Solo admin o responsabili possono cancellare voci. Contatta un responsabile.' });
+      // Non manager/admin: serve override valido
+      if (!override?.pin || !/^\d{4,6}$/.test(override.pin)) {
+        return res.status(403).json({
+          error: 'Cancellazione richiede autorizzazione responsabile. Inserisci PIN responsabile.',
+          requires_override: true,
+        });
+      }
+      // Verifica PIN contro managers/admin attivi del tenant
+      const { rows: managers } = await pool.query(
+        `SELECT id, name, role, pin_hash FROM users
+          WHERE tenant_id=$1 AND is_active=true AND role IN ('manager','admin')`,
+        [tenantId]
+      );
+      let matched = null;
+      for (const m of managers) {
+        if (await bcrypt.compare(override.pin, m.pin_hash)) { matched = m; break; }
+      }
+      if (!matched) {
+        req.log?.warn({ requested_by: req.user.id, order_id, itemId }, '[cancelItem] override PIN errato');
+        return res.status(401).json({ error: 'PIN responsabile non riconosciuto' });
+      }
+      authorizer = matched;
+      overrideUsed = true;
+      overrideReason = override.reason || null;
     }
 
     const { rows: [item] } = await pool.query(
@@ -426,11 +457,20 @@ async function cancelItem(req, res, next) {
       "SELECT COALESCE(mi.name, oi.combo_menu_name, 'Item') AS name FROM order_items oi LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id WHERE oi.id = $1 AND oi.tenant_id = $2",
       [itemId, tenantId]
     );
+    // Audit: user_id/user_name = chi ha autorizzato (manager se override usato,
+    // altrimenti chi chiama). Metadata include override info per ricostruzione.
     await pool.query(
       `INSERT INTO order_audit_log (tenant_id, order_id, item_id, action, from_value, to_value, user_id, user_name, metadata)
        VALUES ($1,$2,$3,'item_delete',$4,'cancelled',$5,$6,$7)`,
-      [tenantId, order_id, itemId, item.status, req.user.id, req.user.name,
-       JSON.stringify({ item_name: itemNameQ.rows[0]?.name, quantity: item.quantity })]
+      [tenantId, order_id, itemId, item.status, authorizer.id, authorizer.name,
+       JSON.stringify({
+         item_name: itemNameQ.rows[0]?.name,
+         quantity: item.quantity,
+         override_used: overrideUsed,
+         requested_by_id: req.user.id,
+         requested_by_name: req.user.name,
+         override_reason: overrideReason,
+       })]
     );
 
     res.json(item);

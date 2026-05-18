@@ -200,7 +200,9 @@ export const ordersAPI = {
   addItems:   (id, items)     => api.post(`/orders/${id}/items`, { items }),
   // "Codice 32": passa l'ordine ad altro cameriere (delega).
   transfer:   (id, toWaiterId, reason) => api.post(`/orders/${id}/transfer`, { to_waiter_id: toWaiterId, reason }),
-  cancelItem: (id, itemId)    => api.delete(`/orders/${id}/items/${itemId}`),
+  // cancelItem: opzionalmente passa override = { pin, reason } se chi
+  // chiama non e' manager/admin (servira' PIN responsabile fisico).
+  cancelItem: (id, itemId, override)   => api.delete(`/orders/${id}/items/${itemId}`, { data: override ? { override } : undefined }),
 };
 
 // KDS — cucina principale (default station=cucina; supporta anche
@@ -233,6 +235,7 @@ export const adminAPI = {
   taxReport:           (from, to) => api.get('/admin/tax-report', { params: { from, to } }),
   stockReconciliation: (from, to) => api.get('/admin/stock-reconciliation', { params: { from, to } }),
   staffPerformance:    (period)   => api.get('/admin/staff-performance', { params: { period } }),
+  auditReport:         (from, to) => api.get('/admin/audit-report', { params: { from, to } }),
 };
 
 // Combos (menù fissi)

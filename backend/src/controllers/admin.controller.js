@@ -321,4 +321,102 @@ async function getStaffPerformance(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getDashboardStats, getHourlyRevenue, getTopItems, getByWeekday, getTaxReport, getStockReconciliation, getStaffPerformance };
+/**
+ * getAuditReport — report scostamenti settimanali (cancellazioni,
+ * trasferimenti codice 32, modifiche post-invio, sconti, voids).
+ *
+ * Aggrega tutto da order_audit_log: serve al maitre/admin per la
+ * verifica settimanale di accountability prima delle riunioni team.
+ *
+ * Query param: ?from=YYYY-MM-DD&to=YYYY-MM-DD (default ultimi 7 giorni)
+ */
+async function getAuditReport(req, res, next) {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600_000).toISOString().slice(0, 10);
+    const from = req.query.from || sevenDaysAgo;
+    const to   = req.query.to   || today;
+    const tenantId = TENANT(req);
+
+    // Totale per azione + per chi ha autorizzato (manager se override)
+    const { rows: byAction } = await pool.query(
+      `SELECT
+         action,
+         COUNT(*)::int        AS total,
+         COUNT(DISTINCT user_id)::int AS distinct_users,
+         COUNT(*) FILTER (WHERE metadata->>'override_used' = 'true')::int AS via_override
+       FROM order_audit_log
+       WHERE tenant_id = $1
+         AND DATE(created_at AT TIME ZONE 'Europe/Rome') BETWEEN $2 AND $3
+       GROUP BY action
+       ORDER BY total DESC`,
+      [tenantId, from, to]
+    );
+
+    // Top "autorizzatori" (chi firma piu' override)
+    const { rows: topAuthorizers } = await pool.query(
+      `SELECT
+         user_id, user_name,
+         COUNT(*)::int AS total_actions,
+         COUNT(*) FILTER (WHERE metadata->>'override_used' = 'true')::int AS overrides_signed
+       FROM order_audit_log
+       WHERE tenant_id = $1
+         AND DATE(created_at AT TIME ZONE 'Europe/Rome') BETWEEN $2 AND $3
+         AND user_id IS NOT NULL
+       GROUP BY user_id, user_name
+       ORDER BY total_actions DESC
+       LIMIT 15`,
+      [tenantId, from, to]
+    );
+
+    // Cancellazioni dettagliate (ultime 100) per drill-down
+    const { rows: cancellations } = await pool.query(
+      `SELECT
+         oal.created_at,
+         oal.action,
+         oal.user_name             AS authorized_by,
+         oal.metadata->>'item_name'             AS item_name,
+         oal.metadata->>'quantity'              AS quantity,
+         oal.metadata->>'requested_by_name'     AS requested_by,
+         oal.metadata->>'override_reason'       AS reason,
+         (oal.metadata->>'override_used')::bool AS override_used,
+         COALESCE(t.table_number, 'ASPORTO')    AS table_number
+       FROM order_audit_log oal
+       LEFT JOIN orders o  ON o.id = oal.order_id AND o.tenant_id = oal.tenant_id
+       LEFT JOIN tables t  ON t.id = o.table_id AND t.tenant_id = oal.tenant_id
+       WHERE oal.tenant_id = $1
+         AND oal.action IN ('item_delete','transfer','order_cancel')
+         AND DATE(oal.created_at AT TIME ZONE 'Europe/Rome') BETWEEN $2 AND $3
+       ORDER BY oal.created_at DESC
+       LIMIT 100`,
+      [tenantId, from, to]
+    );
+
+    // Aggregati cassa per register (chi ha lavorato di piu' / quale cassa)
+    const { rows: byRegister } = await pool.query(
+      `SELECT
+         COALESCE(register, '(nessuna)') AS register,
+         COUNT(*)::int AS num_pagamenti,
+         COALESCE(SUM(amount), 0)::numeric(10,2) AS totale
+       FROM payments
+       WHERE tenant_id = $1
+         AND DATE(created_at AT TIME ZONE 'Europe/Rome') BETWEEN $2 AND $3
+       GROUP BY register
+       ORDER BY totale DESC`,
+      [tenantId, from, to]
+    );
+
+    res.json({
+      periodo: { from, to },
+      by_action: byAction,
+      top_authorizers: topAuthorizers,
+      cancellations,
+      by_register: byRegister,
+    });
+  } catch (err) { next(err); }
+}
+
+module.exports = {
+  getDashboardStats, getHourlyRevenue, getTopItems, getByWeekday,
+  getTaxReport, getStockReconciliation, getStaffPerformance, getAuditReport,
+};
