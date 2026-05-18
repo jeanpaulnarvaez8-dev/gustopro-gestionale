@@ -52,7 +52,10 @@ export default function TableMapPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   // editMode reso disponibile via FloorPlanInteractive (toolbar interna).
-  const [, setMyZoneIds] = useState(null)
+  // myZoneIds: zone assegnate al cameriere oggi. Array vuoto come default
+  // cosi' .includes() non crasha quando il backend non ritorna assegnazioni
+  // o l'utente non e' un waiter.
+  const [myZoneIds, setMyZoneIds] = useState([])
 
   const canEdit = ['admin', 'manager'].includes(user?.role)
 
