@@ -140,6 +140,16 @@ async function processPayment(req, res, next) {
         "UPDATE orders SET payment_status='paid', status='completed' WHERE id=$1 AND tenant_id=$2",
         [order_id, tenantId]
       );
+      // Bug fix 2026-05-18: il pagamento NON aggiornava tables.status, emetteva
+      // solo il socket event. Risultato: ricaricando il tablet il tavolo
+      // tornava 'occupied' perche' il DB non era stato persistito. Adesso
+      // l'UPDATE viene fatto nella stessa transazione del payment.
+      if (order.table_id) {
+        await client.query(
+          "UPDATE tables SET status='dirty' WHERE id=$1 AND tenant_id=$2",
+          [order.table_id, tenantId]
+        );
+      }
     } else {
       await client.query(
         "UPDATE orders SET payment_status='partial' WHERE id=$1 AND tenant_id=$2",
