@@ -26,7 +26,10 @@ async function createUser(req, res, next) {
     if (!/^\d{4,6}$/.test(pin)) return res.status(400).json({ error: 'PIN deve essere 4-6 cifre' });
 
     const pin_hash = await bcrypt.hash(pin, 10);
-    const subRole = role === 'waiter' ? (sub_role || null) : null;
+    // sub_role accettato per waiter (sala, bar, ...) e kitchen (pizzeria,
+    // chef, aiuto cucina). Altri ruoli (admin/manager/cashier) → forzato null.
+    const ROLES_WITH_SUBROLE = ['waiter', 'kitchen'];
+    const subRole = ROLES_WITH_SUBROLE.includes(role) ? (sub_role || null) : null;
     const { rows } = await pool.query(
       `INSERT INTO users (tenant_id, name, pin_hash, role, sub_role)
          VALUES ($1,$2,$3,$4,$5)
@@ -47,9 +50,10 @@ async function updateUser(req, res, next) {
     let i = 1;
 
     const { sub_role } = req.body;
+    const ROLES_WITH_SUBROLE = ['waiter', 'kitchen'];
     if (name)       { fields.push(`name=$${i++}`);      values.push(name); }
     if (role)       { fields.push(`role=$${i++}`);      values.push(role); }
-    if (sub_role !== undefined) { fields.push(`sub_role=$${i++}`); values.push(role === 'waiter' ? (sub_role || null) : null); }
+    if (sub_role !== undefined) { fields.push(`sub_role=$${i++}`); values.push(ROLES_WITH_SUBROLE.includes(role) ? (sub_role || null) : null); }
     if (is_active !== undefined) { fields.push(`is_active=$${i++}`); values.push(is_active); }
     if (pin) {
       if (!/^\d{4,6}$/.test(pin)) return res.status(400).json({ error: 'PIN deve essere 4-6 cifre' });

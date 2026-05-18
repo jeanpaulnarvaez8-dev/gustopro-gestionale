@@ -14,15 +14,25 @@ const ROLES = [
   { id: 'kitchen', label: 'Cucina',    tone: 'ok'    },
 ]
 
-const SUB_ROLES = [
-  { id: '',                 label: 'Nessuno' },
-  { id: 'sala',             label: 'Sala' },
-  { id: 'bar',              label: 'Bar' },
-  { id: 'bar/caffetteria',  label: 'Bar/Caffetteria' },
-  { id: 'accompagnatore',   label: 'Accompagnatore' },
-  { id: 'bevandista',       label: 'Bevandista' },
-  { id: 'comi',             label: 'Comì' },
-]
+// Sotto-ruoli per ruolo. Waiter (sala/bar/...) e kitchen (pizzeria/chef/...).
+const SUB_ROLES_BY_ROLE = {
+  waiter: [
+    { id: '',                label: 'Nessuno' },
+    { id: 'sala',            label: 'Sala' },
+    { id: 'bar',             label: 'Bar' },
+    { id: 'bar/caffetteria', label: 'Bar/Caffetteria' },
+    { id: 'accompagnatore',  label: 'Accompagnatore' },
+    { id: 'bevandista',      label: 'Bevandista' },
+    { id: 'comi',            label: 'Comì' },
+  ],
+  kitchen: [
+    { id: '',              label: 'Nessuno' },
+    { id: 'chef',          label: 'Chef' },
+    { id: 'pizzeria',      label: 'Pizzeria' },
+    { id: 'aiuto cucina',  label: 'Aiuto cucina' },
+    { id: 'pasticceria',   label: 'Pasticceria' },
+  ],
+}
 
 const TONE_BTN = {
   err:  'border-[var(--color-err)]/40   text-[var(--color-err)]  bg-[var(--color-err-soft)]',
@@ -126,12 +136,12 @@ function UserForm({ initial, onClose, onSaved }) {
           </div>
         </div>
 
-        {/* Sub-role (solo per camerieri) */}
-        {form.role === 'waiter' && (
+        {/* Sub-role per waiter e kitchen — set di opzioni diverso per ruolo */}
+        {SUB_ROLES_BY_ROLE[form.role] && (
           <div className="flex flex-col gap-1.5">
             <label className={labelCls}>Sotto-ruolo</label>
             <div className="grid grid-cols-2 gap-2">
-              {SUB_ROLES.map(sr => (
+              {SUB_ROLES_BY_ROLE[form.role].map(sr => (
                 <button
                   key={sr.id}
                   type="button"
