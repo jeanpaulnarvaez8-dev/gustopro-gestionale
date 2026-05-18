@@ -236,6 +236,13 @@ export const adminAPI = {
   stockReconciliation: (from, to) => api.get('/admin/stock-reconciliation', { params: { from, to } }),
   staffPerformance:    (period)   => api.get('/admin/staff-performance', { params: { period } }),
   auditReport:         (from, to) => api.get('/admin/audit-report', { params: { from, to } }),
+}
+
+// Chiusura cassa fine giornata (Z report non fiscale)
+export const dayCloseAPI = {
+  preview:  (date, register)            => api.get('/day-close/preview', { params: { date, register } }),
+  close:    (data)                       => api.post('/day-close', data),
+  list:     (days = 30)                  => api.get('/day-close/list', { params: { days } }),
 };
 
 // Combos (menù fissi)

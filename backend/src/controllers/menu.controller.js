@@ -115,9 +115,35 @@ async function updateCategory(req, res, next) {
 async function deleteCategory(req, res, next) {
   try {
     const { id } = req.params;
+    const tenantId = TENANT(req);
+    // ?hard=true → eliminazione fisica permanente. Permesso solo se la
+    // categoria NON ha menu_items collegati (anche disabilitati): altrimenti
+    // rompiamo FK / perdiamo dati. Soft-delete invece archivia (default).
+    const hard = req.query.hard === 'true';
+
+    if (hard) {
+      const { rows: [count] } = await pool.query(
+        'SELECT COUNT(*)::int AS n FROM menu_items WHERE category_id=$1 AND tenant_id=$2',
+        [id, tenantId]
+      );
+      if (count.n > 0) {
+        return res.status(409).json({
+          error: `Impossibile eliminare definitivamente: ${count.n} piatti collegati. Sposta o cancella i piatti prima.`,
+          menu_items_count: count.n,
+        });
+      }
+      const result = await pool.query(
+        'DELETE FROM categories WHERE id=$1 AND tenant_id=$2',
+        [id, tenantId]
+      );
+      if (result.rowCount === 0) return res.status(404).json({ error: 'Categoria non trovata' });
+      return res.status(204).end();
+    }
+
+    // Soft delete: archivia in is_active=false
     const result = await pool.query(
       'UPDATE categories SET is_active=false WHERE id=$1 AND tenant_id=$2',
-      [id, TENANT(req)]
+      [id, tenantId]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'Categoria non trovata' });
     res.status(204).end();

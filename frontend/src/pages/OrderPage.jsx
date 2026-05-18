@@ -280,15 +280,34 @@ export default function OrderPage() {
       if (table?.active_order_id) {
         await ordersAPI.addItems(table.active_order_id, items)
       } else {
-        await ordersAPI.create({ table_id: tableId, items, covers })
-        await tablesAPI.setStatus(tableId, 'occupied').catch(() => {})
+        try {
+          await ordersAPI.create({ table_id: tableId, items, covers })
+          await tablesAPI.setStatus(tableId, 'occupied').catch(() => {})
+        } catch (e) {
+          // 409 = race condition: un altro cameriere ha appena aperto il
+          // tavolo prima di noi (codice 32, o stato locale stale). Il backend
+          // ci passa existing_order_id → trasformiamo il create in addItems
+          // sullo stesso ordine. Niente DOPPIO conto.
+          const existing = e?.response?.data?.existing_order_id
+          if (e?.response?.status === 409 && existing) {
+            await ordersAPI.addItems(existing, items)
+            toast({
+              type: 'info',
+              title: 'Aggiunto a ordine esistente',
+              message: 'Un altro cameriere aveva già aperto il tavolo.',
+            })
+          } else {
+            throw e
+          }
+        }
       }
 
       clearCart()
       setSent(true)
       setTimeout(() => navigate('/tables'), 1800)
-    } catch {
-      toast({ type: 'error', title: 'Errore invio ordine', message: 'Riprova' })
+    } catch (e) {
+      const msg = e?.response?.data?.error || 'Riprova'
+      toast({ type: 'error', title: 'Errore invio ordine', message: msg })
       setSending(false)
     }
   }

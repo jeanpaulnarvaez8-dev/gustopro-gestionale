@@ -33,6 +33,7 @@ router.use('/kds',          require('./kds.routes'));
 router.use('/bar',          require('./bar.routes'));
 router.use('/push',         require('./push.routes'));
 router.use('/override',     require('./override.routes'));
+router.use('/day-close',    require('./dayClose.routes'));
 router.use('/billing',      require('./billing.routes'));
 router.use('/admin',        require('./admin.routes'));
 router.use('/inventory',    require('./inventory.routes'));
