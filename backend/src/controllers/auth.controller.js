@@ -21,7 +21,7 @@ async function login(req, res, next) {
     // Fetch active users for this tenant only. We still iterate + bcrypt.compare
     // (rather than hashing client-side) to avoid leaking which users exist.
     const { rows } = await pool.query(
-      'SELECT id, name, pin_hash, role FROM users WHERE is_active = true AND tenant_id = $1',
+      'SELECT id, name, pin_hash, role, sub_role FROM users WHERE is_active = true AND tenant_id = $1',
       [tenantId]
     );
 
@@ -48,6 +48,7 @@ async function login(req, res, next) {
         id: matchedUser.id,
         name: matchedUser.name,
         role: matchedUser.role,
+        sub_role: matchedUser.sub_role,
         tenant_id: tenantId,
       },
       process.env.JWT_SECRET,
@@ -60,6 +61,7 @@ async function login(req, res, next) {
         id: matchedUser.id,
         name: matchedUser.name,
         role: matchedUser.role,
+        sub_role: matchedUser.sub_role,
         tenant_id: tenantId,
       },
     });
