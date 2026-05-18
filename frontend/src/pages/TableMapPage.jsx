@@ -65,16 +65,15 @@ export default function TableMapPage() {
         tablesAPI.list(),
       ])
 
+      // Cross-visibility (test reale 2026-05-18): tutti i camerieri vedono
+      // TUTTE le zone, cosi' sanno chi sta servendo cosa anche fuori dal
+      // proprio settore. Le zone assegnate restano evidenziate via spotlight
+      // (lo spotlightZoneId continua a funzionare sull'active zone).
       let allowedZones = zonesRes.data
-      // Cameriere: mostra solo le zone assegnate
       if (user?.role === 'waiter') {
         try {
           const { data: myAssignments } = await assignmentsAPI.my()
-          const ids = myAssignments.map(a => a.zone_id)
-          setMyZoneIds(ids)
-          if (ids.length > 0) {
-            allowedZones = zonesRes.data.filter(z => ids.includes(z.id))
-          }
+          setMyZoneIds(myAssignments.map(a => a.zone_id))
         } catch { /* fallback */ }
       }
 

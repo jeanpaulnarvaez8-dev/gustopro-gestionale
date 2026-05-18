@@ -493,6 +493,31 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
           {table.seats}p
         </text>
 
+        {/* Cross-visibility (test reale Riva): se occupato e backend
+            ritorna active_waiter_name + active_items_count, mostra una
+            chip "Marco · 3it" sotto al tavolo cosi' tutti i camerieri
+            sanno chi serve cosa senza dover navigare. */}
+        {isOccupied && table.active_waiter_name && (
+          <g style={{ pointerEvents: 'none' }}>
+            <rect
+              x={w/2 - 28} y={h - 6} width={56} height={13} rx={6}
+              fill="rgba(212,175,55,0.18)"
+              stroke="rgba(212,175,55,0.45)"
+              strokeWidth="0.6"
+            />
+            <text
+              x={w/2} y={h + 1}
+              textAnchor="middle" dominantBaseline="middle"
+              fontSize="7.5" fontWeight="700"
+              fill="#D4AF37"
+              fontFamily="Inter, system-ui"
+            >
+              {String(table.active_waiter_name).split(' ')[0].slice(0, 8)}
+              {table.active_items_count > 0 ? ` · ${table.active_items_count}` : ''}
+            </text>
+          </g>
+        )}
+
         {/* Badge tempo (se occupato/parked) — bandina tonda sopra al tavolo */}
         {(isOccupied || table.status === 'parked') && sinceMin !== null && sinceMin > 0 && (
           <g style={{ pointerEvents: 'none' }}>
