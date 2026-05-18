@@ -44,6 +44,7 @@ async function getPendingOrders(req, res, next) {
          oi.combo_selections,
          COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name,
          mi.prep_time_mins,
+         mi.required_kit                    AS required_kit,
          COALESCE(c.course_type, 'altro')   AS course_type,
          COALESCE(c.prep_station, 'cucina') AS prep_station,
          COALESCE(
@@ -68,7 +69,7 @@ async function getPendingOrders(req, res, next) {
                 t.table_number, z.name,
                 oi.id, oi.quantity, oi.status, oi.display_status, oi.workflow_status, oi.notes, oi.sent_at,
                 oi.combo_menu_name, oi.combo_selections,
-                mi.name, mi.prep_time_mins, c.course_type, c.prep_station
+                mi.name, mi.prep_time_mins, mi.required_kit, c.course_type, c.prep_station
        ORDER BY
          CASE oi.display_status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 ELSE 2 END,
          oi.sent_at ASC`,
@@ -99,6 +100,7 @@ async function getPendingOrders(req, res, next) {
         workflow_status:  row.workflow_status,
         course_type:      row.course_type,
         prep_station:     row.prep_station,
+        required_kit:     row.required_kit,  // JSONB array di stringhe o null
         notes:            row.item_notes,
         sent_at:          row.sent_at,
         prep_time_mins:   row.prep_time_mins,
@@ -117,7 +119,9 @@ async function updateItemStatus(req, res, next) {
     const { status } = req.body;
     const tenantId = TENANT(req);
 
-    const validStatuses = ['cooking', 'ready', 'served', 'cancelled'];
+    // 'oven_done' = fase intermedia pizza (sfornata, in attesa di finitura).
+    // Non viene mai notificato al cameriere — solo internamente al pizzaiolo.
+    const validStatuses = ['cooking', 'oven_done', 'ready', 'served', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: `Status non valido. Valori: ${validStatuses.join(', ')}` });
     }
@@ -182,6 +186,52 @@ async function updateItemStatus(req, res, next) {
           tag: `ready-${item.order_id}`,
           url: `/order/${item.order_id}`,
           vibrate: [200, 100, 200],
+          requireInteraction: true,
+        }).catch(() => {});
+      }
+
+      // ─── "10 qui = 10 là" coerenza pass ──────────────────────────
+      // Quando un item diventa ready, verifico se TUTTI gli items dello
+      // stesso course di QUELL'ordine sono pronti. Se sì → emette
+      // 'course-ready-pass' al waiter + al pass cucina, cosi' il cameriere
+      // sa che puo' portare tutto il course insieme (no piatti freddi).
+      const { rows: course } = await pool.query(
+        `SELECT
+           COALESCE(c.course_type, 'altro') AS course_type,
+           COUNT(*)                          AS total,
+           COUNT(*) FILTER (
+             WHERE oi.status IN ('ready','served')
+           )                                 AS ready_count
+         FROM order_items oi
+         LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+         LEFT JOIN categories c  ON c.id = mi.category_id
+         WHERE oi.order_id = $1 AND oi.tenant_id = $2
+           AND oi.status != 'cancelled'
+           AND COALESCE(c.course_type, 'altro') = (
+             SELECT COALESCE(c2.course_type, 'altro')
+               FROM order_items oi2
+               LEFT JOIN menu_items mi2 ON mi2.id = oi2.menu_item_id
+               LEFT JOIN categories c2  ON c2.id = mi2.category_id
+              WHERE oi2.id = $3
+           )
+         GROUP BY COALESCE(c.course_type, 'altro')`,
+        [item.order_id, tenantId, id]
+      );
+      const c0 = course[0];
+      if (c0 && Number(c0.total) === Number(c0.ready_count) && Number(c0.total) >= 1 && info) {
+        // Tutti gli items del course sono pronti → segnala coerenza pass.
+        getIO()?.to(`user:${info.waiter_id}`).to('role:admin').to('role:manager').emit('course-ready-pass', {
+          orderId: item.order_id,
+          tableNumber: info.table_number,
+          courseType: c0.course_type,
+          itemsCount: Number(c0.total),
+        });
+        pushService.sendToUser(info.waiter_id, {
+          title: `✅ Tavolo ${info.table_number} — ${c0.course_type} pronto`,
+          body: `Tutti i ${c0.total} pezzi del ${c0.course_type} sono al pass. Servi insieme!`,
+          tag: `course-ready-${item.order_id}-${c0.course_type}`,
+          url: `/order/${item.order_id}`,
+          vibrate: [400, 100, 200, 100, 200],
           requireInteraction: true,
         }).catch(() => {});
       }

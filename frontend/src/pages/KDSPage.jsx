@@ -15,6 +15,7 @@ import { playNewOrderBeep, isSoundEnabled, toggleSound } from '../lib/kdsBeep'
 
 // ─── Status config (tokens Riva) ─────────────────────────────────────────────
 // pending=warn (giallo), cooking=terracotta (arancio caldo), ready=ok (verde)
+// oven_done=sea (blu) → solo pizza, fase intermedia tra cottura e impiattamento
 const ITEM_STATUS = {
   pending: {
     label: 'In attesa',
@@ -32,6 +33,17 @@ const ITEM_STATUS = {
     text: 'text-[var(--color-terracotta)]',
     next: 'ready',
     nextLabel: 'Pronto',
+    nextBtn: 'bg-[var(--color-ok)] hover:brightness-110 text-white',
+  },
+  // Fase intermedia solo per pizza: sfornata, in attesa di impiattamento.
+  // Visualizzato in blu, pulsante "Impiatta" verde porta a ready.
+  oven_done: {
+    label: 'Sfornata',
+    bg: 'bg-[var(--color-sea-soft)]',
+    border: 'border-[var(--color-sea)]/50',
+    text: 'text-[var(--color-sea)]',
+    next: 'ready',
+    nextLabel: 'Impiatta',
     nextBtn: 'bg-[var(--color-ok)] hover:brightness-110 text-white',
   },
   ready: {
@@ -615,6 +627,14 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
                                     ⚠ {item.notes}
                                   </p>
                                 )}
+                                {/* Kit utensili al pass: astice→schiaccianoci, granchio→pinza, ecc.
+                                    Mostrato in arancione per attirare attenzione: il cameriere
+                                    DEVE portare il kit prima di arrivare al tavolo. */}
+                                {Array.isArray(item.required_kit) && item.required_kit.length > 0 && (
+                                  <p className="text-[var(--color-gold)] text-xs mt-0.5 font-bold flex items-center gap-1">
+                                    🛠️ Kit: {item.required_kit.join(' · ')}
+                                  </p>
+                                )}
                               </div>
                               <span className={`text-xs font-semibold whitespace-nowrap ${cfg.text}`}>
                                 {cfg.label}
@@ -624,11 +644,21 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
                             {(() => {
                               // Bevande: skip "Inizia" → diretto a "Pronto"
                               const isBev = item.course_type === 'bevanda'
-                              const nextStatus = isBev && cfg.next === 'cooking' ? 'ready' : cfg.next
-                              const nextLabel = isBev && cfg.next === 'cooking' ? 'Pronto' : cfg.nextLabel
+                              // Pizza doppia fase: cooking → oven_done (Sfornata)
+                              // → ready (Impiatta). Altri items: cooking → ready.
+                              const isPizza = item.prep_station === 'pizzeria'
+                              let nextStatus = cfg.next
+                              let nextLabel = cfg.nextLabel
+                              if (isBev && cfg.next === 'cooking') {
+                                nextStatus = 'ready'; nextLabel = 'Pronto'
+                              } else if (isPizza && item.status === 'cooking') {
+                                nextStatus = 'oven_done'; nextLabel = 'Sfornata'
+                              }
                               const btnColor = nextStatus === 'ready'
                                 ? 'bg-[var(--color-ok)] hover:brightness-110 text-white'
-                                : 'bg-[var(--color-terracotta)] hover:brightness-110 text-white'
+                                : nextStatus === 'oven_done'
+                                  ? 'bg-[var(--color-sea)] hover:brightness-110 text-white'
+                                  : 'bg-[var(--color-terracotta)] hover:brightness-110 text-white'
 
                               return nextStatus && (
                                 <button

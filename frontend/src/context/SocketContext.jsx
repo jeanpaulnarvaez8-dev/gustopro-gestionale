@@ -128,6 +128,29 @@ export function SocketProvider({ children }) {
       });
     });
 
+    // Course coerenza pass: tutti gli items di un course (antipasti/primi/...)
+    // dello stesso tavolo sono pronti contemporaneamente — il cameriere puo'
+    // portarli insieme rispettando "10 qui = 10 la'" (sincronizzazione tavolo).
+    socket.on('course-ready-pass', (data) => {
+      toast({
+        type: 'success',
+        title: `✅ ${data.courseType} pronto — Tavolo ${data.tableNumber}`,
+        message: `${data.itemsCount} pezzi al pass, servire INSIEME`,
+        duration: 12000,
+      });
+    });
+
+    // Pre-allerta crudi: nuovo ordine con item della stazione crudi.
+    // Toast prominente per kitchen/admin/manager — serve prep tempestiva.
+    socket.on('crudi-preallerta', (data) => {
+      toast({
+        type: 'warning',
+        title: `🦪 Pre-allerta Crudi — Tavolo ${data.tableNumber}`,
+        message: data.summary || `${data.totalQty} item da preparare`,
+        duration: 18000,
+      });
+    });
+
     // Sbarazzo mancato: tavolo dirty da troppo tempo (workflow pulizia).
     // Emesso solo a admin/manager (responsabile sala), no spam ai camerieri.
     socket.on('table-cleanup-alert', (data) => {

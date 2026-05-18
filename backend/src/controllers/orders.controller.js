@@ -235,6 +235,51 @@ async function createOrder(req, res, next) {
       });
     }
 
+    // Pre-allerta crudi: se l'ordine contiene almeno un item di prep_station
+    // 'crudi' (ostriche, tartare, antipasti di mare), notifica la cucina crudi
+    // IMMEDIATAMENTE — la sicurezza alimentare richiede prep tempestiva e
+    // i crudi devono essere serviti freschi.
+    try {
+      const { rows: crudiItems } = await pool.query(
+        `SELECT oi.id, oi.quantity, mi.name AS item_name,
+                COALESCE(t.table_number, 'ASPORTO') AS table_number
+           FROM order_items oi
+           LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+           LEFT JOIN categories c  ON c.id = mi.category_id
+           LEFT JOIN orders o      ON o.id = oi.order_id
+           LEFT JOIN tables t      ON t.id = o.table_id
+          WHERE oi.order_id = $1 AND oi.tenant_id = $2
+            AND c.prep_station = 'crudi'`,
+        [order.id, tenantId]
+      );
+      if (crudiItems.length > 0) {
+        const totalQty = crudiItems.reduce((s, i) => s + Number(i.quantity || 1), 0);
+        const summary = crudiItems.map(i => `${i.quantity}× ${i.item_name}`).join(', ');
+        const tableNumber = crudiItems[0]?.table_number;
+        getIO()?.emit('crudi-preallerta', {
+          orderId: order.id,
+          tableNumber,
+          totalQty,
+          items: crudiItems.map(i => ({ id: i.id, name: i.item_name, qty: i.quantity })),
+          summary,
+        });
+        // Push native a tutto staff cucina del tenant (ne arrivera' una sola
+        // per device, ma e' OK — la cucina crudi e' chiunque sia sull KDS crudi).
+        const pushService = require('../services/pushService');
+        pushService.sendToRole(tenantId, ['kitchen','admin','manager'], {
+          title: `🦪 PRE-ALLERTA CRUDI — Tavolo ${tableNumber}`,
+          body: summary,
+          tag: `crudi-${order.id}`,
+          url: '/kds/crudi',
+          vibrate: [400, 100, 400, 100, 400],
+          requireInteraction: true,
+        }).catch(() => {});
+      }
+    } catch (e) {
+      // Non bloccare il flusso ordine se la preallerta fallisce
+      req.log?.warn({ err: e?.message, orderId: order.id }, 'crudi preallerta failed');
+    }
+
     res.status(201).json({ ...updatedOrder, items: orderItems });
   } catch (err) {
     await client.query('ROLLBACK');
