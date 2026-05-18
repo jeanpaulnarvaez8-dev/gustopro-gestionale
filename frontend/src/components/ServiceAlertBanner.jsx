@@ -14,11 +14,28 @@ export default function ServiceAlertBanner() {
 
   async function handlePostpone(alertId) {
     try {
-      await serviceAPI.postpone(alertId)
+      const res = await serviceAPI.postpone(alertId)
       setServiceAlerts(prev => prev.filter(a => a.alertId !== alertId))
-      toast({ type: 'info', title: 'Posticipato', message: 'Alert posticipato di 5 minuti' })
-    } catch {
-      toast({ type: 'error', title: 'Errore', message: 'Impossibile posticipare' })
+      const deferCount = res?.data?.defer_count
+      const isLast = deferCount >= 2
+      toast({
+        type: isLast ? 'warning' : 'info',
+        title: isLast ? 'Ultimo posticipo' : 'Posticipato +3 min',
+        message: isLast
+          ? `Hai già posticipato ${deferCount}×. Prossimo: escalation manager.`
+          : `Re-allarme tra 3 minuti se non servi.`
+      })
+    } catch (e) {
+      const status = e?.response?.status
+      if (status === 409) {
+        toast({
+          type: 'error',
+          title: 'Limite raggiunto',
+          message: e?.response?.data?.error || 'Servi adesso o chiama il responsabile.'
+        })
+      } else {
+        toast({ type: 'error', title: 'Errore', message: 'Impossibile posticipare' })
+      }
     }
   }
 
@@ -87,7 +104,7 @@ export default function ServiceAlertBanner() {
                       className="px-3 py-1.5 text-xs font-medium rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors flex items-center gap-1"
                     >
                       <Clock className="w-3.5 h-3.5" />
-                      +5 min
+                      +3 min
                     </button>
                     <button
                       onClick={() => handleServed(alert.itemId, alert.alertId)}

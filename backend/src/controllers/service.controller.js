@@ -56,15 +56,42 @@ async function getReadyItems(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// Limite massimo di posticipi consecutivi per alert. Oltre questo,
+// l'alert e' considerato "ignorato" e escalation immediata al manager.
+const MAX_POSTPONE_COUNT = 2;
+const POSTPONE_MINUTES = 3;
+
 async function postponeAlert(req, res, next) {
   try {
     const { id } = req.params;
+
+    // Recupera defer_count attuale per limitare i posticipi
+    const { rows: [current] } = await pool.query(
+      `SELECT defer_count FROM service_alerts
+       WHERE id = $1 AND target_user_id = $2 AND tenant_id = $3`,
+      [id, req.user.id, TENANT(req)]
+    );
+    if (!current) return res.status(404).json({ error: 'Alert non trovato' });
+    if (current.defer_count >= MAX_POSTPONE_COUNT) {
+      return res.status(409).json({
+        error: `Limite posticipi raggiunto (${MAX_POSTPONE_COUNT}). Servi o chiama il responsabile.`,
+        defer_count: current.defer_count,
+      });
+    }
+
     const { rows: [alert] } = await pool.query(
       `UPDATE service_alerts
-       SET postponed_until = NOW() + INTERVAL '5 minutes'
+       SET postponed_until = NOW() + ($4 || ' minutes')::INTERVAL,
+           defer_count     = defer_count + 1,
+           defer_history   = COALESCE(defer_history, '[]'::jsonb) || jsonb_build_object(
+             'at',           NOW(),
+             'by_user_id',   $2::uuid,
+             'by_user_name', $5::text,
+             'minutes',      $4::int
+           )
        WHERE id = $1 AND target_user_id = $2 AND tenant_id = $3
        RETURNING *`,
-      [id, req.user.id, TENANT(req)]
+      [id, req.user.id, TENANT(req), POSTPONE_MINUTES, req.user.name]
     );
     if (!alert) return res.status(404).json({ error: 'Alert non trovato' });
 
@@ -72,6 +99,8 @@ async function postponeAlert(req, res, next) {
       alertId: id,
       waiterName: req.user.name,
       newDeadline: alert.postponed_until,
+      deferCount: alert.defer_count,
+      isLastChance: alert.defer_count >= MAX_POSTPONE_COUNT,
     });
 
     res.json(alert);

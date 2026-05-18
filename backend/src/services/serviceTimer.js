@@ -335,6 +335,36 @@ async function checkCascadeTimersForTenant(client, tenantId) {
   }
 }
 
+// ─── Check tavoli dirty da troppo tempo (workflow sbarazzo) ──
+// Quando il cliente paga il conto, il backend porta il tavolo in
+// status='dirty'. Il commis deve sbarazzare/pulire e poi marcare
+// il tavolo come 'free'. Se passa troppo tempo, emette un alert al
+// maitre/admin/manager (NON al singolo cameriere — pulire tavoli e'
+// responsabilita' collettiva del team sala).
+const DIRTY_ALERT_MINUTES = 5;
+async function checkDirtyTablesForTenant(client, tenantId) {
+  const { rows } = await client.query(`
+    SELECT id, table_number, status_changed_at,
+           EXTRACT(EPOCH FROM (NOW() - status_changed_at))/60 AS minutes_since
+      FROM tables
+     WHERE tenant_id = $1
+       AND status = 'dirty'
+       AND status_changed_at < NOW() - ($2 || ' minutes')::INTERVAL
+  `, [tenantId, DIRTY_ALERT_MINUTES]);
+
+  for (const t of rows) {
+    // Emette solo a manager/admin (escalation). Niente persistenza in
+    // service_alerts: e' un alert "live" che sparisce appena pulisci.
+    getIO()?.to('role:admin').to('role:manager').emit('table-cleanup-alert', {
+      tenantId,
+      tableId: t.id,
+      tableNumber: t.table_number,
+      minutesSince: Math.floor(t.minutes_since),
+      severity: t.minutes_since >= DIRTY_ALERT_MINUTES * 2 ? 'high' : 'normal',
+    });
+  }
+}
+
 // ─── Tick: itera tutti i tenant attivi ───────────────────────
 async function tick() {
   try {
@@ -342,6 +372,7 @@ async function tick() {
       await checkReadyItemsForTenant(client, tenantId);
       await checkCascadeTimersForTenant(client, tenantId);
       await checkMandatoryAlertsForTenant(client, tenantId);
+      await checkDirtyTablesForTenant(client, tenantId);
     });
   } catch (err) {
     // Errori transient (es. tabella non ancora migrata, DB non pronto)

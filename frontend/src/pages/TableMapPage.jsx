@@ -150,6 +150,16 @@ export default function TableMapPage() {
 
   function handleNavigate(table) {
     const isCashier = ['cashier', 'admin', 'manager'].includes(user?.role)
+    // Tavolo dirty (post-pagamento, da pulire): chiedi conferma sbarazzo →
+    // re-imposta status='free'. Workflow operativo: pulizia → free → free
+    // visibile a tutti, alert al maitre si spegne automatico.
+    if (table.status === 'dirty') {
+      if (!confirm(`Tavolo ${table.table_number}: confermi sbarazzo + pulizia completata?`)) return
+      tablesAPI.setStatus(table.id, 'free')
+        .then(() => loadData())
+        .catch(() => toast({ type: 'error', title: 'Errore sbarazzo' }))
+      return
+    }
     if (isCashier && table.status === 'occupied' && table.active_order_id) {
       navigate(`/checkout/${table.active_order_id}`)
     } else if (table.status === 'free' || !table.active_order_id) {

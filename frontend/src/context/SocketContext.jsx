@@ -128,6 +128,20 @@ export function SocketProvider({ children }) {
       });
     });
 
+    // Sbarazzo mancato: tavolo dirty da troppo tempo (workflow pulizia).
+    // Emesso solo a admin/manager (responsabile sala), no spam ai camerieri.
+    socket.on('table-cleanup-alert', (data) => {
+      const high = data.severity === 'high';
+      toast({
+        type: high ? 'error' : 'warning',
+        title: `🧹 Sbarazzo Tavolo ${data.tableNumber}`,
+        message: high
+          ? `Tavolo dirty da ${data.minutesSince}min — pulizia URGENTE`
+          : `Tavolo da pulire da ${data.minutesSince}min`,
+        duration: 12000,
+      });
+    });
+
     // Alert posticipato
     socket.on('alert-postponed', (data) => {
       toast({
