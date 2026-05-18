@@ -79,7 +79,19 @@ export default function TableMapPage() {
 
       setZones(allowedZones)
       setTables(tablesRes.data)
-      setActiveZone(prev => prev && allowedZones.some(z => z.id === prev) ? prev : allowedZones[0]?.id ?? null)
+      // Auto-skip zone vuote nella selezione iniziale: durante il test di
+      // Riva la zona "BAR" (sort_order=1, 0 tavoli) veniva selezionata
+      // di default e mandava in spotlight zero tavoli — gli altri 48 erano
+      // dimmed e l'utente pensava ne avesse solo 7 (la zona successiva
+      // evidenziata era "Botti in Legno" con 7 tavoli).
+      const zoneTableCount = (zoneId) =>
+        tablesRes.data.filter(t => t.zone_id === zoneId).length
+      const firstNonEmpty = allowedZones.find(z => zoneTableCount(z.id) > 0)
+      setActiveZone(prev =>
+        prev && allowedZones.some(z => z.id === prev)
+          ? prev
+          : (firstNonEmpty?.id ?? allowedZones[0]?.id ?? null)
+      )
     } catch {
       setError('Errore caricamento tavoli')
     } finally {
@@ -280,6 +292,45 @@ export default function TableMapPage() {
           </button>
         </div>
       </header>
+
+      {/* ─── Zone picker (sempre visibile, dopo header) ──────────────── */}
+      {!loading && !error && zones.length > 1 && (
+        <div className="bg-[var(--color-surface-2)] border-b border-[var(--color-border-soft)] px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
+          <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-3)] font-semibold mr-1 shrink-0">Zona</span>
+          <button
+            onClick={() => setActiveZone(null)}
+            className={`shrink-0 px-3 py-1 rounded-md text-xs font-semibold transition ${
+              activeZone === null
+                ? 'bg-[var(--color-gold)] text-[#13181C]'
+                : 'bg-[var(--color-surface)] text-[var(--color-text-2)] hover:text-[var(--color-text)] border border-[var(--color-border-soft)]'
+            }`}
+          >
+            Tutte
+          </button>
+          {zones.map(z => {
+            const count = tables.filter(t => t.zone_id === z.id).length
+            const isMine = myZoneIds.includes(z.id)
+            return (
+              <button
+                key={z.id}
+                onClick={() => setActiveZone(z.id)}
+                disabled={count === 0}
+                className={`shrink-0 px-3 py-1 rounded-md text-xs font-semibold transition ${
+                  count === 0
+                    ? 'opacity-40 cursor-not-allowed bg-[var(--color-surface)] text-[var(--color-text-3)] border border-[var(--color-border-soft)]'
+                    : activeZone === z.id
+                      ? 'bg-[var(--color-gold)] text-[#13181C]'
+                      : `bg-[var(--color-surface)] text-[var(--color-text-2)] hover:text-[var(--color-text)] border ${isMine ? 'border-[var(--color-gold-ring)]' : 'border-[var(--color-border-soft)]'}`
+                }`}
+              >
+                {z.name}
+                <span className="ml-1 opacity-70 tnum">({count})</span>
+                {isMine && <span className="ml-1 text-[10px] opacity-80">·me</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* ─── Body: pianta desktop / lista mobile ────────────────────── */}
       <div className="flex-1 min-h-0 overflow-hidden">
