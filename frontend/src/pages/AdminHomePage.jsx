@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   DollarSign, Users, AlertTriangle, UtensilsCrossed, ChefHat, MapPin,
   UserCog, BookOpen, TrendingUp, RefreshCw, Clock, Check, Trophy,
-  Package, BarChart3, CalendarDays, Building,
+  Package, BarChart3, CalendarDays, Building, Wine,
 } from 'lucide-react'
 import { adminAPI, assignmentsAPI, usersAPI, zonesAPI, serviceAPI } from '../lib/api'
 import { useSocket } from '../context/SocketContext'
@@ -213,6 +213,7 @@ export default function AdminHomePage() {
           <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
             <QuickButton icon={UtensilsCrossed} label="Tavoli"       onClick={() => navigate('/tables')} />
             <QuickButton icon={ChefHat}         label="KDS"          onClick={() => navigate('/kds')}          badge={readyItems.length} />
+            <QuickButton icon={Wine}            label="Bar"          onClick={() => navigate('/bar')} tone="gold" />
             <QuickButton icon={MapPin}          label="Zone"         onClick={() => navigate('/assignments')} tone="sea" />
             <QuickButton icon={Trophy}          label="Performance"  onClick={() => navigate('/performance')}  tone="park" />
             <QuickButton icon={CalendarDays}    label="Prenotazioni" onClick={() => navigate('/reservations')} tone="sea" />

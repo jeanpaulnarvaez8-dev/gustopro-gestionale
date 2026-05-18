@@ -30,6 +30,7 @@ router.use('/tables',       require('./tables.routes'));
 router.use('/menu',         require('./menu.routes'));
 router.use('/orders',       require('./orders.routes'));
 router.use('/kds',          require('./kds.routes'));
+router.use('/bar',          require('./bar.routes'));
 router.use('/billing',      require('./billing.routes'));
 router.use('/admin',        require('./admin.routes'));
 router.use('/inventory',    require('./inventory.routes'));

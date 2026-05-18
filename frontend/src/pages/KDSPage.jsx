@@ -8,7 +8,7 @@ import {
 import { useSocket } from '../context/SocketContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
-import { kdsAPI, workflowAPI } from '../lib/api'
+import { kdsAPI, barAPI, workflowAPI } from '../lib/api'
 import { formatElapsed, elapsedMinutes } from '../lib/utils'
 import { Card, Badge } from '../components/v2'
 import { playNewOrderBeep, isSoundEnabled, toggleSound } from '../lib/kdsBeep'
@@ -87,7 +87,20 @@ function NavButton({ icon: Icon, label, onClick, hoverColor = 'gold' }) {
   )
 }
 
-export default function KDSPage() {
+/**
+ * KDSPage — coda comande con stati pending/cooking/ready.
+ *
+ * Props:
+ *   - mode: 'kitchen' (default) o 'bar'
+ *           'kitchen' usa kdsAPI (item non-bevanda, role kitchen/manager/admin).
+ *           'bar'     usa barAPI (item is_beverage=true, role waiter/manager/admin).
+ *           Resto della UI identico.
+ */
+export default function KDSPage({ mode = 'kitchen' }) {
+  const isBar = mode === 'bar'
+  const dataAPI = isBar ? barAPI : kdsAPI
+  const pageTitle = isBar ? 'Bar' : 'KDS Cucina'
+
   const navigate = useNavigate()
   const { socket, isConnected } = useSocket()
   const { toast } = useToast()
@@ -107,10 +120,11 @@ export default function KDSPage() {
 
   const loadOrders = useCallback(async () => {
     try {
+      // Bar mode: niente crossmatches/waiting (sono concetti specifici della cucina).
       const [ordersRes, crossRes, waitingRes] = await Promise.all([
-        kdsAPI.pending(),
-        workflowAPI.getCrossmatches().catch(() => ({ data: [] })),
-        workflowAPI.getWaiting().catch(() => ({ data: [] })),
+        dataAPI.pending(),
+        isBar ? Promise.resolve({ data: [] }) : workflowAPI.getCrossmatches().catch(() => ({ data: [] })),
+        isBar ? Promise.resolve({ data: [] }) : workflowAPI.getWaiting().catch(() => ({ data: [] })),
       ])
       setOrders(Array.isArray(ordersRes.data) ? ordersRes.data : [])
       setCrossmatches(Array.isArray(crossRes.data) ? crossRes.data : [])
@@ -238,7 +252,7 @@ export default function KDSPage() {
     })
 
     try {
-      await kdsAPI.updateItemStatus(itemId, nextStatus)
+      await dataAPI.updateItemStatus(itemId, nextStatus)
     } catch {
       toast({ type: 'error', title: 'Errore aggiornamento stato' })
       loadOrders()
@@ -259,7 +273,7 @@ export default function KDSPage() {
       <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 sm:px-5 py-3 flex items-center gap-3 flex-wrap sticky top-0 z-20">
         {user?.role !== 'kitchen' && (
           <button
-            onClick={() => navigate('/tables')}
+            onClick={() => navigate(isBar ? '/admin' : '/tables')}
             className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
             aria-label="Indietro"
           >
@@ -268,7 +282,7 @@ export default function KDSPage() {
         )}
         <ChefHat size={20} className="text-[var(--color-gold)]" />
         <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">
-          KDS Cucina
+          {pageTitle}
         </h1>
 
         {/* Stats live */}
@@ -282,7 +296,10 @@ export default function KDSPage() {
 
         {/* Right cluster */}
         <div className="ml-auto flex items-center gap-2">
-          <NavButton icon={Clock} label="Attese" hoverColor="warn" onClick={() => navigate('/waiting-monitor')} />
+          {/* Attese/waiting-monitor e' kitchen-only — bar non lo usa */}
+          {!isBar && (
+            <NavButton icon={Clock} label="Attese" hoverColor="warn" onClick={() => navigate('/waiting-monitor')} />
+          )}
           {['admin', 'manager'].includes(user?.role) && (
             <>
               <NavButton icon={LayoutDashboard} label="Dashboard" onClick={() => navigate('/dashboard')} />

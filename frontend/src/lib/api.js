@@ -195,10 +195,17 @@ export const ordersAPI = {
   cancelItem: (id, itemId)    => api.delete(`/orders/${id}/items/${itemId}`),
 };
 
-// KDS
+// KDS — cucina (tutti gli item non-bevanda)
 export const kdsAPI = {
   pending:          ()              => api.get('/kds/pending'),
   updateItemStatus: (id, status)    => api.patch(`/kds/items/${id}/status`, { status }),
+};
+
+// BAR — solo item con category.is_beverage = true (cocktail, vini, caffè, ...)
+// Accessibile a waiter (bar/caffetteria), manager, admin.
+export const barAPI = {
+  pending:          ()              => api.get('/bar/pending'),
+  updateItemStatus: (id, status)    => api.patch(`/bar/items/${id}/status`, { status }),
 };
 
 // Billing

@@ -11,6 +11,7 @@ const TableMapPage           = lazy(() => import('./pages/TableMapPage'))
 const OrderPage              = lazy(() => import('./pages/OrderPage'))
 const CheckoutPage           = lazy(() => import('./pages/CheckoutPage'))
 const KDSPage                = lazy(() => import('./pages/KDSPage'))
+const BarPage                = lazy(() => import('./pages/BarPage'))
 const DashboardPage          = lazy(() => import('./pages/DashboardPage'))
 const AnalyticsPage          = lazy(() => import('./pages/AnalyticsPage'))
 const InventoryPage          = lazy(() => import('./pages/InventoryPage'))
@@ -87,6 +88,10 @@ function HomeRedirect() {
   const { user } = useAuth()
   if (user?.role === 'kitchen') return <Navigate to="/kds" replace />
   if (['admin', 'manager'].includes(user?.role)) return <Navigate to="/admin-home" replace />
+  // Waiter al bar: landing diretto sulla coda bar invece di /tables.
+  if (user?.role === 'waiter' && (user?.sub_role === 'bar' || user?.sub_role === 'bar/caffetteria')) {
+    return <Navigate to="/bar" replace />
+  }
   return <Navigate to="/tables" replace />
 }
 
@@ -117,6 +122,11 @@ export default function App() {
             <Route path="/kds" element={
               <RoleRoute roles={['kitchen', 'admin', 'manager']}>
                 <KDSPage />
+              </RoleRoute>
+            } />
+            <Route path="/bar" element={
+              <RoleRoute roles={['waiter', 'admin', 'manager']}>
+                <BarPage />
               </RoleRoute>
             } />
             <Route path="/dashboard" element={
