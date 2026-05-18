@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   DollarSign, Users, AlertTriangle, UtensilsCrossed, ChefHat, MapPin,
   UserCog, BookOpen, TrendingUp, RefreshCw, Clock, Check, Trophy,
-  Package, BarChart3, CalendarDays, Building, Wine,
+  Package, BarChart3, CalendarDays, Building, Wine, QrCode,
 } from 'lucide-react'
 import { adminAPI, assignmentsAPI, usersAPI, zonesAPI, serviceAPI } from '../lib/api'
 import { useSocket } from '../context/SocketContext'
@@ -220,6 +220,7 @@ export default function AdminHomePage() {
             <QuickButton icon={Package}         label="Inventario"   onClick={() => navigate('/inventory')} />
             <QuickButton icon={BarChart3}       label="Analisi"      onClick={() => navigate('/analytics')}    tone="park" />
             <QuickButton icon={UserCog}         label="Staff"        onClick={() => navigate('/users')} />
+            <QuickButton icon={QrCode}          label="QR Tavoli"    onClick={() => navigate('/qr-codes')} tone="sea" />
           </div>
         </div>
 

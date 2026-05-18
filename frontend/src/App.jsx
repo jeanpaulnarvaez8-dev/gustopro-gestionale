@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 
 // Eager: pagine critiche al first paint (login deve essere istantaneo).
@@ -22,6 +22,7 @@ const AsportoPage            = lazy(() => import('./pages/AsportoPage'))
 const ComboAdminPage         = lazy(() => import('./pages/ComboAdminPage'))
 const MenuAdminPage          = lazy(() => import('./pages/MenuAdminPage'))
 const VenueAdminPage         = lazy(() => import('./pages/VenueAdminPage'))
+const TableQRCodesPage       = lazy(() => import('./pages/TableQRCodesPage'))
 const TaxReportPage          = lazy(() => import('./pages/TaxReportPage'))
 const IngredientsPage        = lazy(() => import('./pages/IngredientsPage'))
 const StockReconciliationPage= lazy(() => import('./pages/StockReconciliationPage'))
@@ -88,6 +89,16 @@ function RoleRoute({ roles, children }) {
   const { user } = useAuth()
   if (!roles.includes(user?.role)) return <Navigate to="/tables" replace />
   return children
+}
+
+function QRTableRedirect() {
+  // Landing per scan QR cavalieri tavoli: redirect basato sul ruolo.
+  // Se non autenticato → ProtectedRoute fa /login (e il return-url resta /t/:id).
+  const { tableId } = useParams()
+  const { user } = useAuth()
+  if (!tableId) return <Navigate to="/" replace />
+  if (user?.role === 'cashier') return <Navigate to={`/tables`} replace />
+  return <Navigate to={`/order/${tableId}`} replace />
 }
 
 function HomeRedirect() {
@@ -177,6 +188,14 @@ export default function App() {
                 <VenueAdminPage />
               </RoleRoute>
             } />
+            <Route path="/qr-codes" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <TableQRCodesPage />
+              </RoleRoute>
+            } />
+            {/* /t/:tableId — landing scan QR cavalieri tavolo. Redirect a
+                /order/:tableId per il waiter, /checkout per la cassa. */}
+            <Route path="/t/:tableId" element={<QRTableRedirect />} />
             <Route path="/tax-report" element={
               <RoleRoute roles={['admin']}>
                 <TaxReportPage />
