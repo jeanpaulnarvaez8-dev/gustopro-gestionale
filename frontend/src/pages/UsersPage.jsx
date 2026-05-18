@@ -15,10 +15,13 @@ const ROLES = [
 ]
 
 const SUB_ROLES = [
-  { id: '',              label: 'Nessuno' },
-  { id: 'accompagnatore',label: 'Accompagnatore' },
-  { id: 'bevandista',    label: 'Bevandista' },
-  { id: 'comi',          label: 'Comì' },
+  { id: '',                 label: 'Nessuno' },
+  { id: 'sala',             label: 'Sala' },
+  { id: 'bar',              label: 'Bar' },
+  { id: 'bar/caffetteria',  label: 'Bar/Caffetteria' },
+  { id: 'accompagnatore',   label: 'Accompagnatore' },
+  { id: 'bevandista',       label: 'Bevandista' },
+  { id: 'comi',             label: 'Comì' },
 ]
 
 const TONE_BTN = {
