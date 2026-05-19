@@ -457,6 +457,7 @@ export default function TableMapPage() {
                     tables={tables}
                     zones={zones}
                     onTableClick={handleNavigate}
+                    activeZoneId={activeZone}
                   />
                 ) : (
                   <FloorPlanInteractive
