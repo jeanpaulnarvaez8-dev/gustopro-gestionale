@@ -11,6 +11,7 @@ import { useSocket } from '../context/SocketContext'
 import { tablesAPI, zonesAPI, assignmentsAPI } from '../lib/api'
 import FloorPlanInteractive from '../components/FloorPlanInteractive'
 import MobileTableList from '../components/MobileTableList'
+import BarTableModal from '../components/BarTableModal'
 import { BottomSheet, Badge, StatusDot } from '../components/v2'
 import { storage } from '../lib/storage'
 import { isWaiterSoundEnabled, toggleWaiterSound } from '../lib/kdsBeep'
@@ -135,6 +136,8 @@ export default function TableMapPage() {
   }, [isConnected])
 
   const [coversSheet, setCoversSheet] = useState(null) // table object o null
+  // BarTableModal: si apre quando bartender clicca un tavolo (vede solo bevande).
+  const [barTableModal, setBarTableModal] = useState(null) // table object o null
 
   // Toggle audio "piatto pronto" per i camerieri (default ON).
   // Persistito in localStorage tramite kdsBeep helpers.
@@ -153,6 +156,15 @@ export default function TableMapPage() {
 
   function handleNavigate(table) {
     const isCashier = ['cashier', 'admin', 'manager'].includes(user?.role)
+    // Bartender (waiter/bar): click su tavolo NON apre l'ordine completo,
+    // mostra invece il modal "Bevande di questo tavolo" filtrato. Cosi'
+    // Desire' vede subito solo i drink senza navigare al conto.
+    const isBartender = user?.role === 'waiter' &&
+      (user?.sub_role === 'bar' || user?.sub_role === 'bar/caffetteria')
+    if (isBartender && table.status !== 'free') {
+      setBarTableModal(table)
+      return
+    }
     // Tavolo dirty (post-pagamento, da pulire): chiedi conferma sbarazzo →
     // re-imposta status='free'. Workflow operativo: pulizia → free → free
     // visibile a tutti, alert al maitre si spegne automatico.
@@ -439,6 +451,14 @@ export default function TableMapPage() {
           </>
         )}
       </div>
+
+      {/* ─── Modal bartender: bevande tavolo (solo waiter/bar) ───────────── */}
+      {barTableModal && (
+        <BarTableModal
+          tableId={barTableModal.id}
+          onClose={() => setBarTableModal(null)}
+        />
+      )}
 
       {/* ─── BottomSheet selezione coperti (sostituisce il Modal vecchio) ─── */}
       <BottomSheet

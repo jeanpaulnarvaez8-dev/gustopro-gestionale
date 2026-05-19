@@ -235,6 +235,51 @@ async function createOrder(req, res, next) {
       });
     }
 
+    // Notifica bar: se l'ordine contiene bevande (is_beverage=true), push
+    // native ai bartender (waiter con sub_role bar/bar-caffetteria) anche
+    // se sono su un'altra pagina. Cosi' Desire' si accorge che ha cocktail
+    // da preparare anche quando non e' su /bar.
+    try {
+      const { rows: barItems } = await pool.query(
+        `SELECT COUNT(*)::int AS n,
+                COALESCE(t.table_number, 'ASPORTO') AS table_number
+           FROM order_items oi
+           JOIN menu_items mi ON mi.id = oi.menu_item_id
+           JOIN categories c  ON c.id = mi.category_id
+           LEFT JOIN orders o ON o.id = oi.order_id
+           LEFT JOIN tables t ON t.id = o.table_id
+          WHERE oi.order_id = $1 AND oi.tenant_id = $2
+            AND c.is_beverage = true
+          GROUP BY t.table_number`,
+        [order.id, tenantId]
+      );
+      if (barItems.length > 0 && barItems[0].n > 0) {
+        const tn = barItems[0].table_number;
+        const n = barItems[0].n;
+        getIO()?.emit('new-bar-order', {
+          orderId: order.id, tableNumber: tn, itemCount: n,
+        });
+        // Push native: trova bartender attivi del tenant
+        const { rows: bartenders } = await pool.query(
+          `SELECT id FROM users
+            WHERE tenant_id = $1 AND is_active = true
+              AND role = 'waiter' AND sub_role IN ('bar','bar/caffetteria')`,
+          [tenantId]
+        );
+        const pushService = require('../services/pushService');
+        await Promise.all(bartenders.map(b => pushService.sendToUser(b.id, {
+          title: `🍷 Tavolo ${tn} — ${n} drink`,
+          body: 'Nuovo ordine bar da preparare',
+          tag: `bar-${order.id}`,
+          url: '/bar',
+          vibrate: [200, 100, 200],
+          requireInteraction: true,
+        }).catch(() => {})));
+      }
+    } catch (e) {
+      req.log?.warn({ err: e?.message }, 'bar push failed');
+    }
+
     // Pre-allerta crudi: se l'ordine contiene almeno un item di prep_station
     // 'crudi' (ostriche, tartare, antipasti di mare), notifica la cucina crudi
     // IMMEDIATAMENTE — la sicurezza alimentare richiede prep tempestiva e
@@ -397,6 +442,49 @@ async function addItems(req, res, next) {
     }
 
     getIO()?.emit('order-item-added', { orderId: order_id, items: addedItems });
+
+    // Push bar se almeno uno degli items aggiunti e' beverage (stesso flow
+    // di createOrder, codice riusato + parametrizzato).
+    try {
+      const itemIds = addedItems.map(i => i.id);
+      if (itemIds.length > 0) {
+        const { rows: barNew } = await pool.query(
+          `SELECT COUNT(*)::int AS n,
+                  COALESCE(t.table_number, 'ASPORTO') AS table_number
+             FROM order_items oi
+             JOIN menu_items mi ON mi.id = oi.menu_item_id
+             JOIN categories c  ON c.id = mi.category_id
+             LEFT JOIN orders o ON o.id = oi.order_id
+             LEFT JOIN tables t ON t.id = o.table_id
+            WHERE oi.id = ANY($1::uuid[]) AND oi.tenant_id = $2
+              AND c.is_beverage = true
+            GROUP BY t.table_number`,
+          [itemIds, tenantId]
+        );
+        if (barNew.length > 0 && barNew[0].n > 0) {
+          const tn = barNew[0].table_number;
+          const n = barNew[0].n;
+          getIO()?.emit('new-bar-order', { orderId: order_id, tableNumber: tn, itemCount: n });
+          const { rows: bartenders } = await pool.query(
+            `SELECT id FROM users WHERE tenant_id = $1 AND is_active = true
+              AND role = 'waiter' AND sub_role IN ('bar','bar/caffetteria')`,
+            [tenantId]
+          );
+          const pushService = require('../services/pushService');
+          await Promise.all(bartenders.map(b => pushService.sendToUser(b.id, {
+            title: `🍷 Tavolo ${tn} — +${n} drink`,
+            body: 'Drink aggiunti a ordine esistente',
+            tag: `bar-${order_id}`,
+            url: '/bar',
+            vibrate: [200, 100, 200],
+            requireInteraction: true,
+          }).catch(() => {})));
+        }
+      }
+    } catch (e) {
+      req.log?.warn({ err: e?.message }, 'bar push (addItems) failed');
+    }
+
     res.status(201).json(addedItems);
   } catch (err) {
     await client.query('ROLLBACK');

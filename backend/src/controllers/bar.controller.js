@@ -97,4 +97,83 @@ async function getBarOrders(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getBarOrders };
+/**
+ * getBarItemsForTable — bevande di UN tavolo specifico, incluso storico
+ * della serata (anche servite/cancellate). Usato dal modal "Bevande tavolo X"
+ * che il bartender apre cliccando un tavolo dalla mappa.
+ *
+ * Differenza da getBarOrders: ritorna TUTTI gli items beverage del tavolo
+ * (anche già served), non solo pending/cooking/ready come la coda.
+ */
+async function getBarItemsForTable(req, res, next) {
+  try {
+    const { tableId } = req.params;
+    const tenantId = TENANT(req);
+    const { rows } = await pool.query(
+      `SELECT
+         oi.id, oi.quantity, oi.status, oi.notes, oi.sent_at, oi.ready_at, oi.served_at,
+         COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name,
+         c.name AS category_name,
+         o.id          AS order_id,
+         o.created_at  AS order_created_at,
+         u.name        AS waiter_name
+       FROM order_items oi
+       JOIN orders o        ON o.id = oi.order_id
+       LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+       LEFT JOIN categories c  ON c.id = mi.category_id
+       LEFT JOIN users u    ON u.id = o.waiter_id
+       WHERE o.table_id = $1
+         AND oi.tenant_id = $2
+         AND o.status IN ('open','completed')
+         AND c.is_beverage = true
+       ORDER BY oi.sent_at DESC`,
+      [tableId, tenantId]
+    );
+
+    // Aggrega counts per status (utile UI: 3 pending, 1 ready, 2 served)
+    const counts = { pending: 0, cooking: 0, ready: 0, served: 0, cancelled: 0 };
+    for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
+
+    const { rows: [tbl] } = await pool.query(
+      'SELECT table_number FROM tables WHERE id = $1 AND tenant_id = $2',
+      [tableId, tenantId]
+    );
+
+    res.json({
+      table_id: tableId,
+      table_number: tbl?.table_number,
+      counts,
+      items: rows,
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * getBarCount — conteggio rapido cocktail "da fare" (pending+cooking+ready) per
+ * il badge persistente. Sub-second response, usato in polling/socket-driven.
+ */
+async function getBarCount(req, res, next) {
+  try {
+    const tenantId = TENANT(req);
+    const { rows: [row] } = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE oi.status = 'pending')::int AS pending,
+         COUNT(*) FILTER (WHERE oi.status = 'cooking')::int AS cooking,
+         COUNT(*) FILTER (WHERE oi.status = 'ready')::int   AS ready,
+         COUNT(*)::int AS total
+       FROM order_items oi
+       JOIN orders o     ON o.id = oi.order_id
+       LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+       LEFT JOIN categories c  ON c.id = mi.category_id
+       WHERE oi.tenant_id = $1
+         AND o.status = 'open'
+         AND oi.status NOT IN ('served','cancelled')
+         AND oi.workflow_status = 'production'
+         AND c.is_beverage = true`,
+      [tenantId]
+    );
+    res.json(row);
+  } catch (err) { next(err); }
+}
+
+module.exports = { getBarOrders, getBarItemsForTable, getBarCount };

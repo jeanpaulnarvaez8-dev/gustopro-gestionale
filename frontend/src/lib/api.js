@@ -216,6 +216,8 @@ export const kdsAPI = {
 // Accessibile a waiter (bar/caffetteria), manager, admin.
 export const barAPI = {
   pending:          ()              => api.get('/bar/pending'),
+  count:            ()              => api.get('/bar/count'),
+  byTable:          (tableId)       => api.get(`/bar/table/${tableId}`),
   updateItemStatus: (id, status)    => api.patch(`/bar/items/${id}/status`, { status }),
 };
 

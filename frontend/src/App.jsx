@@ -45,6 +45,7 @@ const DesignSystemPage       = lazy(() => import('./pages/DesignSystemPage'))
 import ServiceAlertBanner from './components/ServiceAlertBanner'
 import InstallPrompt from './components/InstallPrompt'
 import NotificationsPrompt from './components/NotificationsPrompt'
+import BarPersistentFAB from './components/BarPersistentFAB'
 import MobileBottomNav from './components/MobileBottomNav'
 import MandatoryAlertModal from './components/MandatoryAlertModal'
 import DirectDeliveredAlerts from './components/DirectDeliveredAlerts'
@@ -86,6 +87,8 @@ function ProtectedRoute() {
       <InstallPrompt />
       {/* Push: prompt attivazione notifiche dopo login (idempotent) */}
       <NotificationsPrompt />
+      {/* FAB bartender: contatore cocktail pending visibile anywhere tranne /bar */}
+      <BarPersistentFAB />
     </>
   )
 }
