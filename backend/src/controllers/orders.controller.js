@@ -213,7 +213,18 @@ async function createOrder(req, res, next) {
 
     if (table_id) {
       const tableInfo = await pool.query(
-        'SELECT table_number FROM tables WHERE id=$1 AND tenant_id=$2',
+        'SELECT table_number, status, seated_at FROM tables WHERE id=$1 AND tenant_id=$2',
+        [table_id, tenantId]
+      );
+      // Avanza il tavolo da 'seated' (o 'free') a 'occupied' + traccia
+      // first_order_at per analytics turnover. seated_at viene preservato
+      // se gia' impostato (cliente ha aspettato N minuti prima di ordinare).
+      await pool.query(
+        `UPDATE tables
+            SET status = 'occupied',
+                first_order_at = COALESCE(first_order_at, NOW()),
+                seated_at = COALESCE(seated_at, NOW())
+          WHERE id = $1 AND tenant_id = $2`,
         [table_id, tenantId]
       );
       getIO()?.emit('new-order', {

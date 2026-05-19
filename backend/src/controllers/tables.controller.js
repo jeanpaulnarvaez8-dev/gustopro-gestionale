@@ -121,4 +121,127 @@ async function setTableStatus(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { listTables, createTable, updateTable, deleteTable, setTableStatus };
+/**
+ * seatTable — accomoda un cliente al tavolo (PRIMA dell'ordine).
+ *
+ * Workflow Riva ciclo sala:
+ *   free → seated (qui) → occupied (alla createOrder) → dirty (pagamento) → free
+ *
+ * Imposta tables.status='seated' + seated_at=NOW(). Lo serviceTimer.js
+ * monitora i tavoli seated da > 10min e emette alert "presa comanda" con
+ * pulsante delega.
+ *
+ * Body opzionale: { covers?: number, waiter_id?: uuid }
+ * Default: covers=1, waiter_id=req.user.id (l'accompagnatore).
+ */
+async function seatTable(req, res, next) {
+  try {
+    const { id } = req.params;
+    const tenantId = TENANT(req);
+    const { covers = 1, waiter_id } = req.body || {};
+
+    // Verifica stato corrente: solo da 'free' o 'reserved' si puo' accomodare
+    const { rows: [existing] } = await pool.query(
+      'SELECT id, status FROM tables WHERE id=$1 AND tenant_id=$2',
+      [id, tenantId]
+    );
+    if (!existing) return res.status(404).json({ error: 'Tavolo non trovato' });
+    if (!['free','reserved'].includes(existing.status)) {
+      return res.status(409).json({
+        error: `Tavolo in stato '${existing.status}' — solo da 'free' o 'reserved' si puo' accomodare.`,
+      });
+    }
+
+    const { rows: [updated] } = await pool.query(
+      `UPDATE tables
+         SET status = 'seated',
+             seated_at = NOW(),
+             first_order_at = NULL,
+             current_course = NULL,
+             last_course_served_at = NULL
+       WHERE id = $1 AND tenant_id = $2
+       RETURNING *`,
+      [id, tenantId]
+    );
+
+    // Audit: chi ha accomodato (per analytics + accountability)
+    await pool.query(
+      `INSERT INTO order_audit_log (tenant_id, order_id, action, user_id, user_name, metadata)
+       VALUES ($1, NULL, 'table_seated', $2, $3, $4::jsonb)`,
+      [tenantId, req.user.id, req.user.name, JSON.stringify({
+        table_id: id,
+        table_number: existing.id, // logged for join
+        covers,
+        seated_by: req.user.name,
+        designated_waiter_id: waiter_id || null,
+      })]
+    ).catch(() => {});
+
+    getIO()?.emit('table-status-changed', {
+      tableId: id, status: 'seated', active_order_id: null,
+    });
+    getIO()?.emit('table-seated', {
+      tableId: id, covers, waiterId: waiter_id || req.user.id,
+      seatedByName: req.user.name,
+    });
+
+    res.json(updated);
+  } catch (err) { next(err); }
+}
+
+/**
+ * delegateTable — manda push native a un cameriere chiedendogli di prendere
+ * la comanda di un tavolo seated. Usato dal maitre quando scatta l'alert
+ * "tavolo seated > 10min" → click "Delega" → pick cameriere → push.
+ */
+async function delegateTable(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { to_waiter_id, reason } = req.body || {};
+    const tenantId = TENANT(req);
+    if (!to_waiter_id) return res.status(400).json({ error: 'to_waiter_id obbligatorio' });
+
+    const { rows: [target] } = await pool.query(
+      `SELECT id, name FROM users WHERE id=$1 AND tenant_id=$2 AND is_active=true AND role='waiter'`,
+      [to_waiter_id, tenantId]
+    );
+    if (!target) return res.status(404).json({ error: 'Cameriere non valido' });
+
+    const { rows: [tbl] } = await pool.query(
+      'SELECT table_number, status FROM tables WHERE id=$1 AND tenant_id=$2',
+      [id, tenantId]
+    );
+    if (!tbl) return res.status(404).json({ error: 'Tavolo non trovato' });
+
+    // Audit
+    await pool.query(
+      `INSERT INTO order_audit_log (tenant_id, order_id, action, user_id, user_name, metadata)
+       VALUES ($1, NULL, 'table_delegated', $2, $3, $4::jsonb)`,
+      [tenantId, req.user.id, req.user.name, JSON.stringify({
+        table_id: id, table_number: tbl.table_number,
+        from_user_id: req.user.id, to_user_id: to_waiter_id,
+        to_user_name: target.name, reason: reason || 'delega manuale',
+      })]
+    ).catch(() => {});
+
+    // Socket: notifica al cameriere designato
+    getIO()?.to(`user:${target.id}`).emit('table-delegated', {
+      tableId: id, tableNumber: tbl.table_number,
+      fromUserName: req.user.name, reason,
+    });
+    // Push native (anche se app chiusa)
+    const pushService = require('../services/pushService');
+    pushService.sendToUser(target.id, {
+      title: `📢 Tavolo ${tbl.table_number} — Vai a prendere comanda`,
+      body: `Delegato da ${req.user.name}${reason ? ' · ' + reason : ''}`,
+      tag: `delega-${id}`,
+      url: '/tables',
+      vibrate: [300, 100, 300],
+      requireInteraction: true,
+    }).catch(() => {});
+
+    res.json({ ok: true, delegated_to: { id: target.id, name: target.name } });
+  } catch (err) { next(err); }
+}
+
+module.exports = { listTables, createTable, updateTable, deleteTable, setTableStatus, seatTable, delegateTable };

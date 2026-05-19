@@ -175,6 +175,11 @@ export const tablesAPI = {
   update:    (id, data)   => api.put(`/tables/${id}`, data),
   remove:    (id)         => api.delete(`/tables/${id}`),
   setStatus: (id, status) => api.patch(`/tables/${id}/status`, { status }),
+  // Sprint 4: accomoda cliente (PRIMA dell'ordine) → status='seated'
+  // + parte timer 10min presa comanda.
+  seat:      (id, body = {}) => api.post(`/tables/${id}/seat`, body),
+  // Delega: manda push native a un cameriere per andare a prendere comanda.
+  delegate:  (id, toWaiterId, reason) => api.post(`/tables/${id}/delegate`, { to_waiter_id: toWaiterId, reason }),
 };
 
 // Menu

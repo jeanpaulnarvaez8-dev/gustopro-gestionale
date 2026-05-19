@@ -151,6 +151,37 @@ export function SocketProvider({ children }) {
       });
     });
 
+    // Sprint 4: tavolo accomodato (seated) > 10min senza ordine.
+    // Alert al maitre/admin per delegare un cameriere.
+    socket.on('seating-comanda-alert', (data) => {
+      toast({
+        type: 'warning',
+        title: `⏳ Tavolo ${data.tableNumber} — comanda non presa`,
+        message: `Cliente accomodato da ${data.minutesSeated}min. Delega un cameriere.`,
+        duration: 15000,
+      });
+    });
+
+    // Sprint 4: portata X servita > 20min senza items della successiva.
+    socket.on('course-cycle-alert', (data) => {
+      toast({
+        type: 'warning',
+        title: `🍽️ Tavolo ${data.tableNumber} — ciclo portate`,
+        message: `${data.completedCourse} servito da ${data.minutesSince}min. Tempo di passare al ${data.nextCourse}.`,
+        duration: 12000,
+      });
+    });
+
+    // Sprint 4: dolce servito > 10min senza emissione conto.
+    socket.on('check-emission-alert', (data) => {
+      toast({
+        type: 'warning',
+        title: `🧾 Tavolo ${data.tableNumber} — emettere conto`,
+        message: `${data.minutesSince}min dalla fine pasto. Chiudere conto per liberare il tavolo.`,
+        duration: 12000,
+      });
+    });
+
     // Sbarazzo mancato: tavolo dirty da troppo tempo (workflow pulizia).
     // Emesso solo a admin/manager (responsabile sala), no spam ai camerieri.
     socket.on('table-cleanup-alert', (data) => {

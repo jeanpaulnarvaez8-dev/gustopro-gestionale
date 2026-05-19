@@ -165,6 +165,53 @@ async function updateItemStatus(req, res, next) {
       if (orderInfo) {
         trackItemServed(tenantId, orderInfo.waiter_id, item.ready_at, item.served_at);
       }
+
+      // Avanzamento ciclo portate: se TUTTI gli items dello stesso course_type
+      // di QUESTO ordine sono served/cancelled, marca la portata come "appena
+      // servita" sul tavolo → serviceTimer avvia il 20min per la prossima.
+      try {
+        const { rows: [courseInfo] } = await pool.query(
+          `SELECT
+             COALESCE(c.course_type, 'altro') AS course_type,
+             COUNT(*) AS total,
+             COUNT(*) FILTER (WHERE oi.status IN ('served','cancelled')) AS done
+           FROM order_items oi
+           LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+           LEFT JOIN categories c  ON c.id = mi.category_id
+           WHERE oi.order_id = $1 AND oi.tenant_id = $2
+             AND oi.status != 'cancelled'
+             AND COALESCE(c.course_type, 'altro') = (
+               SELECT COALESCE(c2.course_type, 'altro')
+                 FROM order_items oi2
+                 LEFT JOIN menu_items mi2 ON mi2.id = oi2.menu_item_id
+                 LEFT JOIN categories c2  ON c2.id = mi2.category_id
+                WHERE oi2.id = $3
+             )
+           GROUP BY COALESCE(c.course_type, 'altro')`,
+          [item.order_id, tenantId, id]
+        );
+        if (courseInfo && Number(courseInfo.total) === Number(courseInfo.done)) {
+          // Tutta la portata e' servita → aggiorna tavolo
+          const { rows: [ord] } = await pool.query(
+            'SELECT table_id FROM orders WHERE id = $1 AND tenant_id = $2',
+            [item.order_id, tenantId]
+          );
+          if (ord?.table_id) {
+            await pool.query(
+              `UPDATE tables
+                  SET current_course = $1,
+                      last_course_served_at = NOW()
+                WHERE id = $2 AND tenant_id = $3`,
+              [courseInfo.course_type, ord.table_id, tenantId]
+            );
+            getIO()?.emit('course-served', {
+              tableId: ord.table_id,
+              orderId: item.order_id,
+              courseType: courseInfo.course_type,
+            });
+          }
+        }
+      } catch (e) { /* non blocca il servito */ }
     }
 
     if (status === 'ready') {

@@ -20,6 +20,7 @@ const STATUS_COLORS = {
 // Status text breve (3 lettere, daltonici-friendly: stato visibile anche senza colore)
 const STATUS_SHORT = {
   free:     'FREE',
+  seated:   'SEAT',   // Sprint 4: cliente accomodato, comanda non ancora presa
   occupied: 'OCC',
   reserved: 'RIS',
   dirty:    'PUL',

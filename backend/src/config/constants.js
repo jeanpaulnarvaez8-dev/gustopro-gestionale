@@ -1,6 +1,13 @@
 const ROLES = ['admin', 'manager', 'waiter', 'kitchen', 'cashier'];
 
-const TABLE_STATUSES = ['free', 'occupied', 'parked', 'dirty', 'reserved'];
+// Stati tavolo:
+//   free        → libero, pronto per nuovo cliente
+//   seated      → cliente accomodato, comanda non ancora presa (timer 10min)
+//   occupied   → ordine aperto, ciclo portate attivo
+//   parked     → ordine sospeso (cliente assente temporaneamente)
+//   dirty      → cliente uscito, da sbarazzare/pulire (timer cleanup)
+//   reserved   → prenotazione attiva, tavolo dedicato
+const TABLE_STATUSES = ['free', 'seated', 'occupied', 'parked', 'dirty', 'reserved'];
 
 const ORDER_STATUSES = ['open', 'completed', 'cancelled', 'parked'];
 

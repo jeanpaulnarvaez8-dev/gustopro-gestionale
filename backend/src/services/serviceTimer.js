@@ -355,6 +355,98 @@ async function checkCascadeTimersForTenant(client, tenantId) {
   }
 }
 
+// ─── Ciclo timer sala (Sprint 4) ────────────────────────────────
+// Soglie configurabili (in minuti). Documentate nel piano operativo Riva.
+const SEATING_ALERT_MINUTES = 10;  // seated > 10min senza ordine
+const COURSE_CYCLE_MINUTES  = 20;  // tra portate (antipasto→primo→secondo→dolce)
+const CHECK_EMISSION_MINUTES = 10; // dopo dolce, conto entro 10min
+
+// Sequenza standard portate. Quando la portata X e' servita, dopo
+// COURSE_CYCLE_MINUTES senza items della successiva → alert.
+const COURSE_SEQUENCE = ['antipasto','primo','secondo','dolce'];
+const NEXT_COURSE = COURSE_SEQUENCE.reduce((acc, c, i) => {
+  acc[c] = COURSE_SEQUENCE[i + 1] || 'check';
+  return acc;
+}, {});
+
+async function checkSeatingTimersForTenant(client, tenantId) {
+  // Tavoli 'seated' (accomodati ma senza ordine) da > 10min
+  const { rows: seated } = await client.query(`
+    SELECT
+      t.id AS table_id, t.table_number, t.seated_at,
+      EXTRACT(EPOCH FROM (NOW() - t.seated_at))/60 AS minutes_seated
+    FROM tables t
+    WHERE t.tenant_id = $1
+      AND t.status = 'seated'
+      AND t.seated_at IS NOT NULL
+      AND t.seated_at < NOW() - ($2 || ' minutes')::INTERVAL
+  `, [tenantId, SEATING_ALERT_MINUTES]);
+
+  const io = getIO();
+  for (const r of seated) {
+    io?.to('role:admin').to('role:manager').emit('seating-comanda-alert', {
+      tenantId,
+      tableId: r.table_id,
+      tableNumber: r.table_number,
+      minutesSeated: Math.round(r.minutes_seated),
+    });
+    pushService.sendToRole(tenantId, ['admin','manager'], {
+      title: `⏳ Tavolo ${r.table_number} — ${Math.round(r.minutes_seated)}min`,
+      body: 'Cliente accomodato senza comanda. Delega un cameriere.',
+      tag: `seating-${r.table_id}`,
+      url: '/tables',
+      vibrate: [200, 100, 200, 100, 200],
+      requireInteraction: true,
+    }).catch(() => {});
+  }
+}
+
+async function checkCourseCycleForTenant(client, tenantId) {
+  // Per ogni tavolo occupied con last_course_served_at, check se ci
+  // sono items della portata SUCCESSIVA non ancora 'ready' o sent.
+  // Se trascorrono > COURSE_CYCLE_MINUTES senza next course → alert.
+  const { rows } = await client.query(`
+    SELECT
+      t.id AS table_id, t.table_number,
+      t.current_course, t.last_course_served_at,
+      EXTRACT(EPOCH FROM (NOW() - t.last_course_served_at))/60 AS minutes_since,
+      o.id AS order_id,
+      u.name AS waiter_name
+    FROM tables t
+    JOIN orders o ON o.table_id = t.id AND o.status = 'open' AND o.tenant_id = t.tenant_id
+    LEFT JOIN users u ON u.id = o.waiter_id
+    WHERE t.tenant_id = $1
+      AND t.status = 'occupied'
+      AND t.current_course IS NOT NULL
+      AND t.last_course_served_at IS NOT NULL
+      AND t.last_course_served_at < NOW() - ($2 || ' minutes')::INTERVAL
+      AND t.current_course IN ('antipasto','primo','secondo','dolce')
+  `, [tenantId, COURSE_CYCLE_MINUTES]);
+
+  const io = getIO();
+  for (const r of rows) {
+    const nextCourse = NEXT_COURSE[r.current_course] || 'check';
+    const minutes = Math.round(r.minutes_since);
+    if (nextCourse === 'check') {
+      // Dopo dolce: 10min per emettere conto
+      if (minutes >= CHECK_EMISSION_MINUTES) {
+        io?.to('role:admin').to('role:manager').to(`user:${r.waiter_name}`).emit('check-emission-alert', {
+          tableId: r.table_id, tableNumber: r.table_number,
+          minutesSince: minutes, waiterName: r.waiter_name,
+        });
+      }
+    } else {
+      io?.to('role:admin').to('role:manager').emit('course-cycle-alert', {
+        tableId: r.table_id, tableNumber: r.table_number,
+        completedCourse: r.current_course,
+        nextCourse,
+        minutesSince: minutes,
+        waiterName: r.waiter_name,
+      });
+    }
+  }
+}
+
 // ─── Check tavoli dirty da troppo tempo (workflow sbarazzo) ──
 // Quando il cliente paga il conto, il backend porta il tavolo in
 // status='dirty'. Il commis deve sbarazzare/pulire e poi marcare
@@ -393,6 +485,8 @@ async function tick() {
       await checkCascadeTimersForTenant(client, tenantId);
       await checkMandatoryAlertsForTenant(client, tenantId);
       await checkDirtyTablesForTenant(client, tenantId);
+      await checkSeatingTimersForTenant(client, tenantId);
+      await checkCourseCycleForTenant(client, tenantId);
     });
   } catch (err) {
     // Errori transient (es. tabella non ancora migrata, DB non pronto)

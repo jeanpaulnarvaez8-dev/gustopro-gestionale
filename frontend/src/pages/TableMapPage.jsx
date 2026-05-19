@@ -21,6 +21,8 @@ import { List, Map as MapIcon, Bell, AlertTriangle, Wine, Clock as ClockIcon, Vo
 // free=ok(verde), occupied=gold(oro Riva), reserved=sea(mare), dirty=warn(giallo), parked=park(viola)
 const STATUS_CONFIG = {
   free:     { label: 'Libero',    tone: 'ok',   bg: 'bg-[var(--color-ok-soft)]',         border: 'border-[var(--color-ok)]/40 hover:border-[var(--color-ok)]',                 dot: 'bg-[var(--color-ok)]',         text: 'text-[var(--color-ok)]' },
+  // 'seated' = cliente accomodato, comanda non ancora presa (timer 10min)
+  seated:   { label: 'Accomodato',tone: 'sea',  bg: 'bg-[var(--color-sea-soft)]',        border: 'border-[var(--color-sea)]/40 hover:border-[var(--color-sea)]',               dot: 'bg-[var(--color-sea)]',        text: 'text-[var(--color-sea)]' },
   occupied: { label: 'Occupato',  tone: 'gold', bg: 'bg-[var(--color-gold-soft)]',       border: 'border-[var(--color-gold-ring)] hover:border-[var(--color-gold)]',           dot: 'bg-[var(--color-gold)]',       text: 'text-[var(--color-gold)]' },
   reserved: { label: 'Riservato', tone: 'sea',  bg: 'bg-[var(--color-sea-soft)]',        border: 'border-[var(--color-sea)]/40 hover:border-[var(--color-sea)]',               dot: 'bg-[var(--color-sea)]',        text: 'text-[var(--color-sea)]' },
   dirty:    { label: 'Pulizia',   tone: 'warn', bg: 'bg-[var(--color-warn-soft)]',       border: 'border-[var(--color-warn)]/40 hover:border-[var(--color-warn)]',             dot: 'bg-[var(--color-warn)]',       text: 'text-[var(--color-warn)]' },
@@ -194,18 +196,37 @@ export default function TableMapPage() {
     }
     if (isCashier && table.status === 'occupied' && table.active_order_id) {
       navigate(`/checkout/${table.active_order_id}`)
-    } else if (table.status === 'free' || !table.active_order_id) {
-      // Tavolo libero → chiedi coperti
+    } else if (table.status === 'free') {
+      // Tavolo libero → chiedi coperti (poi accomoda → seated → ordine)
+      setCoversSheet(table)
+    } else if (table.status === 'seated') {
+      // Cliente gia' accomodato → vai direttamente a prendere comanda
+      navigate(`/order/${table.id}`)
+    } else if (!table.active_order_id) {
       setCoversSheet(table)
     } else {
       navigate(`/order/${table.id}`)
     }
   }
 
-  function handleCoversConfirm(covers) {
+  async function handleCoversConfirm(covers) {
     if (!coversSheet) return
-    navigate(`/order/${coversSheet.id}?covers=${covers}`)
+    const table = coversSheet
     setCoversSheet(null)
+    // Sprint 4: se tavolo libero → setta 'seated' + parte timer 10min presa
+    // comanda. Il backend traccia seated_at per analytics turnover.
+    // Idempotent: se gia' seated/occupied, non rompe nulla (status check 409).
+    if (table.status === 'free') {
+      try {
+        await tablesAPI.seat(table.id, { covers })
+      } catch (e) {
+        // 409 = altro cameriere ha gia' accomodato → ok, prosegui
+        if (e?.response?.status !== 409) {
+          toast({ type: 'error', title: 'Errore accomoda cliente' })
+        }
+      }
+    }
+    navigate(`/order/${table.id}?covers=${covers}`)
   }
 
   // Stats globali (per badge header live)
