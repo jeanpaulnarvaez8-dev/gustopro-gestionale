@@ -106,20 +106,37 @@ export default function TableMapPage() {
   useEffect(() => { loadData() }, [loadData])
 
   // Realtime updates via socket.io
+  //
+  // Fix 2026-05-19: il vecchio handler aggiornava SOLO {status, active_order_id}
+  // localmente, ma la mappa mostra anche active_waiter_name, active_items_count,
+  // order_opened_at (chip "Marco · 2", badge tempo) che restavano stale.
+  // Plus nessun listener su new-order / order-item-added → aggiunte di item
+  // a ordine esistente non aggiornavano la mappa.
+  //
+  // Nuovo approccio: a OGNI evento rilevante, ricarica i tavoli con
+  // tablesAPI.list() debounced 250ms (single source of truth = backend
+  // view tables_with_active_order). Niente race condition tra socket
+  // payload parziale e stato locale.
   useEffect(() => {
     if (!socket) return
-    const handler = ({ tableId, status, active_order_id }) => {
-      setTables(prev => prev.map(t => {
-        if (t.id !== tableId) return t
-        return {
-          ...t,
-          status,
-          active_order_id: active_order_id !== undefined ? active_order_id : t.active_order_id,
-        }
-      }))
+    let pendingRefresh = null
+    const debouncedRefresh = () => {
+      clearTimeout(pendingRefresh)
+      pendingRefresh = setTimeout(() => {
+        tablesAPI.list().then(r => setTables(r.data)).catch(() => {})
+      }, 250)
     }
-    socket.on('table-status-changed', handler)
-    return () => socket.off('table-status-changed', handler)
+    socket.on('table-status-changed', debouncedRefresh)
+    socket.on('new-order',             debouncedRefresh)
+    socket.on('order-item-added',      debouncedRefresh)
+    socket.on('order-settled',         debouncedRefresh)
+    return () => {
+      clearTimeout(pendingRefresh)
+      socket.off('table-status-changed', debouncedRefresh)
+      socket.off('new-order',             debouncedRefresh)
+      socket.off('order-item-added',      debouncedRefresh)
+      socket.off('order-settled',         debouncedRefresh)
+    }
   }, [socket])
 
   // Polling fallback: se il socket e' disconnesso (WiFi cade, server restart,
