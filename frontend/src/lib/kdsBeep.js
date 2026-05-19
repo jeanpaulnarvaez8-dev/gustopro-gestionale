@@ -89,6 +89,38 @@ export function toggleSound() {
   return next === 'on'
 }
 
+/** Forza set audio on/off (usato dal NotificationsPrompt al login per
+ *  riabilitare audio anche se l'utente lo aveva spento in sessione prec). */
+export function setSoundEnabled(on) {
+  storage.set(KEY, on ? 'on' : 'off')
+  storage.set(KEY_WAITER, on ? 'on' : 'off')
+}
+
+/**
+ * unlockAudio — sblocca AudioContext (alcuni browser, in particolare iOS
+ * Safari, bloccano l'audio finche' l'utente non interagisce). Chiamata
+ * dal click "Attiva" → suona un beep silente che attiva il context per
+ * tutti i beep successivi (anche se l'app va in background+riapre).
+ */
+let _unlocked = false
+export function unlockAudio() {
+  if (_unlocked) return
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    // Resume del context (richiede gesture utente)
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {})
+    // Beep silente per attivare effettivamente l'audio
+    const o = ctx.createOscillator()
+    const g = ctx.createGain()
+    g.gain.value = 0.0001
+    o.connect(g); g.connect(ctx.destination)
+    o.start(); o.stop(ctx.currentTime + 0.01)
+    _unlocked = true
+  } catch { /* fallback: niente */ }
+}
+
 // ─── Cameriere: beep "piatto pronto" + toggle separato ──────────────
 export function isWaiterSoundEnabled() {
   return storage.get(KEY_WAITER, 'on') !== 'off'

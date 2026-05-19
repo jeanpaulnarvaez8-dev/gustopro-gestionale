@@ -3,7 +3,7 @@ import { connectSocket, disconnectSocket } from '../lib/socket';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { storage } from '../lib/storage';
-import { playReadyBeep } from '../lib/kdsBeep';
+import { playReadyBeep, playUrgentBeep, playNewOrderBeep } from '../lib/kdsBeep';
 
 const SocketContext = createContext(null);
 
@@ -105,6 +105,7 @@ export function SocketProvider({ children }) {
 
     // Alert servizio: piatto pronto da troppo tempo (20min cibo / 5min bevande)
     socket.on('service-alert', (data) => {
+      try { playUrgentBeep() } catch {}
       setServiceAlerts(prev => {
         if (prev.some(a => a.alertId === data.alertId)) return prev;
         return [...prev, data];
@@ -120,6 +121,7 @@ export function SocketProvider({ children }) {
 
     // Escalation per admin/manager: cameriere non ha servito
     socket.on('service-escalation', (data) => {
+      try { playUrgentBeep() } catch {}
       toast({
         type: 'error',
         title: `🚨 Escalation — Tavolo ${data.tableNumber}`,
@@ -143,6 +145,7 @@ export function SocketProvider({ children }) {
     // Pre-allerta crudi: nuovo ordine con item della stazione crudi.
     // Toast prominente per kitchen/admin/manager — serve prep tempestiva.
     socket.on('crudi-preallerta', (data) => {
+      try { playUrgentBeep() } catch {}
       toast({
         type: 'warning',
         title: `🦪 Pre-allerta Crudi — Tavolo ${data.tableNumber}`,
@@ -154,6 +157,7 @@ export function SocketProvider({ children }) {
     // Sprint 4: tavolo accomodato (seated) > 10min senza ordine.
     // Alert al maitre/admin per delegare un cameriere.
     socket.on('seating-comanda-alert', (data) => {
+      try { playUrgentBeep() } catch {}
       toast({
         type: 'warning',
         title: `⏳ Tavolo ${data.tableNumber} — comanda non presa`,
@@ -164,6 +168,7 @@ export function SocketProvider({ children }) {
 
     // Sprint 4: portata X servita > 20min senza items della successiva.
     socket.on('course-cycle-alert', (data) => {
+      try { playUrgentBeep() } catch {}
       toast({
         type: 'warning',
         title: `🍽️ Tavolo ${data.tableNumber} — ciclo portate`,
@@ -174,6 +179,7 @@ export function SocketProvider({ children }) {
 
     // Sprint 4: dolce servito > 10min senza emissione conto.
     socket.on('check-emission-alert', (data) => {
+      try { playUrgentBeep() } catch {}
       toast({
         type: 'warning',
         title: `🧾 Tavolo ${data.tableNumber} — emettere conto`,
@@ -186,6 +192,7 @@ export function SocketProvider({ children }) {
     // Emesso solo a admin/manager (responsabile sala), no spam ai camerieri.
     socket.on('table-cleanup-alert', (data) => {
       const high = data.severity === 'high';
+      try { playUrgentBeep() } catch {}
       toast({
         type: high ? 'error' : 'warning',
         title: `🧹 Sbarazzo Tavolo ${data.tableNumber}`,
