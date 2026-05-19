@@ -11,6 +11,7 @@ import { getSocket } from '../lib/socket'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { Card, Badge, Button } from '../components/v2'
+import DayStatusBadge from '../components/DayStatusBadge'
 
 const TONE_TEXT = {
   gold: 'text-[var(--color-gold)]',
@@ -166,6 +167,9 @@ export default function AdminHomePage() {
         <span className="hidden sm:block text-[var(--color-text-3)] text-xs ml-2 truncate">
           {user?.name} · <span className="text-[var(--color-gold)] uppercase tracking-wider">{user?.role}</span>
         </span>
+
+        {/* Badge stato giornata (apri/chiudi) */}
+        <DayStatusBadge userRole={user?.role} />
 
         <nav className="ml-auto flex items-center gap-1.5 overflow-x-auto scrollbar-none">
           <NavButton icon={ChefHat} label="KDS" onClick={() => navigate('/kds')} />

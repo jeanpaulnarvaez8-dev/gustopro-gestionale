@@ -14,6 +14,7 @@
  *   3. GET /admin/day-close/list?days=30 → storico ultime chiusure.
  */
 const pool = require('../config/db');
+const { getIO } = require('../socket');
 
 const TENANT = (req) => req.tenant.id;
 
@@ -141,6 +142,10 @@ async function closeDay(req, res, next) {
        req.user.id, req.user.name, notes || null]
     );
 
+    getIO()?.emit('day-status-changed', {
+      tenantId, businessDate: date, isOpen: false,
+      closedByName: req.user.name,
+    });
     res.status(201).json(closure);
   } catch (err) { next(err); }
 }
@@ -160,4 +165,72 @@ async function list(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { preview, closeDay, list };
+/**
+ * openDay — "Apri giornata": registra opened_at + opened_by sul record
+ * day_closures della giornata (register=NULL per chiusura globale).
+ * Idempotent: ri-aprire aggiorna opened_at (es. ho cliccato per sbaglio
+ * troppo presto, ri-clicco quando inizia davvero servizio).
+ *
+ * Body opzionale: { date?: YYYY-MM-DD } default oggi.
+ */
+async function openDay(req, res, next) {
+  try {
+    const tenantId = TENANT(req);
+    const date = req.body?.date || new Date().toISOString().slice(0, 10);
+
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO day_closures
+         (tenant_id, business_date, register, opened_at, opened_by, opened_by_name,
+          closed_by, closed_by_name, total_amount, total_cash, total_card, total_digital,
+          total_other, num_orders, num_receipts, num_covers)
+       VALUES ($1, $2, NULL, NOW(), $3, $4, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0)
+       ON CONFLICT (tenant_id, business_date, register) DO UPDATE SET
+         opened_at      = NOW(),
+         opened_by      = EXCLUDED.opened_by,
+         opened_by_name = EXCLUDED.opened_by_name
+       RETURNING *`,
+      [tenantId, date, req.user.id, req.user.name]
+    );
+
+    getIO()?.emit('day-status-changed', {
+      tenantId, businessDate: date, isOpen: true,
+      openedByName: req.user.name,
+    });
+    res.status(201).json(row);
+  } catch (err) { next(err); }
+}
+
+/**
+ * todayStatus — ritorna stato giornata corrente: { is_open, opened_at,
+ * opened_by_name, closed_at, closed_by_name }. Tutto null = mai aperta.
+ *
+ * Frontend lo usa per badge "📅 Aperta dalle 12:30" o "Chiusa".
+ */
+async function todayStatus(req, res, next) {
+  try {
+    const tenantId = TENANT(req);
+    const date = req.query.date || new Date().toISOString().slice(0, 10);
+    const { rows: [row] } = await pool.query(
+      `SELECT id, business_date, opened_at, opened_by_name, closed_at, closed_by_name,
+              total_amount
+         FROM day_closures
+        WHERE tenant_id = $1 AND business_date = $2::date AND register IS NULL`,
+      [tenantId, date]
+    );
+    if (!row) {
+      return res.json({ business_date: date, is_open: false, opened_at: null, closed_at: null });
+    }
+    res.json({
+      business_date:  row.business_date,
+      // Aperta = ha opened_at MA non ha ancora closed_at
+      is_open:        !!row.opened_at && !row.closed_at,
+      opened_at:      row.opened_at,
+      opened_by_name: row.opened_by_name,
+      closed_at:      row.closed_at,
+      closed_by_name: row.closed_by_name,
+      total_amount:   row.total_amount,
+    });
+  } catch (err) { next(err); }
+}
+
+module.exports = { preview, closeDay, list, openDay, todayStatus };
