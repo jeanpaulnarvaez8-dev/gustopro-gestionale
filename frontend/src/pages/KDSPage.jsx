@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock,
-  LayoutDashboard, Package, LogOut, Volume2, VolumeX, UtensilsCrossed, History,
+  LayoutDashboard, Package, LogOut, Volume2, VolumeX, UtensilsCrossed, History, Wine,
 } from 'lucide-react'
 import { useSocket } from '../context/SocketContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
-import { kdsAPI, barAPI, workflowAPI } from '../lib/api'
+import { kdsAPI, barAPI, workflowAPI, wineAPI } from '../lib/api'
 import { formatElapsed, elapsedMinutes } from '../lib/utils'
 import { Card, Badge } from '../components/v2'
 import { playNewOrderBeep, isSoundEnabled, toggleSound } from '../lib/kdsBeep'
@@ -339,6 +339,17 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
           {isBar && (
             <NavButton icon={UtensilsCrossed} label="Tavoli" hoverColor="gold" onClick={() => navigate('/tables')} />
           )}
+          {/* Sprint 10: bevandista chiama sommelier per servizio vino. */}
+          {isBar && (
+            <NavButton icon={Wine} label="Chiama Vino" hoverColor="gold" onClick={async () => {
+              try {
+                await wineAPI.call(null, 'Richiesta dal bar')
+                toast({ type: 'success', title: '🍷 Sommelier chiamato', message: 'In arrivo al banco' })
+              } catch {
+                toast({ type: 'error', title: 'Errore chiamata vino' })
+              }
+            }} />
+          )}
           {/* Storico: visibile sia kitchen che bar */}
           <NavButton icon={History} label="Storico" hoverColor="gold" onClick={() => navigate('/kds/history')} />
           {/* Attese/waiting-monitor e' kitchen-only — bar non lo usa */}
@@ -661,6 +672,16 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
                                 {Array.isArray(item.required_kit) && item.required_kit.length > 0 && (
                                   <p className="text-[var(--color-gold)] text-xs mt-0.5 font-bold flex items-center gap-1">
                                     🛠️ Kit: {item.required_kit.join(' · ')}
+                                  </p>
+                                )}
+                                {/* Sprint 8: hint priorita' cottura.
+                                    cooking_modes.start_early_min → cottura lunga, anticipare.
+                                    cooking_modes.notes → dettaglio per chef. */}
+                                {item.cooking_modes && (item.cooking_modes.start_early_min || item.cooking_modes.notes) && (
+                                  <p className="text-[var(--color-warn)] text-[10px] mt-0.5 font-semibold flex items-center gap-1">
+                                    ⏱️ {item.cooking_modes.start_early_min ? `Inizia subito (cottura ${item.cooking_modes.default || item.cooking_modes.per_kg}min` : ''}
+                                    {item.cooking_modes.start_early_min ? `, anticipa ${item.cooking_modes.start_early_min}min)` : ''}
+                                    {item.cooking_modes.notes && ` — ${item.cooking_modes.notes}`}
                                   </p>
                                 )}
                               </div>

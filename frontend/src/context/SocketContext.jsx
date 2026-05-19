@@ -142,6 +142,39 @@ export function SocketProvider({ children }) {
       });
     });
 
+    // Sprint 10: chiamata vino dal bevandista → notifica sommelier abilitati.
+    socket.on('wine-call', (data) => {
+      try { playUrgentBeep() } catch {}
+      toast({
+        type: 'warning',
+        title: `🍷 Chiama Vino — Tavolo ${data.tableNumber || '?'}`,
+        message: data.notes || `${data.calledByName} richiede sommelier al tavolo`,
+        duration: 18000,
+      });
+    });
+
+    // Sprint 10: catena escalation alert (delegato dopo 6min).
+    socket.on('service-delegate-alert', (data) => {
+      try { playUrgentBeep() } catch {}
+      toast({
+        type: 'error',
+        title: `🔔 DELEGATO Tavolo ${data.tableNumber}`,
+        message: `${data.primaryWaiterName} non ha risposto. Subentri tu — ${data.itemName} ${data.elapsedMinutes}min`,
+        duration: 25000,
+      });
+    });
+
+    // Sprint 6: chiamata cameriere dal pass (banco comandista).
+    socket.on('pass-call', (data) => {
+      try { playUrgentBeep() } catch {}
+      toast({
+        type: 'info',
+        title: `🛎️ Ritira al pass — Tavolo ${data.tableNumber}`,
+        message: `${data.calledByName} ti ha chiamato`,
+        duration: 12000,
+      });
+    });
+
     // Pre-allerta crudi: nuovo ordine con item della stazione crudi.
     // Toast prominente per kitchen/admin/manager — serve prep tempestiva.
     socket.on('crudi-preallerta', (data) => {

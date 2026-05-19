@@ -224,6 +224,21 @@ export const kdsAPI = {
   batchStatus:      (itemIds, status)    => api.post('/kds/batch-status', { item_ids: itemIds, status }),
 };
 
+// Sprint 6: Banco Comandista. Ordini al pass + chiamata cameriere + pickup.
+export const comandistaAPI = {
+  ready:        ()                 => api.get('/comandista/ready'),
+  openCalls:    ()                 => api.get('/comandista/open-calls'),
+  call:         (orderId)          => api.post(`/comandista/call/${orderId}`),
+  pickup:       (orderId, itemIds, method = 'manual') =>
+                  api.post(`/comandista/pickup/${orderId}`, { item_ids: itemIds, method }),
+}
+
+// Sprint 10: Chiama vino (bevandista → sommelier abilitato).
+export const wineAPI = {
+  call:    (tableId, notes)   => api.post('/wine/call', { table_id: tableId, notes }),
+  ack:     (callId)            => api.post(`/wine/ack/${callId}`),
+  open:    ()                  => api.get('/wine/open'),
+
 // BAR — solo item con category.is_beverage = true (cocktail, vini, caffè, ...)
 // Accessibile a waiter (bar/caffetteria), manager, admin.
 export const barAPI = {

@@ -51,6 +51,7 @@ async function getPendingOrders(req, res, next) {
          COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name,
          mi.prep_time_mins,
          mi.required_kit                    AS required_kit,
+         mi.cooking_modes                   AS cooking_modes,
          COALESCE(c.course_type, 'altro')   AS course_type,
          COALESCE(mi.prep_station, c.prep_station, 'cucina') AS prep_station,
          COALESCE(
@@ -79,7 +80,7 @@ async function getPendingOrders(req, res, next) {
                 t.table_number, z.name,
                 oi.id, oi.quantity, oi.status, oi.display_status, oi.workflow_status, oi.notes, oi.sent_at,
                 oi.combo_menu_name, oi.combo_selections,
-                mi.name, mi.prep_time_mins, mi.required_kit, mi.prep_station, c.course_type, c.prep_station
+                mi.name, mi.prep_time_mins, mi.required_kit, mi.cooking_modes, mi.prep_station, c.course_type, c.prep_station
        ORDER BY
          CASE oi.display_status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 ELSE 2 END,
          oi.sent_at ASC`,
@@ -111,6 +112,7 @@ async function getPendingOrders(req, res, next) {
         course_type:      row.course_type,
         prep_station:     row.prep_station,
         required_kit:     row.required_kit,  // JSONB array di stringhe o null
+        cooking_modes:    row.cooking_modes, // JSONB { default, per_kg, standby_min, ... } o null
         notes:            row.item_notes,
         sent_at:          row.sent_at,
         prep_time_mins:   row.prep_time_mins,

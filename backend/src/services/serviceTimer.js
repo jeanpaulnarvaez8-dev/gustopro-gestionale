@@ -7,17 +7,12 @@ const logger = require('../lib/logger').child({ component: 'serviceTimer' });
 const INTERVAL_MS = 30_000; // controlla ogni 30 secondi
 
 // Soglie in MINUTI per emettere alert "item ready non servito".
-// waiter  = soglia bassa, alert sul tablet del cameriere assegnato.
-// manager = escalation, alert anche su admin/manager.
-//
-// Riva (operational tuning): 3min/6min uniforme. Il responsabile della
-// sala vuole feedback rapido sia su piatti che su drink — un cocktail
-// "ready" da 5 minuti su servizio spiaggia estivo e' gia' annacquato.
-// Erano 20/25 food + 5/10 beverage, ma il personale "impazziva" perche'
-// la latenza era troppo alta per reagire (test reale 2026-05-18).
+// waiter   = primario (cameriere assegnato)
+// delegate = sub_role responder, dopo 3 min se primario non risponde
+// manager  = escalation finale, admin/manager (Sprint 10 catena)
 const THRESHOLDS = {
-  food:     { waiter: 3, manager: 6 },
-  beverage: { waiter: 3, manager: 6 },
+  food:     { waiter: 3, delegate: 6, manager: 9 },
+  beverage: { waiter: 3, delegate: 6, manager: 9 },
 };
 
 let timer = null;
@@ -125,6 +120,36 @@ async function checkReadyItemsForTenant(client, tenantId) {
         trackAlertReceived(tenantId, row.waiter_id);
       } else {
         await maybeResendAlert(client, tenantId, io, row, alertType, elapsedMin);
+      }
+    }
+
+    // Sprint 10: Delegate step (catena failover prima del manager)
+    if (elapsedMin >= thresholds.delegate) {
+      const inserted = await tryInsertAlert(client, tenantId, row.item_id, 'delegate_alert', null);
+      if (inserted) {
+        // Notifica al delegato del cameriere primario, se configurato
+        const { rows: [waiter] } = await client.query(
+          'SELECT alert_delegate_id FROM users WHERE id = $1 AND tenant_id = $2',
+          [row.waiter_id, tenantId]
+        );
+        if (waiter?.alert_delegate_id) {
+          io.to(`user:${waiter.alert_delegate_id}`).emit('service-delegate-alert', {
+            alertId: inserted.id,
+            orderId: row.order_id, itemId: row.item_id,
+            itemName: row.item_name, quantity: row.quantity,
+            tableNumber: row.table_number, zoneName: row.zone_name,
+            elapsedMinutes: Math.round(elapsedMin),
+            primaryWaiterName: row.waiter_name,
+          });
+          pushService.sendToUser(waiter.alert_delegate_id, {
+            title: `🔔 DELEGATO — Tavolo ${row.table_number}`,
+            body: `${row.waiter_name} non ha servito ${row.item_name} (${Math.round(elapsedMin)}min). Subentri tu.`,
+            tag: `delegate-${row.item_id}`,
+            url: '/tables',
+            vibrate: [400, 100, 400],
+            requireInteraction: true,
+          }).catch(() => {});
+        }
       }
     }
 
