@@ -178,16 +178,23 @@ async function openDay(req, res, next) {
     const tenantId = TENANT(req);
     const date = req.body?.date || new Date().toISOString().slice(0, 10);
 
+    // INSERT esplicito di closed_at=NULL per evitare DEFAULT NOW() legacy.
+    // ON CONFLICT non tocca closed_*: ri-aprire una giornata gia' chiusa
+    // setta NULL su closed_* esplicitamente (e' "re-apertura").
     const { rows: [row] } = await pool.query(
       `INSERT INTO day_closures
          (tenant_id, business_date, register, opened_at, opened_by, opened_by_name,
-          closed_by, closed_by_name, total_amount, total_cash, total_card, total_digital,
+          closed_at, closed_by, closed_by_name,
+          total_amount, total_cash, total_card, total_digital,
           total_other, num_orders, num_receipts, num_covers)
-       VALUES ($1, $2, NULL, NOW(), $3, $4, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0)
+       VALUES ($1, $2, NULL, NOW(), $3, $4, NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0)
        ON CONFLICT (tenant_id, business_date, register) DO UPDATE SET
          opened_at      = NOW(),
          opened_by      = EXCLUDED.opened_by,
-         opened_by_name = EXCLUDED.opened_by_name
+         opened_by_name = EXCLUDED.opened_by_name,
+         closed_at      = NULL,
+         closed_by      = NULL,
+         closed_by_name = NULL
        RETURNING *`,
       [tenantId, date, req.user.id, req.user.name]
     );
