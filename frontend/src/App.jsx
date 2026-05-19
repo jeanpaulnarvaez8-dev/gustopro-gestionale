@@ -29,6 +29,7 @@ const VenueAdminPage         = lazy(() => import('./pages/VenueAdminPage'))
 const TableQRCodesPage       = lazy(() => import('./pages/TableQRCodesPage'))
 const AuditReportPage        = lazy(() => import('./pages/AuditReportPage'))
 const DayClosePage           = lazy(() => import('./pages/DayClosePage'))
+const TakeawayLabelPage      = lazy(() => import('./pages/TakeawayLabelPage'))
 const TaxReportPage          = lazy(() => import('./pages/TaxReportPage'))
 const IngredientsPage        = lazy(() => import('./pages/IngredientsPage'))
 const StockReconciliationPage= lazy(() => import('./pages/StockReconciliationPage'))
@@ -236,6 +237,11 @@ export default function App() {
             <Route path="/day-close" element={
               <RoleRoute roles={['cashier','admin', 'manager']}>
                 <DayClosePage />
+              </RoleRoute>
+            } />
+            <Route path="/takeaway-label/:orderId" element={
+              <RoleRoute roles={['waiter','cashier','admin','manager']}>
+                <TakeawayLabelPage />
               </RoleRoute>
             } />
             {/* /t/:tableId — landing scan QR cavalieri tavolo. Redirect a

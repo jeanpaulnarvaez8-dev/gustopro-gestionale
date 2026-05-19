@@ -12,6 +12,7 @@ import { kdsAPI, barAPI, workflowAPI } from '../lib/api'
 import { formatElapsed, elapsedMinutes } from '../lib/utils'
 import { Card, Badge } from '../components/v2'
 import { playNewOrderBeep, isSoundEnabled, toggleSound } from '../lib/kdsBeep'
+import AbbinaPanel from '../components/AbbinaPanel'
 
 // ─── Status config (tokens Riva) ─────────────────────────────────────────────
 // pending=warn (giallo), cooking=terracotta (arancio caldo), ready=ok (verde)
@@ -387,6 +388,12 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
           )}
         </div>
       </header>
+
+      {/* Sprint 5: pannello Abbina (gruppi di items duplicati per batch).
+          Solo per la cucina, non per il bar (drink son sempre 1-off). */}
+      {!isBar && (
+        <AbbinaPanel station={station} socket={socket} onUpdate={loadOrders} />
+      )}
 
       {/* ─── Content ─────────────────────────────────────────── */}
       <div className="flex-1 p-4 overflow-auto">

@@ -218,6 +218,10 @@ export const kdsAPI = {
   // Storico items KDS (ready/served/cancelled): tutto cio' che e' passato
   // dalla coda. Filtri: from/to (default oggi), station (default all), status.
   history:          (params = {})        => api.get('/kds/history', { params }),
+  // "Abbina": gruppi di items duplicati nello stesso station (per batch cook).
+  abbina:           (station = 'cucina') => api.get('/kds/abbina', { params: { station } }),
+  // Batch update: porta N items allo stesso status atomically.
+  batchStatus:      (itemIds, status)    => api.post('/kds/batch-status', { item_ids: itemIds, status }),
 };
 
 // BAR — solo item con category.is_beverage = true (cocktail, vini, caffè, ...)

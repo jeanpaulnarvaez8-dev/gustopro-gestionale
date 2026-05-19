@@ -398,4 +398,117 @@ async function getHistory(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getPendingOrders, updateItemStatus, getHistory };
+/**
+ * getAbbinaGroups — Sprint 5: gruppi di items duplicati attivi nel KDS.
+ *
+ * L'algoritmo: trova items DIVERSI (oi.id) di STESSO menu_item_id, in
+ * stato pending/cooking/oven_done (= attivi in cucina), nello stesso
+ * tenant + stazione richiesta.
+ *
+ * Restituisce gruppi con >= 2 items: il pizzaiolo/cuoco li puo' cucinare
+ * insieme ("cuoci 4 Margherite contemporaneamente"). Plus al confirm
+ * batch porta tutti gli items a cooking insieme.
+ *
+ * Query params: ?station=cucina|pizzeria|crudi|pasticceria (default cucina)
+ *
+ * Risposta: [{ menu_item_id, item_name, total_quantity, items: [{ id, quantity, status, table_number, order_id, sent_at }] }]
+ */
+async function getAbbinaGroups(req, res, next) {
+  try {
+    const tenantId = TENANT(req);
+    const station = (req.query.station || 'cucina').toLowerCase();
+    const VALID = ['cucina','pizzeria','crudi','pasticceria'];
+    if (!VALID.includes(station)) return res.status(400).json({ error: 'station invalido' });
+
+    const stationFilter = station === 'cucina'
+      ? `COALESCE(mi.prep_station, c.prep_station, 'cucina') = 'cucina'`
+      : `COALESCE(mi.prep_station, c.prep_station, 'cucina') = $2`;
+    const params = station === 'cucina' ? [tenantId] : [tenantId, station];
+
+    const { rows } = await pool.query(
+      `WITH active_items AS (
+         SELECT
+           oi.id, oi.menu_item_id, oi.quantity, oi.status, oi.sent_at,
+           oi.order_id,
+           COALESCE(mi.name, 'Item') AS item_name,
+           COALESCE(t.table_number, 'ASPORTO') AS table_number
+         FROM order_items oi
+         JOIN orders o          ON o.id = oi.order_id
+         LEFT JOIN tables t     ON t.id = o.table_id
+         LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+         LEFT JOIN categories c  ON c.id = mi.category_id
+         WHERE o.status = 'open'
+           AND oi.status IN ('pending','cooking','oven_done')
+           AND oi.workflow_status = 'production'
+           AND oi.tenant_id = $1
+           AND oi.menu_item_id IS NOT NULL
+           AND (c.is_beverage IS NULL OR c.is_beverage = false)
+           AND ${stationFilter}
+       )
+       SELECT
+         menu_item_id,
+         item_name,
+         SUM(quantity)::int AS total_quantity,
+         COUNT(*)::int AS num_orders,
+         jsonb_agg(jsonb_build_object(
+           'id', id, 'quantity', quantity, 'status', status,
+           'order_id', order_id, 'table_number', table_number,
+           'sent_at', sent_at
+         ) ORDER BY sent_at) AS items
+       FROM active_items
+       GROUP BY menu_item_id, item_name
+       HAVING COUNT(*) >= 2
+       ORDER BY total_quantity DESC, item_name`,
+      params
+    );
+
+    res.json(rows);
+  } catch (err) { next(err); }
+}
+
+/**
+ * batchUpdateStatus — Sprint 5: porta N items allo stesso status atomically.
+ * Usato dopo "Abbina" → click "Inizia tutti" → 4 Margherite passano a cooking
+ * insieme.
+ *
+ * Body: { item_ids: [uuid, ...], status: 'cooking'|'oven_done'|'ready' }
+ */
+async function batchUpdateStatus(req, res, next) {
+  try {
+    const { item_ids, status } = req.body || {};
+    const tenantId = TENANT(req);
+
+    if (!Array.isArray(item_ids) || item_ids.length === 0) {
+      return res.status(400).json({ error: 'item_ids array obbligatorio' });
+    }
+    if (item_ids.length > 50) {
+      return res.status(400).json({ error: 'Max 50 items per batch' });
+    }
+    const valid = ['cooking','oven_done','ready','served','cancelled'];
+    if (!valid.includes(status)) {
+      return res.status(400).json({ error: `Status non valido. Valori: ${valid.join(', ')}` });
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE order_items SET
+         status   = $1::varchar,
+         ready_at = CASE WHEN $1::varchar = 'ready'  AND ready_at  IS NULL THEN NOW() ELSE ready_at  END,
+         served_at = CASE WHEN $1::varchar = 'served' AND served_at IS NULL THEN NOW() ELSE served_at END
+       WHERE id = ANY($2::uuid[]) AND tenant_id = $3
+       RETURNING id, order_id, status`,
+      [status, item_ids, tenantId]
+    );
+
+    // Socket: emette UN evento batch per i clients
+    getIO()?.emit('items-batch-updated', {
+      itemIds: rows.map(r => r.id),
+      orderIds: [...new Set(rows.map(r => r.order_id))],
+      status,
+      count: rows.length,
+    });
+
+    res.json({ updated: rows.length, items: rows });
+  } catch (err) { next(err); }
+}
+
+module.exports = { getPendingOrders, updateItemStatus, getHistory, getAbbinaGroups, batchUpdateStatus };

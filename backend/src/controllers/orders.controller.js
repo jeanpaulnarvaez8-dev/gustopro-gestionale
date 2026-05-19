@@ -135,13 +135,30 @@ async function createOrder(req, res, next) {
       }
     }
 
+    // Sprint 7: per asporto, assegna numero progressivo giornaliero
+    // (T101, T102, ...). Reset automatico ogni giorno via PRIMARY KEY
+    // (tenant_id, business_date) sulla tabella counter.
+    let takeawayNumber = null;
+    if (order_type === 'takeaway') {
+      const today = new Date().toISOString().slice(0, 10);
+      const { rows: [counter] } = await client.query(
+        `INSERT INTO takeaway_counters (tenant_id, business_date, last_number)
+         VALUES ($1, $2::date, 101)
+         ON CONFLICT (tenant_id, business_date) DO UPDATE SET
+           last_number = takeaway_counters.last_number + 1
+         RETURNING last_number`,
+        [tenantId, today]
+      );
+      takeawayNumber = counter.last_number;
+    }
+
     const { rows: [order] } = await client.query(
       `INSERT INTO orders
-         (tenant_id, table_id, waiter_id, notes, order_type, customer_name, customer_phone, pickup_time, covers)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+         (tenant_id, table_id, waiter_id, notes, order_type, customer_name, customer_phone, pickup_time, covers, takeaway_number)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [tenantId, table_id || null, req.user.id, notes || null,
        order_type, customer_name || null, customer_phone || null, pickup_time || null,
-       Math.max(1, parseInt(covers, 10) || 1)]
+       Math.max(1, parseInt(covers, 10) || 1), takeawayNumber]
     );
 
     const orderItems = [];
