@@ -46,10 +46,11 @@ async function callWine(req, res, next) {
     });
 
     // Push native ai sommelier (utenti con can_serve_wine=true)
+    // — escludendo chi ha chiamato (id <> req.user.id).
     const { rows: sommelier } = await pool.query(
       `SELECT id FROM users
         WHERE tenant_id = $1 AND is_active = true AND can_serve_wine = true
-          AND id <> $2`,  -- non a chi ha chiamato
+          AND id <> $2`,
       [tenantId, req.user.id]
     );
     await Promise.all(sommelier.map(s => pushService.sendToUser(s.id, {
