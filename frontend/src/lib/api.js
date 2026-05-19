@@ -238,6 +238,7 @@ export const wineAPI = {
   call:    (tableId, notes)   => api.post('/wine/call', { table_id: tableId, notes }),
   ack:     (callId)            => api.post(`/wine/ack/${callId}`),
   open:    ()                  => api.get('/wine/open'),
+};
 
 // BAR — solo item con category.is_beverage = true (cocktail, vini, caffè, ...)
 // Accessibile a waiter (bar/caffetteria), manager, admin.
