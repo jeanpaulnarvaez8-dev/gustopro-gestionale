@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock,
-  LayoutDashboard, Package, LogOut, Volume2, VolumeX, UtensilsCrossed,
+  LayoutDashboard, Package, LogOut, Volume2, VolumeX, UtensilsCrossed, History,
 } from 'lucide-react'
 import { useSocket } from '../context/SocketContext'
 import { useToast } from '../context/ToastContext'
@@ -338,6 +338,8 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
           {isBar && (
             <NavButton icon={UtensilsCrossed} label="Tavoli" hoverColor="gold" onClick={() => navigate('/tables')} />
           )}
+          {/* Storico: visibile sia kitchen che bar */}
+          <NavButton icon={History} label="Storico" hoverColor="gold" onClick={() => navigate('/kds/history')} />
           {/* Attese/waiting-monitor e' kitchen-only — bar non lo usa */}
           {!isBar && (
             <NavButton icon={Clock} label="Attese" hoverColor="warn" onClick={() => navigate('/waiting-monitor')} />

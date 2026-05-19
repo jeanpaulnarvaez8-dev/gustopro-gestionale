@@ -14,6 +14,7 @@ const KDSPage                = lazy(() => import('./pages/KDSPage'))
 const KDSPizzeriaPage        = lazy(() => import('./pages/KDSPizzeriaPage'))
 const KDSCrudiPage           = lazy(() => import('./pages/KDSCrudiPage'))
 const KDSPasticceriaPage     = lazy(() => import('./pages/KDSPasticceriaPage'))
+const KDSHistoryPage         = lazy(() => import('./pages/KDSHistoryPage'))
 const BarPage                = lazy(() => import('./pages/BarPage'))
 const DashboardPage          = lazy(() => import('./pages/DashboardPage'))
 const AnalyticsPage          = lazy(() => import('./pages/AnalyticsPage'))
@@ -168,6 +169,11 @@ export default function App() {
             <Route path="/kds/pasticceria" element={
               <RoleRoute roles={['kitchen', 'admin', 'manager']}>
                 <KDSPasticceriaPage />
+              </RoleRoute>
+            } />
+            <Route path="/kds/history" element={
+              <RoleRoute roles={['kitchen', 'waiter', 'admin', 'manager']}>
+                <KDSHistoryPage />
               </RoleRoute>
             } />
             <Route path="/bar" element={

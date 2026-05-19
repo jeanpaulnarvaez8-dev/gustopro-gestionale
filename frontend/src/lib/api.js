@@ -210,6 +210,9 @@ export const ordersAPI = {
 export const kdsAPI = {
   pending:          (station = 'cucina') => api.get('/kds/pending', { params: { station } }),
   updateItemStatus: (id, status)         => api.patch(`/kds/items/${id}/status`, { status }),
+  // Storico items KDS (ready/served/cancelled): tutto cio' che e' passato
+  // dalla coda. Filtri: from/to (default oggi), station (default all), status.
+  history:          (params = {})        => api.get('/kds/history', { params }),
 };
 
 // BAR — solo item con category.is_beverage = true (cocktail, vini, caffè, ...)

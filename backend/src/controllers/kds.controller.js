@@ -66,7 +66,11 @@ async function getPendingOrders(req, res, next) {
        LEFT JOIN order_item_modifiers oim ON oim.order_item_id = oi.id
        LEFT JOIN modifiers m ON m.id = oim.modifier_id
        WHERE o.status = 'open'
-         AND oi.status NOT IN ('served','cancelled')
+         -- Esclude 'ready' dalla coda: una volta che lo chef ha cliccato
+         -- "Pronto" l'item passa al pass del cameriere, non serve piu' allo
+         -- chef. Vedi /kds/history per il riepilogo di tutto cio' che e'
+         -- passato (incluso ready/served/cancelled).
+         AND oi.status NOT IN ('ready','served','cancelled')
          AND oi.workflow_status = 'production'
          AND oi.tenant_id = $1
          AND (c.is_beverage IS NULL OR c.is_beverage = false)
@@ -247,4 +251,104 @@ async function updateItemStatus(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getPendingOrders, updateItemStatus };
+/**
+ * getHistory — storico items KDS (tutto cio' che e' passato dalla coda,
+ * incluso ready/served/cancelled). Usato per la pagina "Storico" del KDS.
+ *
+ * Query params:
+ *   ?from=YYYY-MM-DD&to=YYYY-MM-DD  default oggi
+ *   ?station=cucina|pizzeria|crudi|pasticceria|bar  default tutto
+ *   ?status=ready|served|cancelled|all  default all
+ *
+ * Ritorna max 500 item, ordinati per sent_at DESC.
+ */
+async function getHistory(req, res, next) {
+  try {
+    const tenantId = TENANT(req);
+    const today = new Date().toISOString().slice(0, 10);
+    const from = req.query.from || today;
+    const to   = req.query.to   || today;
+    const station = (req.query.station || 'all').toLowerCase();
+    const statusFilter = (req.query.status || 'all').toLowerCase();
+
+    const VALID_STATIONS = ['all','cucina','pizzeria','crudi','pasticceria','bar'];
+    const VALID_STATUS   = ['all','pending','cooking','oven_done','ready','served','cancelled'];
+    if (!VALID_STATIONS.includes(station)) return res.status(400).json({ error: 'station invalido' });
+    if (!VALID_STATUS.includes(statusFilter)) return res.status(400).json({ error: 'status invalido' });
+
+    const params = [tenantId, from, to];
+    let where = `oi.tenant_id = $1
+                 AND DATE(oi.sent_at AT TIME ZONE 'Europe/Rome') BETWEEN $2 AND $3`;
+
+    if (station === 'bar') {
+      where += ' AND c.is_beverage = true';
+    } else if (station !== 'all') {
+      where += ' AND (c.is_beverage IS NULL OR c.is_beverage = false)';
+      if (station === 'cucina') {
+        where += ` AND COALESCE(mi.prep_station, c.prep_station, 'cucina') = 'cucina'`;
+      } else {
+        params.push(station);
+        where += ` AND COALESCE(mi.prep_station, c.prep_station, 'cucina') = $${params.length}`;
+      }
+    }
+    if (statusFilter !== 'all') {
+      params.push(statusFilter);
+      where += ` AND oi.status = $${params.length}`;
+    }
+
+    const { rows } = await pool.query(
+      `SELECT
+         oi.id, oi.quantity, oi.status, oi.notes,
+         oi.sent_at, oi.ready_at, oi.served_at,
+         COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name,
+         c.name AS category,
+         COALESCE(mi.prep_station, c.prep_station, 'cucina') AS prep_station,
+         c.is_beverage,
+         o.id AS order_id,
+         COALESCE(t.table_number, 'ASPORTO') AS table_number,
+         u.name AS waiter_name,
+         -- Durata cottura (sent → ready) in minuti
+         CASE WHEN oi.ready_at IS NOT NULL
+              THEN ROUND(EXTRACT(EPOCH FROM (oi.ready_at - oi.sent_at))/60.0, 1)
+         END AS prep_minutes,
+         -- Durata pass (ready → served) in minuti
+         CASE WHEN oi.served_at IS NOT NULL AND oi.ready_at IS NOT NULL
+              THEN ROUND(EXTRACT(EPOCH FROM (oi.served_at - oi.ready_at))/60.0, 1)
+         END AS pass_minutes
+       FROM order_items oi
+       JOIN orders o          ON o.id = oi.order_id
+       LEFT JOIN tables t     ON t.id = o.table_id
+       LEFT JOIN users u      ON u.id = o.waiter_id
+       LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+       LEFT JOIN categories c  ON c.id = mi.category_id
+       WHERE ${where}
+       ORDER BY oi.sent_at DESC
+       LIMIT 500`,
+      params
+    );
+
+    // Aggregati: totali per status + per stazione
+    const { rows: [agg] } = await pool.query(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE oi.status = 'served')::int AS served,
+         COUNT(*) FILTER (WHERE oi.status = 'cancelled')::int AS cancelled,
+         COALESCE(AVG(EXTRACT(EPOCH FROM (oi.ready_at - oi.sent_at))/60.0)
+                  FILTER (WHERE oi.ready_at IS NOT NULL), 0)::numeric(10,1) AS avg_prep_min
+       FROM order_items oi
+       LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+       LEFT JOIN categories c  ON c.id = mi.category_id
+       WHERE ${where}`,
+      params
+    );
+
+    res.json({
+      periodo: { from, to },
+      filtro: { station, status: statusFilter },
+      aggregati: agg,
+      items: rows,
+    });
+  } catch (err) { next(err); }
+}
+
+module.exports = { getPendingOrders, updateItemStatus, getHistory };

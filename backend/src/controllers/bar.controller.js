@@ -48,7 +48,9 @@ async function getBarOrders(req, res, next) {
        LEFT JOIN order_item_modifiers oim ON oim.order_item_id = oi.id
        LEFT JOIN modifiers m ON m.id = oim.modifier_id
        WHERE o.status = 'open'
-         AND oi.status NOT IN ('served','cancelled')
+         -- Esclude 'ready' dalla coda: dopo "Pronto" il drink passa al
+         -- pass del cameriere; il bartender vede solo pending/cooking.
+         AND oi.status NOT IN ('ready','served','cancelled')
          AND oi.workflow_status = 'production'
          AND oi.tenant_id = $1
          AND c.is_beverage = true   -- ← unico delta vs KDS cucina
