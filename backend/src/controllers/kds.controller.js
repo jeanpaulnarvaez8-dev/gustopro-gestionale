@@ -18,10 +18,16 @@ async function getPendingOrders(req, res, next) {
     if (!validStations.includes(stationParam)) {
       return res.status(400).json({ error: `station non valido. Valori: ${validStations.join(', ')}` });
     }
-    // 'cucina' = NULL o esplicito 'cucina' (categorie senza prep_station)
+    // Effective prep_station per ITEM:
+    //   1. menu_items.prep_station se non NULL (override per piatto)
+    //   2. altrimenti categories.prep_station
+    //   3. altrimenti 'cucina' (default backward compat)
+    // Esempio Riva: "Cozze alla Tarantina" (cat Antipasti di Mare → cucina)
+    // resta a cucina; "Tartare di Tonno" stessa cat ma item.prep_station='crudi'.
+    const effectiveStation = `COALESCE(mi.prep_station, c.prep_station, 'cucina')`;
     const stationFilter = stationParam === 'cucina'
-      ? `(c.prep_station IS NULL OR c.prep_station = 'cucina')`
-      : `c.prep_station = $2`;
+      ? `${effectiveStation} = 'cucina'`
+      : `${effectiveStation} = $2`;
     const params = stationParam === 'cucina' ? [TENANT(req)] : [TENANT(req), stationParam];
 
     const { rows } = await pool.query(
@@ -46,7 +52,7 @@ async function getPendingOrders(req, res, next) {
          mi.prep_time_mins,
          mi.required_kit                    AS required_kit,
          COALESCE(c.course_type, 'altro')   AS course_type,
-         COALESCE(c.prep_station, 'cucina') AS prep_station,
+         COALESCE(mi.prep_station, c.prep_station, 'cucina') AS prep_station,
          COALESCE(
            json_agg(m.name ORDER BY m.name) FILTER (WHERE m.id IS NOT NULL),
            '[]'
@@ -69,7 +75,7 @@ async function getPendingOrders(req, res, next) {
                 t.table_number, z.name,
                 oi.id, oi.quantity, oi.status, oi.display_status, oi.workflow_status, oi.notes, oi.sent_at,
                 oi.combo_menu_name, oi.combo_selections,
-                mi.name, mi.prep_time_mins, mi.required_kit, c.course_type, c.prep_station
+                mi.name, mi.prep_time_mins, mi.required_kit, mi.prep_station, c.course_type, c.prep_station
        ORDER BY
          CASE oi.display_status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 ELSE 2 END,
          oi.sent_at ASC`,

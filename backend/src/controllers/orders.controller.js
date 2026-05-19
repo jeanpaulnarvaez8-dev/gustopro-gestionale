@@ -249,7 +249,8 @@ async function createOrder(req, res, next) {
            LEFT JOIN orders o      ON o.id = oi.order_id
            LEFT JOIN tables t      ON t.id = o.table_id
           WHERE oi.order_id = $1 AND oi.tenant_id = $2
-            AND c.prep_station = 'crudi'`,
+            -- Item override > category > default. Solo se effective='crudi'.
+            AND COALESCE(mi.prep_station, c.prep_station) = 'crudi'`,
         [order.id, tenantId]
       );
       if (crudiItems.length > 0) {
