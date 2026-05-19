@@ -945,14 +945,23 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
   const [local, setLocal] = useState(tables)
   const [saving, setSaving] = useState(false)
 
-  // Auto-fit
+  // Auto-fit: ricalcola il viewBox basandosi sui tavoli VISIBILI (= zona
+  // attiva se spotlightZoneId e' set, altrimenti tutti). Senza questo fix,
+  // selezionando "Terrazza Panoramica" su mobile, l'SVG continuava a
+  // fitterare tutti i 48 tavoli → quelli di Terrazza diventavano
+  // microscopici e l'utente non li vedeva. (Bug test reale 2026-05-19)
   useEffect(() => {
     const el = containerRef.current
     if (!el || tables.length === 0) return
     const fit = () => {
       const rect = el.getBoundingClientRect()
+      // Focus sui tavoli della zona attiva (se filtrata) altrimenti tutti
+      const focusTables = spotlightZoneId
+        ? tables.filter(t => t.zone_id === spotlightZoneId)
+        : tables
+      const tablesForFit = focusTables.length > 0 ? focusTables : tables
       let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0
-      for (const t of tables) {
+      for (const t of tablesForFit) {
         const x2 = t.pos_x + (t.width || 60) + 30
         const y2 = t.pos_y + (t.height || 60) + 30
         if (t.pos_x < minX) minX = t.pos_x
@@ -960,28 +969,35 @@ export default function FloorPlanInteractive({ tables, zones, onTableClick, canE
         if (x2 > maxX) maxX = x2
         if (y2 > maxY) maxY = y2
       }
-      for (const z of zones) {
-        const zx2 = (z.floor_x || 0) + (z.floor_w || 400)
-        const zy2 = (z.floor_y || 0) + (z.floor_h || 300)
-        if (zx2 > maxX) maxX = zx2
-        if (zy2 > maxY) maxY = zy2
+      // Includi le zone (rectangle pavimento) SOLO se nessun spotlight
+      if (!spotlightZoneId) {
+        for (const z of zones) {
+          const zx2 = (z.floor_x || 0) + (z.floor_w || 400)
+          const zy2 = (z.floor_y || 0) + (z.floor_h || 300)
+          if (zx2 > maxX) maxX = zx2
+          if (zy2 > maxY) maxY = zy2
+        }
       }
-      const contentW = maxX + 40
-      const contentH = maxY + 40
+      // Padding intorno al cluster + offset per spostare tutto verso 0,0
+      const padding = 40
+      const offsetX = Math.max(0, minX - padding)
+      const offsetY = Math.max(0, minY - padding)
+      const contentW = (maxX - offsetX) + padding
+      const contentH = (maxY - offsetY) + padding
       const scaleX = rect.width / contentW
       const scaleY = rect.height / contentH
       const s = Math.min(scaleX, scaleY) * 0.92
       setZoom(s)
       setPan({
-        x: (rect.width - contentW * s) / 2,
-        y: Math.max(5, (rect.height - contentH * s) / 2),
+        x: (rect.width - contentW * s) / 2 - offsetX * s,
+        y: Math.max(5, (rect.height - contentH * s) / 2 - offsetY * s),
       })
     }
     fit()
     const obs = new ResizeObserver(fit)
     obs.observe(el)
     return () => obs.disconnect()
-  }, [tables, zones])
+  }, [tables, zones, spotlightZoneId])
 
   useEffect(() => { setLocal(tables) }, [tables])
 
