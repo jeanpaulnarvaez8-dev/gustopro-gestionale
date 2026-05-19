@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Wifi, WifiOff, RefreshCw, ChefHat, CheckCircle2, Clock,
-  LayoutDashboard, Package, LogOut, Volume2, VolumeX,
+  LayoutDashboard, Package, LogOut, Volume2, VolumeX, UtensilsCrossed,
 } from 'lucide-react'
 import { useSocket } from '../context/SocketContext'
 import { useToast } from '../context/ToastContext'
@@ -294,15 +294,29 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
 
       {/* ─── Header ─────────────────────────────────────────── */}
       <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 sm:px-5 py-3 flex items-center gap-3 flex-wrap sticky top-0 z-20">
-        {user?.role !== 'kitchen' && (
-          <button
-            onClick={() => navigate(isBar ? '/admin' : '/tables')}
-            className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
-            aria-label="Indietro"
-          >
-            <ArrowLeft size={18} />
-          </button>
-        )}
+        {/* Back button: NON mostrato se questa pagina e' la "home" del ruolo
+            (kitchen → /kds, bartender → /bar). Per gli altri (admin/manager
+            che navigano qui da admin-home) torna ad admin-home, mai a /admin
+            che non esiste come route (bug 2026-05-19 segnalato in test reale).
+            Per waiter sala su KDS → /tables. */}
+        {(() => {
+          const isKitchenHome = user?.role === 'kitchen'
+          const isBartenderHome = isBar && user?.role === 'waiter' &&
+            (user?.sub_role === 'bar' || user?.sub_role === 'bar/caffetteria')
+          if (isKitchenHome || isBartenderHome) return null
+
+          // Destinazione del back: admin/manager → admin-home; altri → /tables
+          const backTo = ['admin','manager'].includes(user?.role) ? '/admin-home' : '/tables'
+          return (
+            <button
+              onClick={() => navigate(backTo)}
+              className="text-[var(--color-text-2)] hover:text-[var(--color-text)] hover:bg-[rgba(255,255,255,0.04)] rounded-lg p-1.5 transition"
+              aria-label="Indietro"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )
+        })()}
         <ChefHat size={20} className="text-[var(--color-gold)]" />
         <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">
           {pageTitle}
@@ -319,6 +333,11 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
 
         {/* Right cluster */}
         <div className="ml-auto flex items-center gap-2">
+          {/* Bar mode: pulsante "Tavoli" per accedere alla mappa (bartender
+              puo' cliccare un tavolo → modal bevande di quel tavolo). */}
+          {isBar && (
+            <NavButton icon={UtensilsCrossed} label="Tavoli" hoverColor="gold" onClick={() => navigate('/tables')} />
+          )}
           {/* Attese/waiting-monitor e' kitchen-only — bar non lo usa */}
           {!isBar && (
             <NavButton icon={Clock} label="Attese" hoverColor="warn" onClick={() => navigate('/waiting-monitor')} />
