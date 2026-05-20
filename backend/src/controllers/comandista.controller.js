@@ -99,7 +99,11 @@ async function callWaiter(req, res, next) {
       waiterName: order.waiter_name,
     });
 
-    // Push native al cameriere (gli arriva anche con app chiusa)
+    // Push native al cameriere (gli arriva anche con app chiusa) con
+    // ACTION BUTTON "✓ Ritirato": conferma il ritiro dall'orologio.
+    const pickupToken = pushService.signActionToken({
+      userId: order.waiter_id, tenantId, orderId, itemIds: [], action: 'pickup',
+    });
     pushService.sendToUser(order.waiter_id, {
       title: `🛎️ Tavolo ${order.table_number} — Ritira al pass`,
       body: `Banco comandista pronto. Vai a prendere i piatti.`,
@@ -107,6 +111,8 @@ async function callWaiter(req, res, next) {
       url: `/order/${orderId}`,
       vibrate: [300, 100, 300, 100, 300],
       requireInteraction: true,
+      actions: [{ action: 'pickup', title: '✓ Ritirato' }],
+      actionToken: pickupToken,
     }).catch(() => {});
 
     res.status(201).json(call);

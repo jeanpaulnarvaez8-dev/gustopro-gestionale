@@ -65,18 +65,74 @@ self.addEventListener('push', (event) => {
     badge: data.badge || '/icon-192.png',
     vibrate: data.vibrate || [200, 100, 200],
     requireInteraction: !!data.requireInteraction,
-    data: { url: data.url || '/' },
+    // Action buttons (es. "✓ Servito") cliccabili da notifica/orologio.
+    // Su Apple Watch + Wear OS i bottoni-azione delle notifiche funzionano.
+    actions: Array.isArray(data.actions) ? data.actions : [],
+    data: {
+      url: data.url || '/',
+      actionToken: data.actionToken || null,  // JWT firmato per push-action
+    },
   }
   event.waitUntil(self.registration.showNotification(title, options))
 })
 
-// Click sulla notifica → apri o focus la tab GustoPro alla URL specificata
+// Esegue una push-action (Servito/Ritirato) chiamando il backend col token
+// firmato. Niente JWT di sessione necessario — il token E' l'auth.
+async function runPushAction(action, actionToken) {
+  if (!actionToken) return false
+  try {
+    const res = await fetch(`${self.location.origin}/api/push-action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: actionToken, action }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+// Click sulla notifica: due casi.
+//  1. Tap su un BOTTONE-AZIONE (es. "✓ Servito") → esegue push-action
+//     col token, mostra conferma, NON apre l'app (mani libere dall'orologio).
+//  2. Tap sul corpo della notifica → apri/focus la tab GustoPro.
 self.addEventListener('notificationclick', (event) => {
+  const action = event.action
+  const data = event.notification.data || {}
   event.notification.close()
-  const targetUrl = event.notification.data?.url || '/'
+
+  // CASO 1: bottone azione (servito/pickup)
+  if (action === 'served' || action === 'pickup') {
+    event.waitUntil((async () => {
+      const ok = await runPushAction(action, data.actionToken)
+      // Feedback visivo: notifica breve di conferma (sparisce da sola)
+      const title = ok
+        ? (action === 'served' ? '✓ Servito confermato' : '✓ Ritiro confermato')
+        : '⚠️ Errore — apri l\'app'
+      try {
+        await self.registration.showNotification(title, {
+          tag: 'action-feedback',
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          vibrate: ok ? [80] : [200, 100, 200],
+          requireInteraction: false,
+          silent: ok,
+        })
+        // Auto-dismiss feedback dopo 2.5s
+        if (ok) {
+          await new Promise(r => setTimeout(r, 2500))
+          const notifs = await self.registration.getNotifications({ tag: 'action-feedback' })
+          notifs.forEach(n => n.close())
+        }
+      } catch { /* ignore */ }
+    })())
+    return
+  }
+
+  // CASO 2: tap sul corpo → apri/focus app alla URL
+  const targetUrl = data.url || '/'
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    // Se c'e' gia' una finestra GustoPro aperta, naviga + focus
     for (const c of all) {
       if (c.url.includes(self.location.origin)) {
         try {
@@ -86,7 +142,6 @@ self.addEventListener('notificationclick', (event) => {
         } catch { /* fallback openWindow */ }
       }
     }
-    // Altrimenti apre nuova tab
     if (self.clients.openWindow) await self.clients.openWindow(targetUrl)
   })())
 })

@@ -16,6 +16,11 @@ router.use('/auth', resolveTenant, require('./auth.routes'));
 // Rate-limited a 30 report/min per IP. Vedi clientError.routes.js.
 router.use('/_client-error', require('./clientError.routes'));
 
+// Push action — eseguito dal Service Worker (tap "Servito" su orologio).
+// PUBBLICO ma autenticato dal token firmato nel body (JWT 30min single-use).
+// Mounted PRIMA di verifyToken perche' il SW non ha il JWT di sessione.
+router.use('/push-action', require('./pushAction.routes'));
+
 // Protected (all routes below require JWT). Tenant is resolved from the
 // JWT claim set at login; falls back to header / default if missing
 // (covers tokens issued before the tenant_id claim was added).

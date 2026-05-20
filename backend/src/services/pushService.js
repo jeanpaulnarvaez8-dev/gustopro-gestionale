@@ -17,8 +17,27 @@
  * il record viene rimosso dal DB → niente cleanup manuale.
  */
 const webpush = require('web-push');
+const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const logger = require('../lib/logger').child({ component: 'pushService' });
+
+/**
+ * signActionToken — genera un JWT breve (30 min) per azioni notifica
+ * eseguibili dal Service Worker (es. "Servito" dall'orologio) senza
+ * il JWT di login. Il token e' single-purpose: encoda esattamente quale
+ * azione + su quali items, firmato col server secret.
+ *
+ * Payload: { uid, tid, oid, items, act }
+ *   uid = user_id che esegue, tid = tenant, oid = order, items = item_ids,
+ *   act = 'served' | 'pickup'
+ */
+function signActionToken({ userId, tenantId, orderId, itemIds, action }) {
+  return jwt.sign(
+    { uid: userId, tid: tenantId, oid: orderId, items: itemIds || [], act: action, kind: 'push-action' },
+    process.env.JWT_SECRET,
+    { expiresIn: '30m' }
+  );
+}
 
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
@@ -105,4 +124,4 @@ async function sendToRole(tenantId, roles, payload) {
   }
 }
 
-module.exports = { isEnabled, getPublicKey, sendToUser, sendToRole };
+module.exports = { isEnabled, getPublicKey, sendToUser, sendToRole, signActionToken };

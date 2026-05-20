@@ -239,6 +239,12 @@ async function updateItemStatus(req, res, next) {
         });
         // Web Push: anche se l'app del cameriere e' chiusa, riceve push.
         // tag = orderId per non duplicare alert sullo stesso ordine.
+        // ACTION BUTTON "✓ Servito": il cameriere conferma dall'orologio
+        // senza aprire il telefono. Il token firmato encoda l'azione.
+        const servedToken = pushService.signActionToken({
+          userId: info.waiter_id, tenantId, orderId: item.order_id,
+          itemIds: [id], action: 'served',
+        });
         pushService.sendToUser(info.waiter_id, {
           title: `🍽️ Tavolo ${info.table_number} — Pronto`,
           body: `${info.quantity}× ${info.item_name}`,
@@ -246,6 +252,8 @@ async function updateItemStatus(req, res, next) {
           url: `/order/${item.order_id}`,
           vibrate: [200, 100, 200],
           requireInteraction: true,
+          actions: [{ action: 'served', title: '✓ Servito' }],
+          actionToken: servedToken,
         }).catch(() => {});
       }
 
