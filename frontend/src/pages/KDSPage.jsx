@@ -105,19 +105,46 @@ function NavButton({ icon: Icon, label, onClick, hoverColor = 'gold' }) {
  *
  * Props:
  *   - mode:    'kitchen' (default) o 'bar'
- *   - station: opzionale, solo se mode='kitchen'. Default 'cucina'.
- *              Valori: 'cucina', 'pizzeria', 'crudi', 'pasticceria'.
- *              Filtra il KDS per la prep_station della categoria.
+ *   - station: opzionale. Se passato (route dedicata /kds/pizzeria) forza
+ *              quella stazione. Se NON passato (route /kds generica), l'utente
+ *              sceglie la stazione dal picker (persistito per device in
+ *              localStorage). Stazioni reali Riva: all, frittura,
+ *              primi_secondi, antipasti, pizzeria, pasticceria.
  */
 const STATION_TITLES = {
-  cucina:      'KDS Cucina',
-  pizzeria:    'KDS Pizzeria',
-  crudi:       'KDS Crudi',
-  pasticceria: 'KDS Pasticceria',
+  all:           'KDS Cucina',
+  cucina:        'KDS Cucina',
+  frittura:      'KDS Frittura',
+  primi_secondi: 'KDS Primi + Secondi',
+  antipasti:     'KDS Antipasti',
+  pizzeria:      'KDS Pizzeria/Panini',
+  pasticceria:   'KDS Pasticceria',
 }
+// Pills picker: stazioni reali cucina Riva.
+const STATION_PICKER = [
+  { id: 'all',           label: 'Tutte' },
+  { id: 'frittura',      label: 'Frittura' },
+  { id: 'primi_secondi', label: 'Primi+Secondi' },
+  { id: 'antipasti',     label: 'Antipasti' },
+  { id: 'pizzeria',      label: 'Pizzeria/Panini' },
+  { id: 'pasticceria',   label: 'Pasticceria' },
+]
+const STATION_LS_KEY = 'gustopro_kds_station'
 
-export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
+export default function KDSPage({ mode = 'kitchen', station: stationProp = null }) {
   const isBar = mode === 'bar'
+  // Station: prop (route dedicata) ha priorita'. Altrimenti localStorage,
+  // altrimenti 'all'. Picker visibile solo se station NON forzata da prop.
+  const [stationSel, setStationSel] = useState(() => {
+    if (stationProp) return stationProp
+    try { return localStorage.getItem(STATION_LS_KEY) || 'all' } catch { return 'all' }
+  })
+  const station = stationProp || stationSel
+  const showPicker = !isBar && !stationProp
+  const changeStation = (s) => {
+    setStationSel(s)
+    try { localStorage.setItem(STATION_LS_KEY, s) } catch {}
+  }
   const pageTitle = isBar ? 'Bar' : (STATION_TITLES[station] || 'KDS Cucina')
   // Wrapper attorno a kdsAPI.pending(station) per non passare il param ovunque
   const dataAPI = isBar ? barAPI : {
@@ -145,8 +172,9 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
   const loadOrders = useCallback(async () => {
     try {
       // Bar mode: niente crossmatches/waiting (sono concetti specifici della cucina).
+      const pendingCall = isBar ? barAPI.pending() : kdsAPI.pending(station)
       const [ordersRes, crossRes, waitingRes] = await Promise.all([
-        dataAPI.pending(),
+        pendingCall,
         isBar ? Promise.resolve({ data: [] }) : workflowAPI.getCrossmatches().catch(() => ({ data: [] })),
         isBar ? Promise.resolve({ data: [] }) : workflowAPI.getWaiting().catch(() => ({ data: [] })),
       ])
@@ -158,7 +186,7 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [isBar, station])
 
   // Render-safe combo selections: gestisce sia format nuovo {course: name|names[]}
   // che format legacy [{menu_item_id: "..."}] (pre-Phase 2).
@@ -188,6 +216,12 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
   useEffect(() => {
     if (!loadedRef.current) { loadedRef.current = true; loadOrders() }
   }, [loadOrders])
+
+  // Re-fetch quando cambia la stazione selezionata (picker).
+  useEffect(() => {
+    if (loadedRef.current) { setLoading(true); loadOrders() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [station])
 
   // Socket real-time updates
   useEffect(() => {
@@ -399,6 +433,29 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
           )}
         </div>
       </header>
+
+      {/* Station picker: ogni tablet cucina sceglie la propria stazione
+          (frittura, primi+secondi, antipasti, pizzeria, pasticceria) o
+          "Tutte". Persistito per device in localStorage. Visibile solo
+          su /kds generico (non sulle route dedicate /kds/pizzeria). */}
+      {showPicker && (
+        <div className="bg-[var(--color-surface-2)] border-b border-[var(--color-border-soft)] px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
+          <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-3)] font-semibold mr-1 shrink-0">Stazione</span>
+          {STATION_PICKER.map(s => (
+            <button
+              key={s.id}
+              onClick={() => changeStation(s.id)}
+              className={`shrink-0 px-3 py-1 rounded-md text-xs font-semibold transition ${
+                station === s.id
+                  ? 'bg-[var(--color-gold)] text-[#13181C]'
+                  : 'bg-[var(--color-surface)] text-[var(--color-text-2)] border border-[var(--color-border-soft)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Sprint 5: pannello Abbina (gruppi di items duplicati per batch).
           Solo per la cucina, non per il bar (drink son sempre 1-off). */}
@@ -664,6 +721,13 @@ export default function KDSPage({ mode = 'kitchen', station = 'cucina' }) {
                                 {item.notes && (
                                   <p className="text-[var(--color-warn)] text-xs mt-0.5 italic font-semibold">
                                     ⚠ {item.notes}
+                                  </p>
+                                )}
+                                {/* Crudi: badge sicurezza alimentare. Anche se mostrati
+                                    con gli antipasti, devono saltare la fila (freschezza). */}
+                                {item.requires_preallerta && (
+                                  <p className="text-[var(--color-sea)] text-xs mt-0.5 font-bold flex items-center gap-1">
+                                    🦪 CRUDO — priorità freschezza
                                   </p>
                                 )}
                                 {/* Kit utensili al pass: astice→schiaccianoci, granchio→pinza, ecc.

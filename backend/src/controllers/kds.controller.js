@@ -10,25 +10,31 @@ const TENANT = (req) => req.tenant.id;
 
 async function getPendingOrders(req, res, next) {
   try {
-    // Filtro per stazione KDS. Default 'cucina' = NULL (backward compat).
-    // Stazioni valide: cucina (default), pizzeria, crudi, pasticceria.
+    // Filtro per stazione KDS (stazioni reali Riva).
+    // Stazioni: frittura, primi_secondi, antipasti, pizzeria, pasticceria,
+    //           cucina (catch-all NULL), all (tutta la cucina non-bar).
     // Bevande sempre escluse (vanno in /bar).
-    const stationParam = (req.query.station || 'cucina').toLowerCase();
-    const validStations = ['cucina', 'pizzeria', 'crudi', 'pasticceria'];
+    const stationParam = (req.query.station || 'all').toLowerCase();
+    const validStations = ['all','cucina','frittura','primi_secondi','antipasti','pizzeria','pasticceria','crudi'];
     if (!validStations.includes(stationParam)) {
       return res.status(400).json({ error: `station non valido. Valori: ${validStations.join(', ')}` });
     }
     // Effective prep_station per ITEM:
     //   1. menu_items.prep_station se non NULL (override per piatto)
     //   2. altrimenti categories.prep_station
-    //   3. altrimenti 'cucina' (default backward compat)
-    // Esempio Riva: "Cozze alla Tarantina" (cat Antipasti di Mare → cucina)
-    // resta a cucina; "Tartare di Tonno" stessa cat ma item.prep_station='crudi'.
+    //   3. altrimenti 'cucina' (catch-all)
     const effectiveStation = `COALESCE(mi.prep_station, c.prep_station, 'cucina')`;
-    const stationFilter = stationParam === 'cucina'
-      ? `${effectiveStation} = 'cucina'`
-      : `${effectiveStation} = $2`;
-    const params = stationParam === 'cucina' ? [TENANT(req)] : [TENANT(req), stationParam];
+    let stationFilter, params;
+    if (stationParam === 'all') {
+      stationFilter = 'TRUE'; // tutta la cucina (bevande escluse sotto)
+      params = [TENANT(req)];
+    } else if (stationParam === 'cucina') {
+      stationFilter = `${effectiveStation} = 'cucina'`;
+      params = [TENANT(req)];
+    } else {
+      stationFilter = `${effectiveStation} = $2`;
+      params = [TENANT(req), stationParam];
+    }
 
     const { rows } = await pool.query(
       `SELECT
@@ -52,6 +58,7 @@ async function getPendingOrders(req, res, next) {
          mi.prep_time_mins,
          mi.required_kit                    AS required_kit,
          mi.cooking_modes                   AS cooking_modes,
+         COALESCE(mi.requires_preallerta, false) AS requires_preallerta,
          COALESCE(c.course_type, 'altro')   AS course_type,
          COALESCE(mi.prep_station, c.prep_station, 'cucina') AS prep_station,
          COALESCE(
@@ -80,7 +87,7 @@ async function getPendingOrders(req, res, next) {
                 t.table_number, z.name,
                 oi.id, oi.quantity, oi.status, oi.display_status, oi.workflow_status, oi.notes, oi.sent_at,
                 oi.combo_menu_name, oi.combo_selections,
-                mi.name, mi.prep_time_mins, mi.required_kit, mi.cooking_modes, mi.prep_station, c.course_type, c.prep_station
+                mi.name, mi.prep_time_mins, mi.required_kit, mi.cooking_modes, mi.requires_preallerta, mi.prep_station, c.course_type, c.prep_station
        ORDER BY
          CASE oi.display_status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 ELSE 2 END,
          oi.sent_at ASC`,
@@ -113,6 +120,7 @@ async function getPendingOrders(req, res, next) {
         prep_station:     row.prep_station,
         required_kit:     row.required_kit,  // JSONB array di stringhe o null
         cooking_modes:    row.cooking_modes, // JSONB { default, per_kg, standby_min, ... } o null
+        requires_preallerta: row.requires_preallerta, // crudi: sicurezza alimentare
         notes:            row.item_notes,
         sent_at:          row.sent_at,
         prep_time_mins:   row.prep_time_mins,
@@ -328,7 +336,7 @@ async function getHistory(req, res, next) {
     const station = (req.query.station || 'all').toLowerCase();
     const statusFilter = (req.query.status || 'all').toLowerCase();
 
-    const VALID_STATIONS = ['all','cucina','pizzeria','crudi','pasticceria','bar'];
+    const VALID_STATIONS = ['all','cucina','frittura','primi_secondi','antipasti','pizzeria','pasticceria','crudi','bar'];
     const VALID_STATUS   = ['all','pending','cooking','oven_done','ready','served','cancelled'];
     if (!VALID_STATIONS.includes(station)) return res.status(400).json({ error: 'station invalido' });
     if (!VALID_STATUS.includes(statusFilter)) return res.status(400).json({ error: 'status invalido' });
@@ -426,14 +434,21 @@ async function getHistory(req, res, next) {
 async function getAbbinaGroups(req, res, next) {
   try {
     const tenantId = TENANT(req);
-    const station = (req.query.station || 'cucina').toLowerCase();
-    const VALID = ['cucina','pizzeria','crudi','pasticceria'];
+    const station = (req.query.station || 'all').toLowerCase();
+    const VALID = ['all','cucina','frittura','primi_secondi','antipasti','pizzeria','pasticceria','crudi'];
     if (!VALID.includes(station)) return res.status(400).json({ error: 'station invalido' });
 
-    const stationFilter = station === 'cucina'
-      ? `COALESCE(mi.prep_station, c.prep_station, 'cucina') = 'cucina'`
-      : `COALESCE(mi.prep_station, c.prep_station, 'cucina') = $2`;
-    const params = station === 'cucina' ? [tenantId] : [tenantId, station];
+    let stationFilter, params;
+    if (station === 'all') {
+      stationFilter = 'TRUE';
+      params = [tenantId];
+    } else if (station === 'cucina') {
+      stationFilter = `COALESCE(mi.prep_station, c.prep_station, 'cucina') = 'cucina'`;
+      params = [tenantId];
+    } else {
+      stationFilter = `COALESCE(mi.prep_station, c.prep_station, 'cucina') = $2`;
+      params = [tenantId, station];
+    }
 
     const { rows } = await pool.query(
       `WITH active_items AS (
