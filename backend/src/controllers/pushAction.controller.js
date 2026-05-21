@@ -23,7 +23,7 @@ async function execute(req, res, next) {
     // Verifica firma + scadenza
     let payload;
     try {
-      payload = jwt.verify(token, process.env.JWT_SECRET);
+      payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     } catch {
       return res.status(401).json({ error: 'token non valido o scaduto' });
     }
