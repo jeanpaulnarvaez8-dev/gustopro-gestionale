@@ -31,6 +31,7 @@ const AuditReportPage        = lazy(() => import('./pages/AuditReportPage'))
 const DayClosePage           = lazy(() => import('./pages/DayClosePage'))
 const TakeawayLabelPage      = lazy(() => import('./pages/TakeawayLabelPage'))
 const ComandistaPage         = lazy(() => import('./pages/ComandistaPage'))
+const NFCWriterPage          = lazy(() => import('./pages/NFCWriterPage'))
 const TaxReportPage          = lazy(() => import('./pages/TaxReportPage'))
 const IngredientsPage        = lazy(() => import('./pages/IngredientsPage'))
 const StockReconciliationPage= lazy(() => import('./pages/StockReconciliationPage'))
@@ -248,6 +249,11 @@ export default function App() {
             <Route path="/comandista" element={
               <RoleRoute roles={['kitchen','admin','manager']}>
                 <ComandistaPage />
+              </RoleRoute>
+            } />
+            <Route path="/nfc-writer" element={
+              <RoleRoute roles={['admin','manager']}>
+                <NFCWriterPage />
               </RoleRoute>
             } />
             {/* /t/:tableId — landing scan QR cavalieri tavolo. Redirect a
