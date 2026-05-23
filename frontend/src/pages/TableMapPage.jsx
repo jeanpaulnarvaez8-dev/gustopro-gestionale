@@ -155,6 +155,7 @@ export default function TableMapPage() {
   }, [isConnected])
 
   const [coversSheet, setCoversSheet] = useState(null) // table object o null
+  const [customCovers, setCustomCovers] = useState('') // numero persone oltre 10
   // BarTableModal: si apre quando bartender clicca un tavolo (vede solo bevande).
   const [barTableModal, setBarTableModal] = useState(null) // table object o null
 
@@ -452,20 +453,44 @@ export default function TableMapPage() {
         title={coversSheet ? `Tavolo ${coversSheet.table_number} · quante persone?` : ''}
       >
         <div className="grid grid-cols-5 gap-2">
-          {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map(n => (
+          {[1,2,3,4,5,6,7,8,9,10].map(n => (
             <motion.button
               key={n}
               type="button"
               whileTap={{ scale: 0.92 }}
-              onClick={() => handleCoversConfirm(n)}
-              className="aspect-square rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text)] font-bold text-lg hover:bg-[var(--color-gold)] hover:text-[#13181C] hover:border-[var(--color-gold)] transition flex items-center justify-center tnum min-h-[48px]"
+              onClick={() => { setCustomCovers(''); handleCoversConfirm(n) }}
+              className="aspect-square rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text)] font-bold text-2xl hover:bg-[var(--color-gold)] hover:text-[#13181C] hover:border-[var(--color-gold)] transition flex items-center justify-center tnum min-h-[56px]"
             >
               {n}
             </motion.button>
           ))}
         </div>
-        <p className="mt-4 text-center text-xs text-[var(--color-text-3)]">
-          Tocca il numero per aprire l&apos;ordine con i coperti selezionati
+
+        {/* Oltre 10: numero persone libero */}
+        <div className="mt-4 flex items-center gap-2">
+          <input
+            type="number"
+            inputMode="numeric"
+            min="1"
+            value={customCovers}
+            onChange={e => setCustomCovers(e.target.value)}
+            placeholder="Più di 10? scrivi qui (es. 14)"
+            className="flex-1 bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] rounded-xl px-4 py-3 text-[var(--color-text)] text-xl text-center font-bold outline-none tnum"
+          />
+          <button
+            type="button"
+            disabled={!customCovers || parseInt(customCovers, 10) < 1}
+            onClick={() => {
+              const n = parseInt(customCovers, 10)
+              if (n >= 1) { setCustomCovers(''); handleCoversConfirm(n) }
+            }}
+            className="px-6 py-3 rounded-xl bg-[var(--color-gold)] text-[#13181C] font-extrabold text-lg disabled:opacity-40"
+          >
+            OK
+          </button>
+        </div>
+        <p className="mt-3 text-center text-xs text-[var(--color-text-3)]">
+          Tocca il numero (o scrivi quanti sono) per aprire l&apos;ordine coi coperti
         </p>
       </BottomSheet>
 
