@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Plus, Minus, Trash2, Send, ShoppingCart, RefreshCw,
-  CheckCircle2, BookOpen, ChevronRight, Building, Clock, Zap, PackageCheck, UserPlus2,
+  CheckCircle2, BookOpen, ChevronRight, Building, Clock, Zap, PackageCheck, UserPlus2, Receipt,
 } from 'lucide-react'
 import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
@@ -365,8 +365,21 @@ export default function OrderPage() {
           </div>
         )}
 
+        {/* Conto: cassa/admin/manager vanno al checkout di questo tavolo.
+            Visibile solo se c'e' un ordine aperto. Cosi' la cassa: apre il
+            tavolo → vede/aggiunge cosa hanno mangiato → tocca "Conto". */}
+        {table?.active_order_id && ['cashier','admin','manager'].includes(authUser?.role) && (
+          <button
+            onClick={() => navigate(`/checkout/${table.active_order_id}`)}
+            className="shrink-0 px-2.5 py-1.5 rounded-lg bg-[var(--color-gold)] text-[#13181C] text-xs font-bold flex items-center gap-1 hover:brightness-110 active:scale-95 transition"
+            title="Vai al conto / cassa"
+          >
+            <Receipt size={13} /> Conto
+          </button>
+        )}
+
         {/* Codice 32: passa ordine ad altro cameriere (solo se ordine aperto) */}
-        {table?.active_order_id && (
+        {table?.active_order_id && authUser?.role === 'waiter' && (
           <button
             onClick={async () => {
               setTransferOpen(true)
@@ -382,6 +395,7 @@ export default function OrderPage() {
           >
             <UserPlus2 size={13} /> 32
           </button>
+        )}
         )}
       </header>
 

@@ -194,8 +194,13 @@ export default function TableMapPage() {
         .catch(() => toast({ type: 'error', title: 'Errore sbarazzo' }))
       return
     }
-    if (isCashier && table.status === 'occupied' && table.active_order_id) {
-      navigate(`/checkout/${table.active_order_id}`)
+    // Cassa/admin/manager su tavolo con ordine: vai alla pagina ORDINE
+    // (vede cosa hanno mangiato, puo' aggiungere piatti) e da li' il
+    // pulsante "Conto" porta al checkout. Niente piu' salto diretto al
+    // conto: la cassa deve poter selezionare/integrare cio' che e' stato
+    // consumato prima di chiudere.
+    if (isCashier && table.active_order_id) {
+      navigate(`/order/${table.id}`)
     } else if (table.status === 'free') {
       // Tavolo libero → chiedi coperti (poi accomoda → seated → ordine)
       setCoversSheet(table)

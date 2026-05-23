@@ -4,9 +4,11 @@ const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder 
 
 const router = Router();
 
-router.post('/',                    requireRole('waiter','manager','admin'), createOrder);
+// Cassa abilitata a creare/aggiungere piatti: spesso e' il cassiere a
+// comporre il conto del tavolo selezionando cosa hanno mangiato.
+router.post('/',                    requireRole('waiter','manager','admin','cashier'), createOrder);
 router.get('/:id',                  getOrder);
-router.post('/:id/items',           requireRole('waiter','manager','admin'), addItems);
+router.post('/:id/items',           requireRole('waiter','manager','admin','cashier'), addItems);
 router.post('/:id/transfer',        requireRole('waiter','manager','admin'), transferOrder);
 // cancelItem: il controller gestisce autorizzazione manager/admin OR
 // override PIN responsabile (per richiesta cancellazione di un waiter).
