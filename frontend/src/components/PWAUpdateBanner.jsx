@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Sparkles, RefreshCw } from 'lucide-react'
-import { Button, Card } from './v2'
 
 /**
  * PWAUpdateBanner — notifica utente di una nuova versione disponibile.
@@ -48,48 +47,36 @@ export default function PWAUpdateBanner() {
 
   return (
     <div
-      className="fixed bottom-16 md:bottom-4 left-1/2 -translate-x-1/2 z-[90] pointer-events-none"
+      className="fixed top-0 left-0 right-0 z-[200]"
       style={{ animation: 'slide-up 280ms ease-out' }}
     >
-      <Card
-        variant="elevated"
-        padding="sm"
-        className="pointer-events-auto border-[var(--color-gold-ring)] flex items-center gap-3 px-4 py-3 max-w-[360px] sm:max-w-[420px]"
-        style={{ boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}
+      <div
+        className="flex items-center gap-3 px-4 py-3 bg-[var(--color-gold)] text-[#13181C]"
+        style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
       >
-        <div
-          className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-          style={{ background: 'rgba(212,175,55,0.18)' }}
-        >
-          <Sparkles size={16} className="text-[var(--color-gold)]" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[var(--color-text)] text-sm font-semibold leading-tight">
-            Nuova versione disponibile
-          </p>
-          <p className="text-[var(--color-text-3)] text-xs leading-snug mt-0.5">
-            Aggiorna per ottenere ultime correzioni e migliorie.
-          </p>
-        </div>
-        <Button
-          variant="primary"
-          size="sm"
-          loading={updating}
-          leftIcon={!updating && <RefreshCw size={14} />}
+        <Sparkles size={22} strokeWidth={2.5} className="shrink-0" />
+        <p className="flex-1 min-w-0 font-extrabold text-base sm:text-lg uppercase tracking-wide leading-tight">
+          Nuova versione — aggiorna per vederla
+        </p>
+        <button
+          type="button"
           onClick={apply}
+          disabled={updating}
+          className="shrink-0 px-5 py-2.5 rounded-xl bg-[#13181C] text-[var(--color-gold)] font-extrabold text-base uppercase flex items-center gap-2 active:scale-95 disabled:opacity-60"
           aria-label="Aggiorna applicazione"
         >
+          {updating ? <RefreshCw size={18} className="animate-spin" /> : <RefreshCw size={18} />}
           {updating ? 'Aggiorno…' : 'Aggiorna'}
-        </Button>
+        </button>
         <button
           type="button"
           onClick={() => setDismissed(true)}
-          className="text-[var(--color-text-3)] hover:text-[var(--color-text-2)] text-xs px-1 py-2"
+          className="shrink-0 text-[#13181C]/70 hover:text-[#13181C] text-sm font-semibold px-1"
           aria-label="Più tardi"
         >
           dopo
         </button>
-      </Card>
+      </div>
     </div>
   )
 }

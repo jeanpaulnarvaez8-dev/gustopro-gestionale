@@ -100,9 +100,15 @@ html { font-size: 18px; }
 @media (min-width: 768px)  { html { font-size: 19px; } }
 @media (min-width: 1280px) { html { font-size: 20px; } }
 
+/* ZOOM globale: scala TUTTO (anche i testi a px fissi tipo text-[10px] che NON
+   seguono il font-size). Cosi' davvero tutta l'app e' piu' grande. */
+#root { zoom: 1.15; }
+@media (min-width: 768px) { #root { zoom: 1.25; } }
+
 /* Tutto in MAIUSCOLO (richiesta operativa). Le ricevute restano normali. */
-body { text-transform: uppercase; }
-.receipt-print, .receipt-print * { text-transform: none; }
+body, body * { text-transform: uppercase; }
+.receipt-print, .receipt-print * { text-transform: none !important; }
+input::placeholder, textarea::placeholder { text-transform: uppercase; }
 
 /* Helper classes per tipografia display (titoli, brand, hero) */
 .serif {

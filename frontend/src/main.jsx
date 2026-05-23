@@ -30,6 +30,17 @@ const updateSW = registerSW({
     console.info('[PWA] new version available')
     window.__SW_UPDATE_AVAILABLE = true
     window.dispatchEvent(new CustomEvent('pwa-need-refresh'))
+    // Auto-aggiornamento sulle schermate SICURE (no carrello/pagamento in corso):
+    // KDS, tavoli, admin, bar... cosi' i dispositivi prendono i cambiamenti da
+    // soli senza dover toccare nulla. Su /order e /checkout mostriamo solo il
+    // banner (per non perdere un carrello/pagamento in corso).
+    try {
+      const p = window.location.pathname || ''
+      const risky = p.startsWith('/order') || p.startsWith('/checkout')
+      if (!risky) {
+        setTimeout(() => { try { updateSW(true) } catch { window.location.reload() } }, 1200)
+      }
+    } catch { /* mostra solo il banner */ }
   },
   onOfflineReady() {
     console.info('[PWA] app ready offline')
