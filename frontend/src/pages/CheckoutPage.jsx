@@ -542,11 +542,11 @@ export default function CheckoutPage() {
   }
 
   const handleAddCustom = async () => {
-    const name = customName.trim()
+    // Nome opzionale: se vuoto usa "Extra" (basta l'importo).
+    const name = customName.trim() || 'Extra'
     const price = parseFloat(customPrice)
     const qty = Math.max(1, parseInt(customQty, 10) || 1)
-    if (!name) { toast({ type: 'warning', title: 'Inserisci una descrizione' }); return }
-    if (!(price > 0)) { toast({ type: 'warning', title: 'Inserisci un prezzo valido' }); return }
+    if (!(price > 0)) { toast({ type: 'warning', title: 'Inserisci un importo in €' }); return }
     setAddingItem(true)
     try {
       await ordersAPI.addCustomItem(orderId, { custom_name: name, unit_price: price, quantity: qty })
@@ -705,77 +705,82 @@ export default function CheckoutPage() {
               ))}
             </Card>
 
-            {/* Voce a prezzo libero (cassa): qualcosa fuori menu */}
+            {/* Importo manuale (cassa): SEMPRE disponibile, grande e oro */}
             {canAddCustom && (
               !showAddItem ? (
                 <button
                   onClick={() => setShowAddItem(true)}
-                  className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-[var(--color-border-strong)] text-[var(--color-text-3)] hover:text-[var(--color-gold)] hover:border-[var(--color-gold-ring)] text-xs font-semibold transition"
+                  className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-[var(--color-gold)] text-[#13181C] text-lg font-extrabold uppercase tracking-wide hover:brightness-110 active:scale-[0.98] transition"
                 >
-                  <Plus size={13} /> Aggiungi voce a prezzo libero
+                  <Plus size={22} strokeWidth={3} /> Aggiungi importo manuale
                 </button>
               ) : (
-                <Card padding="md" className="flex flex-col gap-2">
+                <Card padding="md" className="flex flex-col gap-3 border-2 border-[var(--color-gold-ring)]">
                   <div className="flex items-center justify-between">
-                    <span className="text-[var(--color-text-2)] text-xs font-semibold uppercase tracking-wider">
-                      Voce libera (fuori menu)
+                    <span className="text-[var(--color-text)] text-base font-bold uppercase tracking-wider">
+                      Aggiungi importo al conto
                     </span>
                     <button
                       onClick={() => setShowAddItem(false)}
-                      className="text-[var(--color-text-3)] hover:text-[var(--color-err)] p-0.5"
+                      className="text-[var(--color-text-3)] hover:text-[var(--color-err)] p-1"
                       aria-label="Chiudi"
                     >
-                      <X size={14} />
+                      <X size={18} />
                     </button>
                   </div>
-                  <input
-                    value={customName}
-                    onChange={e => setCustomName(e.target.value)}
-                    placeholder="Descrizione (es. Bottiglia speciale)"
-                    className="bg-[var(--color-canvas)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-3 py-2 text-[var(--color-text)] text-sm outline-none transition"
-                    autoFocus
-                  />
+
+                  {/* IMPORTO — campo principale, grande */}
+                  <div className="flex items-center gap-2 bg-[var(--color-canvas)] border-2 border-[var(--color-border-strong)] focus-within:border-[var(--color-gold)] rounded-xl px-4 py-3">
+                    <span className="text-[var(--color-gold)] text-3xl font-bold">€</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      value={customPrice}
+                      onChange={e => setCustomPrice(e.target.value)}
+                      placeholder="0,00"
+                      autoFocus
+                      className="w-full bg-transparent text-[var(--color-text)] text-4xl font-extrabold text-right outline-none tnum"
+                    />
+                  </div>
+
+                  {/* Descrizione opzionale + quantita' */}
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 flex-1">
-                      <span className="text-[var(--color-text-3)] text-sm">€</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        min="0"
-                        value={customPrice}
-                        onChange={e => setCustomPrice(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-[var(--color-canvas)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-2 py-2 text-[var(--color-text)] text-sm text-right outline-none transition tnum"
-                      />
-                    </div>
+                    <input
+                      value={customName}
+                      onChange={e => setCustomName(e.target.value)}
+                      placeholder="Descrizione (opzionale)"
+                      className="flex-1 bg-[var(--color-canvas)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] rounded-lg px-3 py-2.5 text-[var(--color-text)] text-base outline-none transition"
+                    />
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => setCustomQty(q => Math.max(1, q - 1))}
-                        className="w-8 h-8 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] flex items-center justify-center"
+                        className="w-10 h-10 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] flex items-center justify-center"
                         aria-label="Diminuisci"
                       >
-                        <Minus size={12} />
+                        <Minus size={16} />
                       </button>
-                      <span className="w-6 text-center text-[var(--color-text)] font-bold tnum">{customQty}</span>
+                      <span className="w-8 text-center text-[var(--color-text)] font-bold text-xl tnum">{customQty}</span>
                       <button
                         onClick={() => setCustomQty(q => q + 1)}
-                        className="w-8 h-8 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] flex items-center justify-center"
+                        className="w-10 h-10 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] flex items-center justify-center"
                         aria-label="Aumenta"
                       >
-                        <Plus size={12} />
+                        <Plus size={16} />
                       </button>
                     </div>
                   </div>
+
                   <Button
-                    size="sm"
+                    size="lg"
                     fullWidth
                     loading={addingItem}
-                    disabled={!customName.trim() || !(parseFloat(customPrice) > 0)}
-                    leftIcon={<Plus size={14} />}
+                    disabled={!(parseFloat(customPrice) > 0)}
+                    leftIcon={<Plus size={18} />}
                     onClick={handleAddCustom}
                   >
-                    Aggiungi{parseFloat(customPrice) > 0 ? ` · ${formatPrice(parseFloat(customPrice) * customQty)}` : ''}
+                    Aggiungi al conto{parseFloat(customPrice) > 0 ? ` · ${formatPrice(parseFloat(customPrice) * customQty)}` : ''}
                   </Button>
                 </Card>
               )
