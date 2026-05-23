@@ -114,6 +114,28 @@ async function insertSurchargeItem(client, order_id, { label, unit_price, quanti
   return oi;
 }
 
+// Pizze → Simone: push native al pizzaiolo (kitchen, sub_role 'pizzeria').
+// Le pizze "arrivano solo a Simone": oltre alla stazione dedicata, riceve
+// una notifica anche se non sta guardando lo schermo.
+async function pushToPizzaioli(tenantId, tableNumber, qty, orderId) {
+  const { rows: pizzaioli } = await pool.query(
+    `SELECT id FROM users
+      WHERE tenant_id = $1 AND is_active = true
+        AND role = 'kitchen' AND sub_role = 'pizzeria'`,
+    [tenantId]
+  );
+  if (pizzaioli.length === 0) return;
+  const pushService = require('../services/pushService');
+  await Promise.all(pizzaioli.map(p => pushService.sendToUser(p.id, {
+    title: `🍕 Tavolo ${tableNumber} — ${qty} pizz${qty === 1 ? 'a' : 'e'}`,
+    body: 'Nuova comanda pizzeria',
+    tag: `pizza-${orderId}`,
+    url: '/kds/pizzeria',
+    vibrate: [200, 100, 200],
+    requireInteraction: true,
+  }).catch(() => {})));
+}
+
 // ── createOrder ───────────────────────────────────────────────
 
 async function createOrder(req, res, next) {
@@ -359,6 +381,30 @@ async function createOrder(req, res, next) {
       req.log?.warn({ err: e?.message }, 'bar push failed');
     }
 
+    // Pizzeria → Simone: se l'ordine contiene pizze (prep_station=pizzeria),
+    // notifica il pizzaiolo. Le pizze arrivano SOLO a lui.
+    try {
+      const { rows: pz } = await pool.query(
+        `SELECT COALESCE(SUM(oi.quantity), 0)::int AS qty,
+                COALESCE(t.table_number, 'ASPORTO') AS table_number
+           FROM order_items oi
+           JOIN menu_items mi ON mi.id = oi.menu_item_id
+           LEFT JOIN categories c ON c.id = mi.category_id
+           LEFT JOIN orders o ON o.id = oi.order_id
+           LEFT JOIN tables t ON t.id = o.table_id
+          WHERE oi.order_id = $1 AND oi.tenant_id = $2
+            AND COALESCE(oi.is_surcharge, false) = false
+            AND COALESCE(mi.prep_station, c.prep_station, 'cucina') = 'pizzeria'
+          GROUP BY t.table_number`,
+        [order.id, tenantId]
+      );
+      if (pz.length > 0 && pz[0].qty > 0) {
+        await pushToPizzaioli(tenantId, pz[0].table_number, pz[0].qty, order.id);
+      }
+    } catch (e) {
+      req.log?.warn({ err: e?.message }, 'pizzeria push failed');
+    }
+
     // Pre-allerta crudi: se l'ordine contiene almeno un item di prep_station
     // 'crudi' (ostriche, tartare, antipasti di mare), notifica la cucina crudi
     // IMMEDIATAMENTE — la sicurezza alimentare richiede prep tempestiva e
@@ -591,6 +637,31 @@ async function addItems(req, res, next) {
       }
     } catch (e) {
       req.log?.warn({ err: e?.message }, 'bar push (addItems) failed');
+    }
+
+    // Pizzeria → Simone: push se tra gli item aggiunti ci sono pizze.
+    try {
+      const itemIds = addedItems.map(i => i.id);
+      if (itemIds.length > 0) {
+        const { rows: pz } = await pool.query(
+          `SELECT COALESCE(SUM(oi.quantity), 0)::int AS qty,
+                  COALESCE(t.table_number, 'ASPORTO') AS table_number
+             FROM order_items oi
+             JOIN menu_items mi ON mi.id = oi.menu_item_id
+             LEFT JOIN categories c ON c.id = mi.category_id
+             LEFT JOIN orders o ON o.id = oi.order_id
+             LEFT JOIN tables t ON t.id = o.table_id
+            WHERE oi.id = ANY($1::uuid[]) AND oi.tenant_id = $2
+              AND COALESCE(mi.prep_station, c.prep_station, 'cucina') = 'pizzeria'
+            GROUP BY t.table_number`,
+          [itemIds, tenantId]
+        );
+        if (pz.length > 0 && pz[0].qty > 0) {
+          await pushToPizzaioli(tenantId, pz[0].table_number, pz[0].qty, order_id);
+        }
+      }
+    } catch (e) {
+      req.log?.warn({ err: e?.message }, 'pizzeria push (addItems) failed');
     }
 
     res.status(201).json([...addedItems, ...surchargeItems]);
