@@ -48,13 +48,16 @@ const ITEM_STATUS = {
     nextBtn: 'bg-[var(--color-ok)] hover:brightness-110 text-white',
   },
   ready: {
-    label: 'Pronto',
+    label: 'Pronto — al pass',
     bg: 'bg-[var(--color-ok-soft)]',
     border: 'border-[var(--color-ok)]/50',
     text: 'text-[var(--color-ok)]',
-    next: null,
-    nextLabel: null,
-    nextBtn: null,
+    // La comanda resta sul KDS finche' non e' servita. Da 'ready' il
+    // pass/cuoco puo' segnare 'Servito' per toglierla (oppure sparisce
+    // da sola quando il cameriere segna servito dal suo dispositivo).
+    next: 'served',
+    nextLabel: 'Servito',
+    nextBtn: 'bg-[var(--color-sea)] hover:brightness-110 text-white',
   },
 }
 
@@ -785,7 +788,9 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null 
                                 ? 'bg-[var(--color-ok)] hover:brightness-110 text-white'
                                 : nextStatus === 'oven_done'
                                   ? 'bg-[var(--color-sea)] hover:brightness-110 text-white'
-                                  : 'bg-[var(--color-terracotta)] hover:brightness-110 text-white'
+                                  : nextStatus === 'served'
+                                    ? 'bg-[var(--color-sea)] hover:brightness-110 text-white'
+                                    : 'bg-[var(--color-terracotta)] hover:brightness-110 text-white'
 
                               return nextStatus && (
                                 <button

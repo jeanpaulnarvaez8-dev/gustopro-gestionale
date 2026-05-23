@@ -76,11 +76,11 @@ async function getPendingOrders(req, res, next) {
        LEFT JOIN order_item_modifiers oim ON oim.order_item_id = oi.id
        LEFT JOIN modifiers m ON m.id = oim.modifier_id
        WHERE o.status = 'open'
-         -- Esclude 'ready' dalla coda: una volta che lo chef ha cliccato
-         -- "Pronto" l'item passa al pass del cameriere, non serve piu' allo
-         -- chef. Vedi /kds/history per il riepilogo di tutto cio' che e'
-         -- passato (incluso ready/served/cancelled).
-         AND oi.status NOT IN ('ready','served','cancelled')
+         -- La comanda resta sul KDS finche' NON e' servita: i piatti 'ready'
+         -- (pronti al pass) restano visibili in cucina e spariscono solo
+         -- quando vengono serviti. Esclude solo served/cancelled.
+         -- Storico completo (incluso served/cancelled) in /kds/history.
+         AND oi.status NOT IN ('served','cancelled')
          AND oi.workflow_status = 'production'
          AND oi.tenant_id = $1
          AND COALESCE(oi.is_surcharge, false) = false
