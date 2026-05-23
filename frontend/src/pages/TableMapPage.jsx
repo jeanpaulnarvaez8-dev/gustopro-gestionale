@@ -395,8 +395,24 @@ export default function TableMapPage() {
         </div>
       )}
 
-      {/* ─── Body: pianta desktop / lista mobile ────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      {/* Stats riga riepilogo (libero/occupato/totale) */}
+      {!loading && !error && (
+        <div className="px-3 py-1.5 bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] flex items-center gap-3 text-[11px] text-[var(--color-text-3)] shrink-0">
+          <span className="flex items-center gap-1 tnum"><StatusDot tone="ok" size="xs" />{stats.free} liberi</span>
+          <span className="flex items-center gap-1 tnum"><StatusDot tone="gold" size="xs" />{stats.occupied} occupati</span>
+          <span className="text-[var(--color-text-3)]">/ {stats.total} totali</span>
+          {canEdit && (
+            <button onClick={() => navigate('/floor-plan')} className="ml-auto text-[var(--color-text-3)] hover:text-[var(--color-gold)] underline">
+              Editor pianta
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ─── Body: LISTA tavoli numerata (telefono + tablet + desktop) ── */}
+      {/* La pianta SVG e' stata rimossa dalla vista operativa (confondeva i
+          camerieri). Resta accessibile all'admin via /floor-plan (editor). */}
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         {loading ? (
           <div className="flex items-center justify-center h-64 gap-2 text-[var(--color-text-2)]">
             <RefreshCw size={16} className="animate-spin text-[var(--color-gold)]" />
@@ -407,87 +423,12 @@ export default function TableMapPage() {
             <Badge tone="err">{error}</Badge>
           </div>
         ) : (
-          <>
-            {/* ─── Mobile: toggle Lista ↔ Pianta + container ──────────────── */}
-            <div className="md:hidden h-full flex flex-col">
-              {/* Toolbar mobile con segmented control oro/nero */}
-              <div className="px-3 py-2 bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] flex items-center gap-2 shrink-0">
-                <div className="inline-flex rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-0.5 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => switchMobileView('list')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition min-h-[36px] ${
-                      mobileView === 'list'
-                        ? 'bg-[var(--color-gold)] text-[#13181C] shadow-sm'
-                        : 'text-[var(--color-text-2)]'
-                    }`}
-                    aria-pressed={mobileView === 'list'}
-                  >
-                    <List size={13} />
-                    Lista
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => switchMobileView('plan')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition min-h-[36px] ${
-                      mobileView === 'plan'
-                        ? 'bg-[var(--color-gold)] text-[#13181C] shadow-sm'
-                        : 'text-[var(--color-text-2)]'
-                    }`}
-                    aria-pressed={mobileView === 'plan'}
-                  >
-                    <MapIcon size={13} />
-                    Pianta
-                  </button>
-                </div>
-                <div className="ml-auto flex items-center gap-2 text-[10px] text-[var(--color-text-3)]">
-                  <span className="flex items-center gap-1 tnum">
-                    <StatusDot tone="ok" size="xs" />{stats.free}
-                  </span>
-                  <span className="flex items-center gap-1 tnum">
-                    <StatusDot tone="gold" size="xs" />{stats.occupied}
-                  </span>
-                  <span className="text-[var(--color-text-3)]">/ {stats.total}</span>
-                </div>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-hidden">
-                {mobileView === 'list' ? (
-                  <MobileTableList
-                    tables={tables}
-                    zones={zones}
-                    onTableClick={handleNavigate}
-                    activeZoneId={activeZone}
-                  />
-                ) : (
-                  <FloorPlanInteractive
-                    tables={tables}
-                    zones={zones}
-                    onTableClick={handleNavigate}
-                    canEdit={false /* niente edit da mobile: schermo troppo piccolo */}
-                    onRefresh={loadData}
-                    spotlightZoneId={user?.role === 'waiter' ? activeZone : null}
-                    serviceAlerts={serviceAlerts}
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* ─── Desktop: pianta SVG sempre ──────────────────────────── */}
-            <div className="hidden md:block h-full">
-              <FloorPlanInteractive
-                tables={tables}
-                zones={zones}
-                onTableClick={handleNavigate}
-                canEdit={canEdit}
-                onRefresh={loadData}
-                spotlightZoneId={user?.role === 'waiter' ? activeZone : null}
-                /* Service alerts realtime: TableShape mostra halo escalation
-                   rosso + beep per tavoli con piatti pronti da troppo. */
-                serviceAlerts={serviceAlerts}
-              />
-            </div>
-          </>
+          <MobileTableList
+            tables={tables}
+            zones={zones}
+            onTableClick={handleNavigate}
+            activeZoneId={activeZone}
+          />
         )}
       </div>
 
