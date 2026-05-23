@@ -17,7 +17,7 @@ async function generatePreConto(req, res, next) {
     const { rows: items } = await pool.query(
       `SELECT
          oi.id, oi.quantity, oi.unit_price, oi.modifier_total, oi.subtotal, oi.notes, oi.status,
-         COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name,
+         COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name,
          COALESCE(
            json_agg(json_build_object('name', m.name, 'price_extra', oim.price_extra))
            FILTER (WHERE m.id IS NOT NULL), '[]'
@@ -115,7 +115,7 @@ async function processPayment(req, res, next) {
     // Snapshot receipt data
     const { rows: items } = await client.query(
       `SELECT oi.quantity, oi.subtotal,
-              COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name
+              COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name
        FROM order_items oi
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        WHERE oi.order_id=$1 AND oi.tenant_id=$2 AND oi.status != 'cancelled'`,

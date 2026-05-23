@@ -588,6 +588,11 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null 
                 const mins = elapsedMinutes(oldest)
                 const urgency = elapsedTone(mins) // ok | warn | err
                 const isFresh = recentOrderIds.has(order.order_id) // 8s gold flash post-arrival
+                // Conteggio piatti della comanda (somma quantita', esclusi i gia'
+                // consegnati). Mostrato in GRANDE: il cuoco capisce a colpo d'occhio
+                // se e' 1 piatto o una comanda da 8.
+                const totalPlates = order.items.reduce((s, it) =>
+                  it.display_status === 'delivered' ? s : s + Number(it.quantity || 1), 0)
 
                 return (
                   <motion.div
@@ -636,7 +641,16 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null 
                           </>
                         )}
                       </div>
-                      <ElapsedTick sentAt={oldest} />
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Numero piatti in GRANDE — anche se e' 1 */}
+                        {totalPlates > 0 && (
+                          <div className="flex flex-col items-center justify-center rounded-lg bg-[var(--color-gold)] text-[#13181C] px-2.5 py-1 leading-none min-w-[46px]">
+                            <span className="text-2xl font-extrabold tnum">{totalPlates}</span>
+                            <span className="text-[8px] font-bold tracking-widest">{totalPlates === 1 ? 'PIATTO' : 'PIATTI'}</span>
+                          </div>
+                        )}
+                        <ElapsedTick sentAt={oldest} />
+                      </div>
                     </div>
 
                     {/* Items: gerarchia visiva active > waiting > delivered */}

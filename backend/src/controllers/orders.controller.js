@@ -95,6 +95,25 @@ async function insertComboItem(client, order_id, item, userId, tenantId) {
   return orderItem;
 }
 
+// Riga "surcharge": coperto automatico o voce a prezzo libero della cassa.
+// NON e' un piatto di cucina: entra nel totale (trigger somma subtotal) ma
+// viene inserita gia' come 'served'/'delivered' cosi' non finisce sul KDS.
+async function insertSurchargeItem(client, order_id, { label, unit_price, quantity = 1 }, userId, tenantId) {
+  const qty = Math.max(1, parseInt(quantity, 10) || 1);
+  const price = Math.round((parseFloat(unit_price) || 0) * 100) / 100;
+  if (!(price >= 0)) throw { status: 400, message: 'Prezzo voce non valido' };
+  const subtotal = Math.round(price * qty * 100) / 100;
+  const name = String(label || 'Extra').trim().slice(0, 120) || 'Extra';
+  const { rows: [oi] } = await client.query(
+    `INSERT INTO order_items
+       (tenant_id, order_id, menu_item_id, quantity, unit_price, modifier_total, subtotal,
+        custom_name, is_surcharge, workflow_status, status, inserted_by, served_at)
+     VALUES ($1,$2,NULL,$3,$4,0,$5,$6,true,'delivered','served',$7,NOW()) RETURNING *`,
+    [tenantId, order_id, qty, price, subtotal, name, userId]
+  );
+  return oi;
+}
+
 // ── createOrder ───────────────────────────────────────────────
 
 async function createOrder(req, res, next) {
@@ -113,6 +132,10 @@ async function createOrder(req, res, next) {
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'items obbligatori' });
     }
+
+    // Numero coperti (persone): minimo 1. Usato sia sull'ordine sia per il
+    // coperto automatico piu' sotto.
+    const coversN = Math.max(1, parseInt(covers, 10) || 1);
 
     await client.query('BEGIN');
 
@@ -158,7 +181,7 @@ async function createOrder(req, res, next) {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [tenantId, table_id || null, req.user.id, notes || null,
        order_type, customer_name || null, customer_phone || null, pickup_time || null,
-       Math.max(1, parseInt(covers, 10) || 1), takeawayNumber]
+       coversN, takeawayNumber]
     );
 
     const orderItems = [];
@@ -183,6 +206,34 @@ async function createOrder(req, res, next) {
       } catch (e) {
         await client.query('ROLLBACK');
         return res.status(e.status || 400).json({ error: e.message || 'Errore item' });
+      }
+    }
+
+    // Coperto automatico: N coperti * prezzo tenant. Solo ordini al tavolo
+    // (l'asporto non ha coperto). Inserito come riga surcharge (no cucina) DENTRO
+    // la transazione, cosi' il trigger ricalcola il totale includendolo.
+    if (order_type === 'table') {
+      const { rows: [tcfg] } = await client.query(
+        'SELECT coperto_price FROM tenants WHERE id = $1',
+        [tenantId]
+      );
+      const copertoPrice = parseFloat(tcfg?.coperto_price || 0);
+      if (copertoPrice > 0) {
+        const copertoItem = await insertSurchargeItem(
+          client, order.id,
+          { label: 'Coperto', unit_price: copertoPrice, quantity: coversN },
+          req.user.id, tenantId
+        );
+        await auditLog(client, {
+          tenant_id: tenantId,
+          order_id: order.id,
+          item_id: copertoItem.id,
+          action: 'item_insert',
+          to_value: 'delivered',
+          user_id: req.user.id,
+          user_name: req.user.name,
+          metadata: { surcharge: true, kind: 'coperto', covers: coversN, unit_price: copertoPrice },
+        });
       }
     }
 
@@ -379,7 +430,7 @@ async function getOrder(req, res, next) {
 
     const { rows: items } = await pool.query(
       `SELECT oi.*,
-              COALESCE(mi.name, oi.combo_menu_name, 'Item') AS item_name
+              COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name
        FROM order_items oi
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        WHERE oi.order_id = $1 AND oi.tenant_id = $2
@@ -411,9 +462,36 @@ async function addItems(req, res, next) {
     );
     if (!order) return res.status(404).json({ error: 'Ordine non trovato o già chiuso' });
 
-    const addedItems = [];
+    const addedItems = [];      // piatti veri (cucina/bar) → feed KDS/bar/direct-delivered
+    const surchargeItems = [];  // voci libere cassa → solo conto, no cucina
     for (const item of items) {
       try {
+        // Voce a prezzo libero (cassa): qualcosa fuori menu da mettere sul conto.
+        // Solo cassa/manager/admin possono fissare un prezzo arbitrario.
+        if (item.type === 'custom') {
+          if (!['cashier', 'manager', 'admin'].includes(req.user.role)) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'Solo la cassa può aggiungere voci a prezzo libero' });
+          }
+          const si = await insertSurchargeItem(
+            client, order_id,
+            { label: item.custom_name, unit_price: item.unit_price, quantity: item.quantity },
+            req.user.id, tenantId
+          );
+          surchargeItems.push(si);
+          await auditLog(client, {
+            tenant_id: tenantId,
+            order_id,
+            item_id: si.id,
+            action: 'item_insert',
+            to_value: 'delivered',
+            user_id: req.user.id,
+            user_name: req.user.name,
+            metadata: { surcharge: true, kind: 'custom', item_name: si.custom_name, unit_price: si.unit_price, quantity: si.quantity },
+          });
+          continue;
+        }
+
         const oi = item.type === 'combo'
           ? await insertComboItem(client, order_id, item, req.user.id, tenantId)
           : await insertRegularItem(client, order_id, item, req.user.id, tenantId);
@@ -515,7 +593,7 @@ async function addItems(req, res, next) {
       req.log?.warn({ err: e?.message }, 'bar push (addItems) failed');
     }
 
-    res.status(201).json(addedItems);
+    res.status(201).json([...addedItems, ...surchargeItems]);
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);

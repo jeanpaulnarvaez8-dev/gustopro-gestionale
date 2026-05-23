@@ -81,6 +81,7 @@ async function getPendingOrders(req, res, next) {
          AND oi.status NOT IN ('ready','served','cancelled')
          AND oi.workflow_status = 'production'
          AND oi.tenant_id = $1
+         AND COALESCE(oi.is_surcharge, false) = false
          AND (c.is_beverage IS NULL OR c.is_beverage = false)
          AND ${stationFilter}
        GROUP BY o.id, o.created_at, o.order_type, o.customer_name, o.pickup_time,
@@ -343,6 +344,7 @@ async function getHistory(req, res, next) {
 
     const params = [tenantId, from, to];
     let where = `oi.tenant_id = $1
+                 AND COALESCE(oi.is_surcharge, false) = false
                  AND DATE(oi.sent_at AT TIME ZONE 'Europe/Rome') BETWEEN $2 AND $3`;
 
     if (station === 'bar') {

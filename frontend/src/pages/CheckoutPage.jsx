@@ -6,7 +6,7 @@ import {
   CheckCircle2, Users, SplitSquareVertical, Pencil, Plus, Minus, X, Zap,
   Printer,
 } from 'lucide-react'
-import { billingAPI, tablesAPI } from '../lib/api'
+import { billingAPI, tablesAPI, ordersAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
@@ -455,6 +455,14 @@ export default function CheckoutPage() {
   // Ricevuta finale: dati dell'ultimo payment + receipt + bill snapshot
   const [finalReceipt, setFinalReceipt] = useState(null) // { bill, payment, receipt }
 
+  // Voce a prezzo libero (cassa): qualcosa fuori menu da mettere sul conto.
+  const canAddCustom = ['cashier', 'admin', 'manager'].includes(user?.role)
+  const [showAddItem, setShowAddItem] = useState(false)
+  const [customName, setCustomName]   = useState('')
+  const [customPrice, setCustomPrice] = useState('')
+  const [customQty, setCustomQty]     = useState(1)
+  const [addingItem, setAddingItem]   = useState(false)
+
   // Cassa fisica: persistita in localStorage per device. Default null,
   // l'utente la seleziona dalla pillola in alto. Inviata al backend con
   // ogni payment per audit (tabella payments.register).
@@ -530,6 +538,26 @@ export default function CheckoutPage() {
       toast({ type: 'error', title: 'Errore pagamento', message: 'Riprova' })
     } finally {
       setPaying(false)
+    }
+  }
+
+  const handleAddCustom = async () => {
+    const name = customName.trim()
+    const price = parseFloat(customPrice)
+    const qty = Math.max(1, parseInt(customQty, 10) || 1)
+    if (!name) { toast({ type: 'warning', title: 'Inserisci una descrizione' }); return }
+    if (!(price > 0)) { toast({ type: 'warning', title: 'Inserisci un prezzo valido' }); return }
+    setAddingItem(true)
+    try {
+      await ordersAPI.addCustomItem(orderId, { custom_name: name, unit_price: price, quantity: qty })
+      const updatedBill = await billingAPI.preConto(orderId).then(r => r.data)
+      setBill(updatedBill)
+      setCustomName(''); setCustomPrice(''); setCustomQty(1); setShowAddItem(false)
+      toast({ type: 'success', title: 'Voce aggiunta', message: `${name} · ${formatPrice(price * qty)}` })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    } finally {
+      setAddingItem(false)
     }
   }
 
@@ -676,6 +704,82 @@ export default function CheckoutPage() {
                 </div>
               ))}
             </Card>
+
+            {/* Voce a prezzo libero (cassa): qualcosa fuori menu */}
+            {canAddCustom && (
+              !showAddItem ? (
+                <button
+                  onClick={() => setShowAddItem(true)}
+                  className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-[var(--color-border-strong)] text-[var(--color-text-3)] hover:text-[var(--color-gold)] hover:border-[var(--color-gold-ring)] text-xs font-semibold transition"
+                >
+                  <Plus size={13} /> Aggiungi voce a prezzo libero
+                </button>
+              ) : (
+                <Card padding="md" className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--color-text-2)] text-xs font-semibold uppercase tracking-wider">
+                      Voce libera (fuori menu)
+                    </span>
+                    <button
+                      onClick={() => setShowAddItem(false)}
+                      className="text-[var(--color-text-3)] hover:text-[var(--color-err)] p-0.5"
+                      aria-label="Chiudi"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <input
+                    value={customName}
+                    onChange={e => setCustomName(e.target.value)}
+                    placeholder="Descrizione (es. Bottiglia speciale)"
+                    className="bg-[var(--color-canvas)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-3 py-2 text-[var(--color-text)] text-sm outline-none transition"
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 flex-1">
+                      <span className="text-[var(--color-text-3)] text-sm">€</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0"
+                        value={customPrice}
+                        onChange={e => setCustomPrice(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full bg-[var(--color-canvas)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-2 py-2 text-[var(--color-text)] text-sm text-right outline-none transition tnum"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setCustomQty(q => Math.max(1, q - 1))}
+                        className="w-8 h-8 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] flex items-center justify-center"
+                        aria-label="Diminuisci"
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <span className="w-6 text-center text-[var(--color-text)] font-bold tnum">{customQty}</span>
+                      <button
+                        onClick={() => setCustomQty(q => q + 1)}
+                        className="w-8 h-8 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] flex items-center justify-center"
+                        aria-label="Aumenta"
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    fullWidth
+                    loading={addingItem}
+                    disabled={!customName.trim() || !(parseFloat(customPrice) > 0)}
+                    leftIcon={<Plus size={14} />}
+                    onClick={handleAddCustom}
+                  >
+                    Aggiungi{parseFloat(customPrice) > 0 ? ` · ${formatPrice(parseFloat(customPrice) * customQty)}` : ''}
+                  </Button>
+                </Card>
+              )
+            )}
 
             {/* Totals */}
             <Card padding="none" className="overflow-hidden">

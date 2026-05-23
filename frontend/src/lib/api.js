@@ -203,6 +203,9 @@ export const ordersAPI = {
   create:     (data)          => api.post('/orders', data),
   get:        (id)            => api.get(`/orders/${id}`),
   addItems:   (id, items)     => api.post(`/orders/${id}/items`, { items }),
+  // Voce a prezzo libero dalla cassa (qualcosa fuori menu). Solo cassa/manager/admin.
+  addCustomItem: (id, { custom_name, unit_price, quantity = 1 }) =>
+                  api.post(`/orders/${id}/items`, { items: [{ type: 'custom', custom_name, unit_price, quantity }] }),
   // "Codice 32": passa l'ordine ad altro cameriere (delega).
   transfer:   (id, toWaiterId, reason) => api.post(`/orders/${id}/transfer`, { to_waiter_id: toWaiterId, reason }),
   // cancelItem: opzionalmente passa override = { pin, reason } se chi
