@@ -123,25 +123,26 @@ export default function NotificationsPrompt() {
           <li className="flex items-center gap-2"><span className="text-[var(--color-gold)] shrink-0">⏰</span> Alert con suono per ritardi servizio</li>
         </ul>
 
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={continueWithout}
-            disabled={busy}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] text-sm font-semibold disabled:opacity-50"
-          >
-            Continua
-          </button>
-          <button
-            onClick={handleEnable}
-            disabled={busy}
-            className="flex-[2] px-4 py-2.5 rounded-lg bg-[var(--color-gold)] text-[#13181C] text-sm font-bold disabled:opacity-50 hover:brightness-110 flex items-center justify-center gap-2"
-          >
-            {busy ? '…' : (<><Bell size={14}/> Attiva audio + push</>)}
-          </button>
-        </div>
-        <p className="text-[10px] text-center text-[var(--color-text-3)] mt-2">
-          Il browser ti chiederà conferma per le notifiche push.
+        <p className="text-sm text-center font-bold text-[var(--color-warn)] mt-2 mb-3">
+          ⚠️ Senza attivare NON ricevi i piatti pronti dalla cucina!
         </p>
+        <button
+          onClick={handleEnable}
+          disabled={busy}
+          className="w-full px-4 py-4 rounded-xl bg-[var(--color-gold)] text-[#13181C] text-lg font-extrabold uppercase tracking-wide disabled:opacity-50 hover:brightness-110 active:scale-[0.98] transition flex items-center justify-center gap-2"
+        >
+          {busy ? '…' : (<><Bell size={20}/> Attiva notifiche</>)}
+        </button>
+        <p className="text-[11px] text-center text-[var(--color-text-3)] mt-2">
+          Il browser ti chiederà conferma — tocca <b>Consenti</b>.
+        </p>
+        <button
+          onClick={continueWithout}
+          disabled={busy}
+          className="w-full text-center text-[var(--color-text-3)] hover:text-[var(--color-text-2)] text-xs mt-3 disabled:opacity-50"
+        >
+          continua senza (sconsigliato)
+        </button>
       </div>
     </div>
   )
