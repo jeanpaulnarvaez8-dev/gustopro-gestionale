@@ -210,12 +210,14 @@ async function updateItemStatus(req, res, next) {
             [item.order_id, tenantId]
           );
           if (ord?.table_id) {
+            // last_course_served_at: usato SOLO per il promemoria conto dopo il
+            // dolce. Il timer della portata successiva parte invece da quando la
+            // portata e' PRONTA (last_course_ready_at, impostato nel ramo ready).
             await pool.query(
               `UPDATE tables
-                  SET current_course = $1,
-                      last_course_served_at = NOW()
-                WHERE id = $2 AND tenant_id = $3`,
-              [courseInfo.course_type, ord.table_id, tenantId]
+                  SET last_course_served_at = NOW()
+                WHERE id = $1 AND tenant_id = $2`,
+              [ord.table_id, tenantId]
             );
             getIO()?.emit('course-served', {
               tableId: ord.table_id,
@@ -312,6 +314,19 @@ async function updateItemStatus(req, res, next) {
           vibrate: [400, 100, 200, 100, 200],
           requireInteraction: true,
         }).catch(() => {});
+
+        // Ciclo portate: la portata e' PRONTA al pass (consegna al cameriere).
+        // Da QUI partono i 20 min per la portata successiva — non dal servito
+        // al tavolo, non dalla comanda. Solo per le portate della sequenza.
+        if (['antipasto', 'primo', 'secondo', 'dolce'].includes(c0.course_type)) {
+          await pool.query(
+            `UPDATE tables
+                SET current_course = $1, last_course_ready_at = NOW()
+              WHERE id = (SELECT table_id FROM orders WHERE id = $2 AND tenant_id = $3)
+                AND tenant_id = $3`,
+            [c0.course_type, item.order_id, tenantId]
+          ).catch(() => {});
+        }
       }
     }
 

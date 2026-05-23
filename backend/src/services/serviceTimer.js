@@ -383,7 +383,7 @@ async function checkCascadeTimersForTenant(client, tenantId) {
 // ─── Ciclo timer sala (Sprint 4) ────────────────────────────────
 // Soglie configurabili (in minuti). Documentate nel piano operativo Riva.
 const SEATING_ALERT_MINUTES = 10;  // seated > 10min senza ordine
-const COURSE_CYCLE_MINUTES  = 20;  // tra portate (antipasto→primo→secondo→dolce)
+const COURSE_CYCLE_MINUTES  = 20;  // tra portate, da PRONTO al pass (antipasto→primo→secondo→dolce)
 const CHECK_EMISSION_MINUTES = 10; // dopo dolce, conto entro 10min
 
 // Sequenza standard portate. Quando la portata X e' servita, dopo
@@ -427,14 +427,19 @@ async function checkSeatingTimersForTenant(client, tenantId) {
 }
 
 async function checkCourseCycleForTenant(client, tenantId) {
-  // Per ogni tavolo occupied con last_course_served_at, check se ci
-  // sono items della portata SUCCESSIVA non ancora 'ready' o sent.
-  // Se trascorrono > COURSE_CYCLE_MINUTES senza next course → alert.
+  // Per ogni tavolo occupied: COURSE_CYCLE_MINUTES dopo che una portata e'
+  // PRONTA al pass (last_course_ready_at = consegna al cameriere) → alert per
+  // la portata successiva. NB: NON parte dal servito al tavolo ne' dalla
+  // comanda. Il promemoria conto dopo il dolce resta invece basato sul
+  // SERVITO (last_course_served_at): il cliente deve poter mangiare il dolce.
   const { rows } = await client.query(`
     SELECT
       t.id AS table_id, t.table_number,
-      t.current_course, t.last_course_served_at,
-      EXTRACT(EPOCH FROM (NOW() - t.last_course_served_at))/60 AS minutes_since,
+      t.current_course,
+      t.last_course_ready_at,
+      t.last_course_served_at,
+      EXTRACT(EPOCH FROM (NOW() - t.last_course_ready_at))/60  AS minutes_since_ready,
+      EXTRACT(EPOCH FROM (NOW() - t.last_course_served_at))/60 AS minutes_since_served,
       o.id AS order_id,
       u.name AS waiter_name
     FROM tables t
@@ -443,31 +448,41 @@ async function checkCourseCycleForTenant(client, tenantId) {
     WHERE t.tenant_id = $1
       AND t.status = 'occupied'
       AND t.current_course IS NOT NULL
-      AND t.last_course_served_at IS NOT NULL
-      AND t.last_course_served_at < NOW() - ($2 || ' minutes')::INTERVAL
       AND t.current_course IN ('antipasto','primo','secondo','dolce')
-  `, [tenantId, COURSE_CYCLE_MINUTES]);
+  `, [tenantId]);
 
   const io = getIO();
   for (const r of rows) {
     const nextCourse = NEXT_COURSE[r.current_course] || 'check';
-    const minutes = Math.round(r.minutes_since);
+
     if (nextCourse === 'check') {
-      // Dopo dolce: 10min per emettere conto
-      if (minutes >= CHECK_EMISSION_MINUTES) {
+      // Dopo il dolce: promemoria conto X min dopo che il dolce e' stato
+      // SERVITO (non da quando e' pronto). Guard: il servito deve essere
+      // successivo al pronto del dolce, altrimenti il timer non e' partito.
+      const served = r.last_course_served_at;
+      const servedAfterReady = served &&
+        (!r.last_course_ready_at || new Date(served) >= new Date(r.last_course_ready_at));
+      const mins = Math.round(r.minutes_since_served);
+      if (servedAfterReady && mins >= CHECK_EMISSION_MINUTES) {
         io?.to('role:admin').to('role:manager').to(`user:${r.waiter_name}`).emit('check-emission-alert', {
           tableId: r.table_id, tableNumber: r.table_number,
-          minutesSince: minutes, waiterName: r.waiter_name,
+          minutesSince: mins, waiterName: r.waiter_name,
         });
       }
     } else {
-      io?.to('role:admin').to('role:manager').emit('course-cycle-alert', {
-        tableId: r.table_id, tableNumber: r.table_number,
-        completedCourse: r.current_course,
-        nextCourse,
-        minutesSince: minutes,
-        waiterName: r.waiter_name,
-      });
+      // Portata successiva: COURSE_CYCLE_MINUTES da quando la portata corrente
+      // e' PRONTA al pass (consegna al cameriere).
+      if (r.last_course_ready_at == null) continue;
+      const mins = Math.round(r.minutes_since_ready);
+      if (mins >= COURSE_CYCLE_MINUTES) {
+        io?.to('role:admin').to('role:manager').emit('course-cycle-alert', {
+          tableId: r.table_id, tableNumber: r.table_number,
+          completedCourse: r.current_course,
+          nextCourse,
+          minutesSince: mins,
+          waiterName: r.waiter_name,
+        });
+      }
     }
   }
 }

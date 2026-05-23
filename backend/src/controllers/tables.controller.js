@@ -158,7 +158,8 @@ async function seatTable(req, res, next) {
              seated_at = NOW(),
              first_order_at = NULL,
              current_course = NULL,
-             last_course_served_at = NULL
+             last_course_served_at = NULL,
+             last_course_ready_at = NULL
        WHERE id = $1 AND tenant_id = $2
        RETURNING *`,
       [id, tenantId]
