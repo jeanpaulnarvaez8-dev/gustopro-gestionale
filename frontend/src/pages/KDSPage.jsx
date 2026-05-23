@@ -19,13 +19,14 @@ import AbbinaPanel from '../components/AbbinaPanel'
 // oven_done=sea (blu) → solo pizza, fase intermedia tra cottura e impiattamento
 const ITEM_STATUS = {
   pending: {
-    label: 'In attesa',
+    label: 'Da fare',
     bg: 'bg-[var(--color-warn-soft)]',
     border: 'border-[var(--color-warn)]/50',
     text: 'text-[var(--color-warn)]',
-    next: 'cooking',
-    nextLabel: 'Inizia',
-    nextBtn: 'bg-[var(--color-terracotta)] hover:brightness-110 text-white',
+    // Lo chef fa SOLO "Pronto": un tap dalla comanda direttamente a ready.
+    next: 'ready',
+    nextLabel: 'PRONTO',
+    nextBtn: 'bg-[var(--color-ok)] hover:brightness-110 text-white',
   },
   cooking: {
     label: 'In preparazione',
@@ -48,16 +49,15 @@ const ITEM_STATUS = {
     nextBtn: 'bg-[var(--color-ok)] hover:brightness-110 text-white',
   },
   ready: {
-    label: 'Pronto — al pass',
+    label: 'PRONTO',
     bg: 'bg-[var(--color-ok-soft)]',
     border: 'border-[var(--color-ok)]/50',
     text: 'text-[var(--color-ok)]',
-    // La comanda resta sul KDS finche' non e' servita. Da 'ready' il
-    // pass/cuoco puo' segnare 'Servito' per toglierla (oppure sparisce
-    // da sola quando il cameriere segna servito dal suo dispositivo).
-    next: 'served',
-    nextLabel: 'Servito',
-    nextBtn: 'bg-[var(--color-sea)] hover:brightness-110 text-white',
+    // Dopo "Pronto" lo chef non fa piu' nulla: la comanda resta verde sul KDS
+    // e sparisce da sola quando il cameriere segna servito dal suo dispositivo.
+    next: null,
+    nextLabel: null,
+    nextBtn: null,
   },
 }
 
@@ -484,64 +484,8 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null 
           </div>
         )}
 
-        {/* ─── Preview "IN ARRIVO" — items in workflow_status=waiting ─────
-            Sneak-peek per la cucina: i camerieri hanno messo in coda questi
-            piatti per la prossima portata, quando libereranno (es. dopo che
-            i clienti hanno finito gli antipasti) arriveranno qui in
-            production. La cucina puo' iniziare a organizzarsi mentalmente. */}
-        {!loading && waitingItems.length > 0 && (() => {
-          // Aggrega per nome_item: count totale + lista tavoli
-          const agg = new Map()
-          for (const order of waitingItems) {
-            if (!Array.isArray(order.items)) continue
-            const tbl = order.table_number || 'Asporto'
-            for (const it of order.items) {
-              const key = it.name || it.item_name
-              if (!key) continue
-              const existing = agg.get(key) || { name: key, qty: 0, tables: new Set(), maxWaitMin: 0 }
-              existing.qty += Number(it.quantity || 1)
-              existing.tables.add(tbl)
-              const mins = elapsedMinutes(it.inserted_at || order.created_at)
-              if (mins > existing.maxWaitMin) existing.maxWaitMin = mins
-              agg.set(key, existing)
-            }
-          }
-          const items = Array.from(agg.values()).sort((a, b) => b.qty - a.qty)
-          if (items.length === 0) return null
-          return (
-            <Card variant="elevated" padding="md" className="mb-4 border-[var(--color-sea)]/40">
-              <div className="flex items-center gap-2 mb-3">
-                <Badge tone="sea" solid>IN ARRIVO</Badge>
-                <span className="text-[var(--color-text-3)] text-xs">
-                  Camerieri hanno in coda — pronti per quando libereranno
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {items.map((it, idx) => (
-                  <div
-                    key={`waiting-${idx}-${it.name}`}
-                    className="bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/30 rounded-lg px-3 py-2 flex items-center gap-2"
-                  >
-                    <span className="text-[var(--color-text)] text-sm font-bold">
-                      {it.name}
-                    </span>
-                    <span className="text-[var(--color-sea)] text-xs font-bold tnum">
-                      {it.qty}×
-                    </span>
-                    <span className="text-[var(--color-text-3)] text-[10px]">
-                      ({Array.from(it.tables).join(', ')})
-                    </span>
-                    {it.maxWaitMin > 0 && (
-                      <span className="text-[var(--color-text-3)] text-[10px] tnum">
-                        · {it.maxWaitMin}'
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )
-        })()}
+        {/* Sezione "IN ARRIVO" rimossa su richiesta: lo chef vede solo le
+            comande da fare, niente anteprime. */}
 
         {/* Incroci: piatti uguali su più tavoli — render difensivo per React #31 */}
         {!loading && crossmatches.length > 0 && (
@@ -637,19 +581,19 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null 
                           </div>
                         ) : (
                           <>
-                            <span className="serif text-[var(--color-text)] font-extrabold text-5xl tnum leading-none">
+                            <span className="serif text-[var(--color-text)] font-extrabold text-7xl tnum leading-none">
                               {order.table_number}
                             </span>
-                            <span className="text-[var(--color-text-2)] text-sm font-semibold">{order.zone_name}</span>
+                            <span className="text-[var(--color-text-2)] text-base font-semibold">{order.zone_name}</span>
                           </>
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {/* Numero piatti in GRANDE — anche se e' 1 */}
                         {totalPlates > 0 && (
-                          <div className="flex flex-col items-center justify-center rounded-xl bg-[var(--color-gold)] text-[#13181C] px-3.5 py-1.5 leading-none min-w-[64px]">
-                            <span className="text-4xl font-extrabold tnum">{totalPlates}</span>
-                            <span className="text-[10px] font-bold tracking-widest">{totalPlates === 1 ? 'PIATTO' : 'PIATTI'}</span>
+                          <div className="flex flex-col items-center justify-center rounded-xl bg-[var(--color-gold)] text-[#13181C] px-4 py-2 leading-none min-w-[80px]">
+                            <span className="text-6xl font-extrabold tnum">{totalPlates}</span>
+                            <span className="text-xs font-bold tracking-widest">{totalPlates === 1 ? 'PIATTO' : 'PIATTI'}</span>
                           </div>
                         )}
                         <ElapsedTick sentAt={oldest} />
@@ -708,9 +652,9 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null 
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   {item.quantity > 1 && (
-                                    <span className="text-[var(--color-gold)] tnum font-extrabold text-4xl leading-none">×{item.quantity}</span>
+                                    <span className="text-[var(--color-gold)] tnum font-extrabold text-6xl leading-none">×{item.quantity}</span>
                                   )}
-                                  <span className="text-[var(--color-text)] font-extrabold text-2xl uppercase tracking-wide leading-tight">
+                                  <span className="text-[var(--color-text)] font-extrabold text-3xl uppercase tracking-wide leading-tight">
                                     {item.name}
                                   </span>
                                   {item.is_combo && (
@@ -796,7 +740,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null 
                                 <button
                                   onClick={() => handleAdvance(item.id, nextStatus)}
                                   disabled={isUpdating}
-                                  className={`w-full py-3.5 rounded-xl text-xl font-extrabold uppercase tracking-wide transition flex items-center justify-center gap-1 ${btnColor} disabled:opacity-50 min-h-[60px]`}
+                                  className={`w-full py-4 rounded-xl text-3xl font-extrabold uppercase tracking-wide transition flex items-center justify-center gap-1 ${btnColor} disabled:opacity-50 min-h-[72px]`}
                                 >
                                   {isUpdating
                                     ? <RefreshCw size={22} className="animate-spin" />

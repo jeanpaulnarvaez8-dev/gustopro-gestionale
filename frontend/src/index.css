@@ -92,6 +92,18 @@ body {
   background-attachment: fixed;
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   Leggibilita' sala/cucina: tutta l'app piu' GRANDE + MAIUSCOLO.
+   font-size sul root scala tutte le misure rem di Tailwind.
+   ───────────────────────────────────────────────────────────────── */
+html { font-size: 18px; }
+@media (min-width: 768px)  { html { font-size: 19px; } }
+@media (min-width: 1280px) { html { font-size: 20px; } }
+
+/* Tutto in MAIUSCOLO (richiesta operativa). Le ricevute restano normali. */
+body { text-transform: uppercase; }
+.receipt-print, .receipt-print * { text-transform: none; }
+
 /* Helper classes per tipografia display (titoli, brand, hero) */
 .serif {
   font-family: var(--font-serif);
