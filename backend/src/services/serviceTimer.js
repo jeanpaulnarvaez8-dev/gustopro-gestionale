@@ -525,7 +525,9 @@ async function tick() {
       await checkCascadeTimersForTenant(client, tenantId);
       await checkMandatoryAlertsForTenant(client, tenantId);
       await checkDirtyTablesForTenant(client, tenantId);
-      await checkSeatingTimersForTenant(client, tenantId);
+      // Alert "comanda non presa" DISATTIVATO su richiesta (disturbava troppo).
+      // Riattivare la riga sotto per ripristinarlo.
+      // await checkSeatingTimersForTenant(client, tenantId);
       await checkCourseCycleForTenant(client, tenantId);
     });
   } catch (err) {
