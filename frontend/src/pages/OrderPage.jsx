@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Plus, Minus, Trash2, Send, ShoppingCart, RefreshCw,
-  CheckCircle2, BookOpen, ChevronRight, Building, Clock, Zap, PackageCheck, UserPlus2, Receipt,
+  CheckCircle2, BookOpen, ChevronRight, Building, Clock, Zap, PackageCheck, UserPlus2, Receipt, Pencil,
 } from 'lucide-react'
 import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
@@ -152,7 +152,7 @@ export default function OrderPage() {
   const navigate = useNavigate()
   const {
     items: cartItems, total, itemCount, setTable, addItem, addCombo,
-    removeItem, updateQuantity, setWorkflowStatus, clearCart,
+    removeItem, updateQuantity, setWorkflowStatus, setNotes, clearCart,
   } = useCart()
   const { toast } = useToast()
 
@@ -172,6 +172,12 @@ export default function OrderPage() {
   const [comboModal, setComboModal]   = useState(null)
   const [covers]                      = useState(initialCovers)
   const [weightSheet, setWeightSheet] = useState(null)
+  // Modifica piatto: nota tipo "senza cipolla". noteFor = _key item del carrello.
+  const [noteFor, setNoteFor] = useState(null)
+  const [noteText, setNoteText] = useState('')
+  const noteItem = cartItems.find(ci => ci._key === noteFor) || null
+  const openNote = (ci) => { setNoteFor(ci._key); setNoteText(ci.notes || '') }
+  const QUICK_NOTES = ['Senza cipolla', 'Senza aglio', 'Senza glutine', 'Senza lattosio', 'No piccante', 'Ben cotto', 'Al sangue', 'Senza sale']
   const [weightInput, setWeightInput] = useState('')
   const [showMobileCart, setShowMobileCart] = useState(false)
   // "Codice 32" — modal delega ordine ad altro cameriere
@@ -811,6 +817,17 @@ export default function OrderPage() {
                         {formatPrice((ci.item.computed_price ?? ci.item.base_price) * ci.quantity)}
                       </span>
                     </div>
+
+                    {/* Modifica / nota piatto (es. senza cipolla) */}
+                    <button
+                      onClick={() => openNote(ci)}
+                      className="mt-1.5 w-full text-left flex items-center gap-1 text-[10px] px-1.5 py-1 rounded border border-dashed border-[var(--color-border-strong)] text-[var(--color-text-3)] hover:text-[var(--color-gold)] hover:border-[var(--color-gold-ring)] transition"
+                    >
+                      <Pencil size={10} className="shrink-0" />
+                      {ci.notes
+                        ? <span className="text-[var(--color-warn)] font-semibold truncate">{ci.notes}</span>
+                        : <span>Modifica / togli ingredienti</span>}
+                    </button>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -863,6 +880,16 @@ export default function OrderPage() {
                         <span className="text-[var(--color-text-2)] text-xs ml-1 tnum">{ci.weight_g}g</span>
                       )}
                     </span>
+                    {/* Modifica / nota piatto */}
+                    <button
+                      onClick={() => openNote(ci)}
+                      className="mt-1 flex items-center gap-1 text-[11px] text-[var(--color-text-3)] active:text-[var(--color-gold)]"
+                    >
+                      <Pencil size={11} className="shrink-0" />
+                      {ci.notes
+                        ? <span className="text-[var(--color-warn)] font-semibold truncate">{ci.notes}</span>
+                        : <span>Modifica / togli ingredienti</span>}
+                    </button>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="text-[var(--color-gold)] text-sm font-bold tnum">
@@ -969,6 +996,51 @@ export default function OrderPage() {
           >
             Aggiungi al carrello
           </Button>
+        </div>
+      </BottomSheet>
+
+      {/* ─── BottomSheet modifica / nota piatto (senza X, aggiungi Y) ──── */}
+      <BottomSheet
+        open={!!noteFor}
+        onClose={() => setNoteFor(null)}
+        title={noteItem ? `Modifica · ${noteItem.item.name}` : 'Modifica piatto'}
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-[var(--color-text-3)] text-xs">
+            Scrivi cosa togliere o aggiungere. La nota arriva al cuoco sulla comanda.
+          </p>
+          <textarea
+            value={noteText}
+            onChange={e => setNoteText(e.target.value)}
+            placeholder="Es. senza cipolla, no aglio, ben cotto…"
+            rows={2}
+            className="bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] rounded-lg px-3 py-2.5 text-[var(--color-text)] text-base outline-none transition resize-none"
+            autoFocus
+          />
+          <div className="flex flex-wrap gap-2">
+            {QUICK_NOTES.map(q => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => setNoteText(t => (t && t.trim()) ? `${t.trim()}, ${q}` : q)}
+                className="px-3 py-1.5 rounded-full bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] text-sm active:bg-[var(--color-gold-soft)] active:text-[var(--color-gold)] transition"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" fullWidth onClick={() => setNoteText('')}>
+              Pulisci
+            </Button>
+            <Button
+              fullWidth
+              leftIcon={<CheckCircle2 size={16} />}
+              onClick={() => { if (noteFor) setNotes(noteFor, noteText.trim() || null); setNoteFor(null) }}
+            >
+              Salva
+            </Button>
+          </div>
         </div>
       </BottomSheet>
     </div>

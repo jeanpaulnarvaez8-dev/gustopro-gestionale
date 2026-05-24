@@ -79,6 +79,14 @@ function cartReducer(state, action) {
         ),
       };
 
+    case 'SET_NOTES':
+      return {
+        ...state,
+        items: state.items.map(i =>
+          i._key === action.key ? { ...i, notes: action.notes } : i
+        ),
+      };
+
     case 'CLEAR':
       return initialState;
 
@@ -114,6 +122,10 @@ export function CartProvider({ children }) {
     dispatch({ type: 'SET_WORKFLOW', key, workflow_status });
   }, []);
 
+  const setNotes = useCallback((key, notes) => {
+    dispatch({ type: 'SET_NOTES', key, notes });
+  }, []);
+
   const clearCart = useCallback(() => {
     dispatch({ type: 'CLEAR' });
   }, []);
@@ -129,7 +141,7 @@ export function CartProvider({ children }) {
   return (
     <CartContext.Provider value={{
       ...state, total, itemCount,
-      setTable, addItem, addCombo, removeItem, updateQuantity, setWorkflowStatus, clearCart,
+      setTable, addItem, addCombo, removeItem, updateQuantity, setWorkflowStatus, setNotes, clearCart,
     }}>
       {children}
     </CartContext.Provider>
