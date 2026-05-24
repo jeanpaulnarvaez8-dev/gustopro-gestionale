@@ -178,6 +178,9 @@ export default function OrderPage() {
   const noteItem = cartItems.find(ci => ci._key === noteFor) || null
   const openNote = (ci) => { setNoteFor(ci._key); setNoteText(ci.notes || '') }
   const QUICK_NOTES = ['Senza cipolla', 'Senza aglio', 'Senza glutine', 'Senza lattosio', 'No piccante', 'Ben cotto', 'Al sangue', 'Senza sale']
+  // "Già al tavolo": cosa è stato già ordinato (se il tavolo ha un ordine aperto).
+  const [existingItems, setExistingItems] = useState([])
+  const [showExisting, setShowExisting] = useState(true)
   const [weightInput, setWeightInput] = useState('')
   const [showMobileCart, setShowMobileCart] = useState(false)
   // "Codice 32" — modal delega ordine ad altro cameriere
@@ -218,6 +221,12 @@ export default function OrderPage() {
         setCategories(catsRes.data)
         setCombos(combosRes.data.filter(c => c.is_active !== false))
         if (catsRes.data.length > 0) setActiveCategory(catsRes.data[0].id)
+        // Tavolo con ordine aperto → mostra cosa è già stato ordinato.
+        if (t.active_order_id) {
+          ordersAPI.get(t.active_order_id)
+            .then(r => setExistingItems((r.data.items || []).filter(i => i.status !== 'cancelled')))
+            .catch(() => {})
+        }
       } catch {
         toast({ type: 'error', title: 'Errore caricamento menu' })
       } finally {
@@ -476,6 +485,37 @@ export default function OrderPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─── Già al tavolo: cosa è stato già ordinato ─────────────── */}
+      {existingItems.length > 0 && (
+        <div className="bg-[var(--color-sea-soft)] border-b border-[var(--color-sea)]/30 shrink-0">
+          <button
+            onClick={() => setShowExisting(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5"
+          >
+            <span className="text-sm font-bold text-[var(--color-sea)] flex items-center gap-2">
+              <ShoppingCart size={15} /> Già al tavolo · {existingItems.reduce((s, i) => s + i.quantity, 0)} piatti
+            </span>
+            <ChevronRight size={16} className={`text-[var(--color-sea)] transition-transform ${showExisting ? 'rotate-90' : ''}`} />
+          </button>
+          {showExisting && (
+            <div className="px-4 pb-3 max-h-[30vh] overflow-y-auto space-y-1">
+              {existingItems.map(it => {
+                const STAT = { pending: 'Da fare', cooking: 'In lavorazione', oven_done: 'Sfornata', ready: 'Pronto', served: 'Servito' }
+                return (
+                  <div key={it.id} className="flex items-start justify-between gap-2 text-sm py-1 border-b border-[var(--color-border-soft)] last:border-0">
+                    <span className="text-[var(--color-text)] min-w-0">
+                      <span className="text-[var(--color-gold)] font-bold tnum">{it.quantity}×</span> {it.item_name}
+                      {it.notes && <span className="text-[var(--color-warn)] text-xs ml-1 italic">({it.notes})</span>}
+                    </span>
+                    <span className="text-[var(--color-text-3)] text-[11px] shrink-0 whitespace-nowrap">{STAT[it.status] || it.status}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 

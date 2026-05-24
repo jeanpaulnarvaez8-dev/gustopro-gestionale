@@ -23,18 +23,19 @@ const ITEM_STATUS = {
     bg: 'bg-[var(--color-warn-soft)]',
     border: 'border-[var(--color-warn)]/50',
     text: 'text-[var(--color-warn)]',
-    // Lo chef fa SOLO "Pronto": un tap dalla comanda direttamente a ready.
-    next: 'ready',
-    nextLabel: 'PRONTO',
-    nextBtn: 'bg-[var(--color-ok)] hover:brightness-110 text-white',
+    // 1° tap: "In lavorazione" → la cucina segna che sta facendo il piatto.
+    next: 'cooking',
+    nextLabel: 'IN LAVORAZIONE',
+    nextBtn: 'bg-[var(--color-terracotta)] hover:brightness-110 text-white',
   },
   cooking: {
-    label: 'In preparazione',
+    label: 'IN LAVORAZIONE',
     bg: 'bg-[var(--color-terracotta-soft)]',
     border: 'border-[var(--color-terracotta)]/50',
     text: 'text-[var(--color-terracotta)]',
+    // 2° tap: "Pronto" → notifica il cameriere.
     next: 'ready',
-    nextLabel: 'Pronto',
+    nextLabel: 'PRONTO',
     nextBtn: 'bg-[var(--color-ok)] hover:brightness-110 text-white',
   },
   // Fase intermedia solo per pizza: sfornata, in attesa di impiattamento.
@@ -716,18 +717,9 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null 
                             </div>
 
                             {(() => {
-                              // Bevande: skip "Inizia" → diretto a "Pronto"
-                              const isBev = item.course_type === 'bevanda'
-                              // Pizza doppia fase: cooking → oven_done (Sfornata)
-                              // → ready (Impiatta). Altri items: cooking → ready.
-                              const isPizza = item.prep_station === 'pizzeria'
+                              // Flusso unico per tutti: Da fare → IN LAVORAZIONE → PRONTO.
                               let nextStatus = cfg.next
                               let nextLabel = cfg.nextLabel
-                              if (isBev && cfg.next === 'cooking') {
-                                nextStatus = 'ready'; nextLabel = 'Pronto'
-                              } else if (isPizza && item.status === 'cooking') {
-                                nextStatus = 'oven_done'; nextLabel = 'Sfornata'
-                              }
                               const btnColor = nextStatus === 'ready'
                                 ? 'bg-[var(--color-ok)] hover:brightness-110 text-white'
                                 : nextStatus === 'oven_done'
