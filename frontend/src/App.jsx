@@ -227,7 +227,7 @@ export default function App() {
               </RoleRoute>
             } />
             <Route path="/menu-admin" element={
-              <RoleRoute roles={['admin', 'manager']}>
+              <RoleRoute roles={['admin']}>
                 <MenuAdminPage />
               </RoleRoute>
             } />

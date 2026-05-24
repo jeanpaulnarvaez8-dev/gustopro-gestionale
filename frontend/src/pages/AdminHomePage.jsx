@@ -216,6 +216,7 @@ export default function AdminHomePage() {
           <h2 className="text-[var(--color-text-2)] text-xs font-semibold uppercase tracking-wider mb-2">Azioni rapide</h2>
           <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
             <QuickButton icon={UtensilsCrossed} label="Tavoli"       onClick={() => navigate('/tables')} />
+            <QuickButton icon={BookOpen}        label="Menu / Piatti" onClick={() => navigate('/menu-admin')} tone="gold" />
             <QuickButton icon={ChefHat}         label="KDS"          onClick={() => navigate('/kds')}          badge={readyItems.length} />
             <QuickButton icon={Wine}            label="Bar"          onClick={() => navigate('/bar')} tone="gold" />
             <QuickButton icon={MapPin}          label="Zone"         onClick={() => navigate('/assignments')} tone="sea" />
