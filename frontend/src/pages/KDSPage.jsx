@@ -135,8 +135,11 @@ const STATION_PICKER = [
 ]
 const STATION_LS_KEY = 'gustopro_kds_station'
 
-export default function KDSPage({ mode = 'kitchen', station: stationProp = null }) {
+export default function KDSPage({ mode = 'kitchen', station: stationProp = null, emphasize = null }) {
   const isBar = mode === 'bar'
+  // emphasize='pizzeria' (schermo Simone): pizze GRANDI, resto cucina piccolo.
+  // default (cucina): pizze PICCOLE (awareness), resto grande.
+  const focusPizza = emphasize === 'pizzeria'
   // Station: prop (route dedicata) ha priorita'. Altrimenti localStorage,
   // altrimenti 'all'. Picker visibile solo se station NON forzata da prop.
   const [stationSel, setStationSel] = useState(() => {
@@ -531,6 +534,8 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             <AnimatePresence>
               {orders.map(order => {
+                // Schermo Simone: salta gli ordini SENZA pizza (non lo riguardano).
+                if (focusPizza && !order.items.some(it => (it.prep_station || 'cucina') === 'pizzeria')) return null
                 const oldest = order.items.reduce((min, it) =>
                   !min || new Date(it.sent_at) < new Date(min) ? it.sent_at : min, null)
                 const mins = elapsedMinutes(oldest)
@@ -607,6 +612,28 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null 
                         const cfg = ITEM_STATUS[item.status] ?? ITEM_STATUS.pending
                         const isUpdating = updating[item.id]
                         const ds = item.display_status || 'active'
+
+                        // ── PIATTO DI UN ALTRO REPARTO — piccolo, solo per sapere ──
+                        // Cucina vede le pizze piccole; Simone (focusPizza) vede la
+                        // cucina piccola. Solo in vista 'Tutte'.
+                        const itemStation = item.prep_station || 'cucina'
+                        const isMine = focusPizza ? itemStation === 'pizzeria' : itemStation !== 'pizzeria'
+                        if (station === 'all' && !isMine) {
+                          return (
+                            <div
+                              key={item.id}
+                              className="flex items-center gap-2 px-2 py-1 rounded border border-[var(--color-border-soft)] bg-[var(--color-surface-2)]/40 opacity-70"
+                            >
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-text-3)] shrink-0">
+                                {focusPizza ? 'CUCINA' : '🍕 PIZZA'}
+                              </span>
+                              <span className="text-[var(--color-text-2)] text-xs truncate">
+                                {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
+                              </span>
+                              <span className="ml-auto text-[9px] text-[var(--color-text-3)] shrink-0">{cfg.label}</span>
+                            </div>
+                          )
+                        }
 
                         // ── DELIVERED (c) — minimo impatto visivo ──
                         if (ds === 'delivered') {
