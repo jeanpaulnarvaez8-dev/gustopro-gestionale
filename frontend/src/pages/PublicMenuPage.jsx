@@ -84,7 +84,9 @@ export default function PublicMenuPage() {
                         <span className="rb-name">{it.name}</span>
                         <span className="rb-lead" />
                         <span className="rb-price">
-                          {formatPrice(it.base_price)}{it.pricing_type === 'per_kg' ? '/kg' : ''}
+                          {it.pricing_type === 'per_kg'
+                            ? `${formatPrice(it.base_price / 10)}/etto`
+                            : formatPrice(it.base_price)}
                         </span>
                       </div>
                       {it.description && <p className="rb-desc">{it.description}</p>}
