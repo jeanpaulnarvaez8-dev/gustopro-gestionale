@@ -7,7 +7,7 @@ const { getIO } = require('../socket');
 async function resolveTenantBySlug(slug) {
   if (!slug) return null;
   const { rows: [t] } = await pool.query(
-    'SELECT id, name FROM tenants WHERE slug = $1 AND is_active = true',
+    'SELECT id, name, coperto_price FROM tenants WHERE slug = $1 AND is_active = true',
     [String(slug).toLowerCase().trim()]
   );
   return t || null;
@@ -56,7 +56,12 @@ async function getPublicMenu(req, res, next) {
       }))
       .filter(c => c.items.length > 0);
 
-    res.json({ restaurant: tenant.name, slug: req.params.slug, menu });
+    res.json({
+      restaurant: tenant.name,
+      slug: req.params.slug,
+      coperto: parseFloat(tenant.coperto_price || 0),
+      menu,
+    });
   } catch (err) { next(err); }
 }
 

@@ -4,6 +4,13 @@ import { BellRing, CheckCircle2 } from 'lucide-react'
 import { publicAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 
+// 14 allergeni obbligatori — Allegato II Reg. UE 1169/2011 (D.Lgs. 231/2017).
+const ALLERGENI = [
+  'Glutine (cereali)', 'Crostacei', 'Uova', 'Pesce', 'Arachidi', 'Soia',
+  'Latte e lattosio', 'Frutta a guscio', 'Sedano', 'Senape',
+  'Sesamo', 'Anidride solforosa e solfiti', 'Lupini', 'Molluschi',
+]
+
 /**
  * PublicMenuPage — menu CLIENTE via QR sul tavolo. NESSUN login.
  * Rotta: /menu/:slug/:table?  (es. /menu/riva-beach/12)
@@ -81,15 +88,50 @@ export default function PublicMenuPage() {
                         </span>
                       </div>
                       {it.description && <p className="rb-desc">{it.description}</p>}
+                      {Array.isArray(it.allergens) && it.allergens.length > 0 && (
+                        <div className="rb-alg">
+                          {it.allergens.map((a, i) => (
+                            <span key={i} className="rb-alg-tag">{a}</span>
+                          ))}
+                        </div>
+                      )}
                     </article>
                   ))}
                 </div>
               </section>
             ))}
-            <p className="rb-foot">
-              <span className="rb-foot-line">Tradizione di ospitalità dal 1965</span>
-              Per allergie o intolleranze chiedi al personale
-            </p>
+            {/* ─── Informazioni & Allergeni (a norma UE/Italia) ─── */}
+            <section className="rb-info">
+              <h2 className="rb-cat"><span>Informazioni</span></h2>
+
+              {data.coperto > 0 && (
+                <p className="rb-info-row"><b>Coperto</b> {formatPrice(data.coperto)} a persona</p>
+              )}
+              <p className="rb-info-row">Prezzi in Euro, <b>IVA inclusa</b>.</p>
+              <p className="rb-info-row">
+                Il pesce destinato ad essere consumato crudo è sottoposto ad abbattimento
+                rapido di temperatura come previsto dal Reg. CE 853/2004.
+              </p>
+              <p className="rb-info-row">
+                Alcuni prodotti possono essere surgelati o congelati all'origine.
+                Chiedi al personale per il dettaglio.
+              </p>
+
+              <h3 className="rb-info-h3">Allergeni · Reg. UE 1169/2011</h3>
+              <p className="rb-info-row rb-info-muted">
+                Per gli allergeni presenti in ogni piatto rivolgiti al personale di sala:
+                la documentazione completa è disponibile in cassa.
+              </p>
+              <div className="rb-alg-grid">
+                {ALLERGENI.map((a, i) => (
+                  <span key={i} className="rb-alg-li"><b>{i + 1}.</b> {a}</span>
+                ))}
+              </div>
+
+              <p className="rb-foot-line2">
+                Tradizione di ospitalità dal 1965 · Punta Prosciutto · Salento
+              </p>
+            </section>
           </>
         )}
       </main>
@@ -159,9 +201,24 @@ const RB_CSS = `
 .rb-price{font-family:var(--font-serif, Georgia, serif); font-weight:700; color:var(--gold);
   font-size:16.5px; white-space:nowrap; font-variant-numeric:tabular-nums;}
 .rb-desc{margin:3px 0 0; color:var(--ink-soft); font-size:13.5px; line-height:1.45;}
-.rb-foot{text-align:center; color:var(--ink-soft); font-size:12px; margin:40px 0 8px; line-height:1.7;}
-.rb-foot-line{display:block; font-family:var(--font-serif, Georgia, serif); font-style:italic;
-  color:var(--sea); font-size:14px; margin-bottom:4px;}
+/* Allergeni per piatto (badge) */
+.rb-alg{display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;}
+.rb-alg-tag{font-size:10.5px; font-weight:600; color:var(--sea-deep);
+  background:rgba(47,147,173,.12); border:1px solid rgba(47,147,173,.3);
+  border-radius:999px; padding:2px 8px;}
+/* Sezione informazioni / legale */
+.rb-info{margin:42px 0 10px; padding:22px 18px; border-radius:16px;
+  background:var(--sand-2); border:1px solid rgba(198,160,75,.3);}
+.rb-info-row{margin:0 0 8px; font-size:12.5px; color:var(--ink-soft); line-height:1.55;}
+.rb-info-row b{color:var(--ink);}
+.rb-info-muted{font-style:italic;}
+.rb-info-h3{font-family:var(--font-serif, Georgia, serif); color:var(--sea-deep);
+  font-size:15px; font-weight:700; margin:18px 0 8px;}
+.rb-alg-grid{display:grid; grid-template-columns:1fr 1fr; gap:4px 14px; margin-top:6px;}
+.rb-alg-li{font-size:11.5px; color:var(--ink-soft);}
+.rb-alg-li b{color:var(--gold);}
+.rb-foot-line2{text-align:center; font-family:var(--font-serif, Georgia, serif);
+  font-style:italic; color:var(--sea); font-size:13px; margin:20px 0 0;}
 /* CTA */
 .rb-cta-wrap{position:fixed; left:0; right:0; bottom:0; padding:16px 20px 22px;
   background:linear-gradient(180deg, rgba(251,247,239,0) 0%, var(--sand) 38%);}
