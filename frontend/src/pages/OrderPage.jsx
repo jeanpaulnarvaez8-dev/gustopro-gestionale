@@ -578,7 +578,7 @@ export default function OrderPage() {
                               onClick={() => {
                                 if (item.pricing_type === 'per_kg') {
                                   setWeightSheet(item)
-                                  setWeightInput('')
+                                  setWeightInput(item.min_weight_g ? String(item.min_weight_g) : '')
                                 } else {
                                   addItem(item, 1, [], null)
                                 }
@@ -659,7 +659,7 @@ export default function OrderPage() {
                     onClick={() => {
                       if (item.pricing_type === 'per_kg') {
                         setWeightSheet(item)
-                        setWeightInput('')
+                        setWeightInput(item.min_weight_g ? String(item.min_weight_g) : '')
                       } else {
                         addItem(item, 1, [], null)
                       }
@@ -956,6 +956,11 @@ export default function OrderPage() {
             <label className="text-[var(--color-text-2)] text-xs uppercase tracking-wider font-semibold">
               Peso in grammi
             </label>
+            {weightSheet?.min_weight_g > 0 && (
+              <p className="text-[var(--color-gold)] text-sm font-bold">
+                Ordine minimo: {weightSheet.min_weight_g} g
+              </p>
+            )}
             <input
               type="number"
               inputMode="numeric"
@@ -965,6 +970,11 @@ export default function OrderPage() {
               className="bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-4 py-3.5 text-[var(--color-text)] text-2xl text-center font-bold placeholder:text-[var(--color-text-3)] outline-none transition tnum"
               autoFocus
             />
+            {weightSheet?.min_weight_g > 0 && weightInput && parseInt(weightInput, 10) < weightSheet.min_weight_g && (
+              <p className="text-[var(--color-err)] text-xs font-semibold">
+                ⚠ Sotto il minimo di {weightSheet.min_weight_g} g
+              </p>
+            )}
           </div>
           {weightInput && parseInt(weightInput, 10) > 0 && weightSheet && (
             <div className="text-center bg-[var(--color-gold-soft)] rounded-lg py-3">
@@ -980,12 +990,16 @@ export default function OrderPage() {
           <Button
             fullWidth
             size="lg"
-            disabled={!weightInput || parseInt(weightInput, 10) <= 0}
+            disabled={!weightInput || parseInt(weightInput, 10) <= 0 || (weightSheet?.min_weight_g > 0 && parseInt(weightInput, 10) < weightSheet.min_weight_g)}
             leftIcon={<Plus size={16} />}
             onClick={() => {
               const g = parseInt(weightInput, 10)
               if (!g || g <= 0 || !weightSheet) {
                 toast({ type: 'warning', title: 'Inserisci un peso valido' })
+                return
+              }
+              if (weightSheet.min_weight_g > 0 && g < weightSheet.min_weight_g) {
+                toast({ type: 'warning', title: `Minimo ${weightSheet.min_weight_g} g per ${weightSheet.name}` })
                 return
               }
               addItem(weightSheet, 1, [], null, g)
