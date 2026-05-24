@@ -105,11 +105,13 @@ async function callWaiter(req, res, next) {
       tableNumber: table.table_number,
       timestamp: new Date().toISOString(),
     };
-    // Socket: admin/manager sempre + cameriere dell'ordine (se aperto)
-    io?.to('role:admin').to('role:manager').emit('customer-call', payload);
-    if (table.waiter_id) io?.to(`user:${table.waiter_id}`).emit('customer-call', payload);
+    // Chiamata cliente → arriva a TUTTO lo staff (tutte le stanze ruolo):
+    // sala, bar, cassa, cucina, manager, admin. Chiunque sia libero risponde.
+    const ALL_ROLES = ['admin', 'manager', 'waiter', 'cashier', 'kitchen'];
+    let emit = io;
+    if (emit) { for (const r of ALL_ROLES) emit = emit.to(`role:${r}`); emit.emit('customer-call', payload); }
 
-    // Push native
+    // Push native a tutto lo staff (chi ha attivato le notifiche).
     const pushService = require('../services/pushService');
     const pushBody = {
       title: `🔔 Tavolo ${table.table_number} ti chiama`,
@@ -119,12 +121,7 @@ async function callWaiter(req, res, next) {
       vibrate: [300, 100, 300, 100, 300],
       requireInteraction: true,
     };
-    if (table.waiter_id) {
-      pushService.sendToUser(table.waiter_id, pushBody).catch(() => {});
-    }
-    // Sempre anche a maitre/admin/manager (così qualcuno risponde se il
-    // cameriere non c'e' o il tavolo non ha ancora un ordine aperto).
-    pushService.sendToRole(tenant.id, ['admin', 'manager'], pushBody).catch(() => {});
+    pushService.sendToRole(tenant.id, ALL_ROLES, pushBody).catch(() => {});
 
     res.json({ ok: true });
   } catch (err) { next(err); }
