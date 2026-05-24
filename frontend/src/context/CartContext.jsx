@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useCallback } from 'react';
+import { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
 
 const CartContext = createContext(null);
 
@@ -129,6 +129,13 @@ export function CartProvider({ children }) {
   const clearCart = useCallback(() => {
     dispatch({ type: 'CLEAR' });
   }, []);
+
+  // Flag globale: c'e' roba nel carrello? Serve al PWA auto-update per NON
+  // ricaricare la schermata ordine mentre il cameriere sta componendo (perderebbe
+  // il carrello). A carrello vuoto invece può aggiornarsi in sicurezza.
+  useEffect(() => {
+    try { window.__CART_HAS_ITEMS = state.items.length > 0; } catch { /* noop */ }
+  }, [state.items]);
 
   const total = state.items.reduce((sum, i) => {
     const modExtra = i.modifiers.reduce((s, m) => s + (m.price_extra || 0), 0);

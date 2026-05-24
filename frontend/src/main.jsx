@@ -36,7 +36,10 @@ const updateSW = registerSW({
     // banner (per non perdere un carrello/pagamento in corso).
     try {
       const p = window.location.pathname || ''
-      const risky = p.startsWith('/order') || p.startsWith('/checkout')
+      // Rischioso solo se sei su ordine/cassa CON roba nel carrello (la perderesti).
+      // A carrello vuoto si aggiorna anche lì → i camerieri prendono le novità.
+      const onCartScreen = p.startsWith('/order') || p.startsWith('/checkout')
+      const risky = onCartScreen && window.__CART_HAS_ITEMS === true
       if (!risky) {
         setTimeout(() => { try { updateSW(true) } catch { window.location.reload() } }, 1200)
       }
