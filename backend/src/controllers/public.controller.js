@@ -23,6 +23,7 @@ async function getPublicMenu(req, res, next) {
       `SELECT id, name, sort_order, course_type, is_beverage
          FROM categories
         WHERE tenant_id = $1 AND is_active = true
+          AND COALESCE(show_on_qr, true) = true
         ORDER BY sort_order, name`,
       [tenant.id]
     );
