@@ -225,6 +225,7 @@ export default function AdminHomePage() {
             <QuickButton icon={BarChart3}       label="Analisi"      onClick={() => navigate('/analytics')}    tone="park" />
             <QuickButton icon={UserCog}         label="Staff"        onClick={() => navigate('/users')} />
             <QuickButton icon={QrCode}          label="QR Tavoli"    onClick={() => navigate('/qr-codes')} tone="sea" />
+            <QuickButton icon={QrCode}          label="QR Menu"      onClick={() => navigate('/menu-qr')} tone="gold" />
             <QuickButton icon={ShieldAlert}     label="Audit"        onClick={() => navigate('/audit-report')} tone="warn" />
             <QuickButton icon={Lock}            label="Chiusura cassa" onClick={() => navigate('/day-close')} tone="err" />
           </div>
