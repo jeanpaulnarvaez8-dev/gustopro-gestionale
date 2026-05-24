@@ -13,14 +13,28 @@ async function resolveTenantBySlug(slug) {
   return t || null;
 }
 
-// GET /public/menu/:slug — categorie attive + piatti disponibili, raggruppati.
+// Lingue supportate per il menu cliente. 'it' = originale (colonne name/description).
+const SUPPORTED_LANGS = ['en', 'de', 'fr', 'es'];
+
+// GET /public/menu/:slug?lang=xx — categorie attive + piatti, tradotti se ?lang.
 async function getPublicMenu(req, res, next) {
   try {
     const tenant = await resolveTenantBySlug(req.params.slug);
     if (!tenant) return res.status(404).json({ error: 'Ristorante non trovato' });
 
+    const lang = SUPPORTED_LANGS.includes(String(req.query.lang || '').toLowerCase())
+      ? String(req.query.lang).toLowerCase()
+      : null;
+    // Traduzione con fallback all'italiano (campo originale).
+    const tr = (row, field) => {
+      if (lang && row.translations && row.translations[lang] && row.translations[lang][field]) {
+        return row.translations[lang][field];
+      }
+      return row[field];
+    };
+
     const { rows: cats } = await pool.query(
-      `SELECT id, name, sort_order, course_type, is_beverage
+      `SELECT id, name, sort_order, course_type, is_beverage, translations
          FROM categories
         WHERE tenant_id = $1 AND is_active = true
           AND COALESCE(show_on_qr, true) = true
@@ -28,7 +42,7 @@ async function getPublicMenu(req, res, next) {
       [tenant.id]
     );
     const { rows: items } = await pool.query(
-      `SELECT id, category_id, name, description, base_price, pricing_type, allergens
+      `SELECT id, category_id, name, description, base_price, pricing_type, allergens, translations
          FROM menu_items
         WHERE tenant_id = $1 AND is_available = true
         ORDER BY sort_order, name`,
@@ -39,8 +53,8 @@ async function getPublicMenu(req, res, next) {
     for (const it of items) {
       (byCat[it.category_id] = byCat[it.category_id] || []).push({
         id: it.id,
-        name: it.name,
-        description: it.description,
+        name: tr(it, 'name'),
+        description: tr(it, 'description'),
         base_price: parseFloat(it.base_price),
         pricing_type: it.pricing_type,
         allergens: it.allergens || [],
@@ -50,7 +64,7 @@ async function getPublicMenu(req, res, next) {
     const menu = cats
       .map(c => ({
         id: c.id,
-        name: c.name,
+        name: tr(c, 'name'),
         course_type: c.course_type,
         is_beverage: c.is_beverage,
         items: byCat[c.id] || [],
@@ -60,15 +74,17 @@ async function getPublicMenu(req, res, next) {
     res.json({
       restaurant: tenant.name,
       slug: req.params.slug,
+      lang: lang || 'it',
       coperto: parseFloat(tenant.coperto_price || 0),
       menu,
     });
   } catch (err) { next(err); }
 }
 
-// Throttle in-memory: una chiamata per tavolo ogni 15s (anti-spam dal QR).
+// Throttle in-memory: una chiamata cameriere per tavolo ogni 30 min (richiesta
+// cliente: si puo' richiamare solo dopo 30 minuti dalla chiamata precedente).
 const lastCall = new Map();
-const THROTTLE_MS = 15_000;
+const THROTTLE_MS = 30 * 60 * 1000;
 
 // POST /public/call-waiter/:slug { table_number } — il cliente chiama.
 async function callWaiter(req, res, next) {

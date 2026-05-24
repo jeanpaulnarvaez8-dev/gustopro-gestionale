@@ -431,7 +431,7 @@ const publicApi = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'https://loyal-eagerness-production.up.railway.app/api',
 });
 export const publicAPI = {
-  menu:       (slug)               => publicApi.get(`/public/menu/${slug}`),
+  menu:       (slug, lang)         => publicApi.get(`/public/menu/${slug}`, { params: lang ? { lang } : {} }),
   callWaiter: (slug, tableNumber)  => publicApi.post(`/public/call-waiter/${slug}`, { table_number: tableNumber }),
 };
 
