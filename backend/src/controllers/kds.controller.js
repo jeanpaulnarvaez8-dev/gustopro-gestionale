@@ -26,9 +26,9 @@ async function getPendingOrders(req, res, next) {
     const effectiveStation = `COALESCE(mi.prep_station, c.prep_station, 'cucina')`;
     let stationFilter, params;
     if (stationParam === 'all') {
-      // 'Tutte' = tutta la cucina TRANNE la pizzeria: le pizze vanno SOLO a
-      // Simone sulla sua stazione dedicata. (Bevande escluse sotto.)
-      stationFilter = `${effectiveStation} <> 'pizzeria'`;
+      // 'Tutte' = TUTTA la cucina, PIZZE INCLUSE (oltre alla stazione dedicata
+      // + push a Simone). Tutto arriva in cucina. (Bevande escluse sotto.)
+      stationFilter = 'TRUE';
       params = [TENANT(req)];
     } else if (stationParam === 'cucina') {
       stationFilter = `${effectiveStation} = 'cucina'`;
@@ -459,8 +459,8 @@ async function getAbbinaGroups(req, res, next) {
 
     let stationFilter, params;
     if (station === 'all') {
-      // 'Tutte' esclude la pizzeria (le pizze sono solo di Simone).
-      stationFilter = `COALESCE(mi.prep_station, c.prep_station, 'cucina') <> 'pizzeria'`;
+      // 'Tutte' include la pizzeria (tutto arriva in cucina).
+      stationFilter = 'TRUE';
       params = [tenantId];
     } else if (station === 'cucina') {
       stationFilter = `COALESCE(mi.prep_station, c.prep_station, 'cucina') = 'cucina'`;
