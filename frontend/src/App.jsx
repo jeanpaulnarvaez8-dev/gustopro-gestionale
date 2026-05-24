@@ -27,6 +27,8 @@ const ComboAdminPage         = lazy(() => import('./pages/ComboAdminPage'))
 const MenuAdminPage          = lazy(() => import('./pages/MenuAdminPage'))
 const VenueAdminPage         = lazy(() => import('./pages/VenueAdminPage'))
 const TableQRCodesPage       = lazy(() => import('./pages/TableQRCodesPage'))
+const PublicMenuPage         = lazy(() => import('./pages/PublicMenuPage'))
+const MenuQRPage             = lazy(() => import('./pages/MenuQRPage'))
 const AuditReportPage        = lazy(() => import('./pages/AuditReportPage'))
 const DayClosePage           = lazy(() => import('./pages/DayClosePage'))
 const TakeawayLabelPage      = lazy(() => import('./pages/TakeawayLabelPage'))
@@ -152,6 +154,11 @@ export default function App() {
               test visivo dei primitivi (Button/Card/Badge/Input/Modal/...). */}
           <Route path="/design-system" element={<DesignSystemPage />} />
 
+          {/* Menu CLIENTE via QR sul tavolo — PUBBLICO (no login). Il tenant e'
+              risolto dallo slug. Con o senza numero tavolo (per "chiama cameriere"). */}
+          <Route path="/menu/:slug" element={<PublicMenuPage />} />
+          <Route path="/menu/:slug/:table" element={<PublicMenuPage />} />
+
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<HomeRedirect />} />
             <Route path="/tables" element={<TableMapPage />} />
@@ -232,6 +239,11 @@ export default function App() {
             <Route path="/qr-codes" element={
               <RoleRoute roles={['admin', 'manager']}>
                 <TableQRCodesPage />
+              </RoleRoute>
+            } />
+            <Route path="/menu-qr" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <MenuQRPage />
               </RoleRoute>
             } />
             <Route path="/audit-report" element={

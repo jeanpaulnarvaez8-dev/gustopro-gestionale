@@ -424,6 +424,17 @@ export const superadminAPI = {
   updateTenant:  (id, data) => superadminApi.patch(`/superadmin/tenants/${id}`, data),
 };
 
+// ─── Pubblico (no auth) ───────────────────────────────────────
+// Menu cliente via QR + chiamata cameriere. Istanza axios separata: niente
+// JWT, niente redirect 401 (il cliente non e' loggato).
+const publicApi = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'https://loyal-eagerness-production.up.railway.app/api',
+});
+export const publicAPI = {
+  menu:       (slug)               => publicApi.get(`/public/menu/${slug}`),
+  callWaiter: (slug, tableNumber)  => publicApi.post(`/public/call-waiter/${slug}`, { table_number: tableNumber }),
+};
+
 // Debug helper opt-in (solo se localStorage.gustopro_dev_mode === '1')
 if (typeof window !== 'undefined' && storage.get('gustopro_dev_mode') === '1') {
   window.gustoApi = api;

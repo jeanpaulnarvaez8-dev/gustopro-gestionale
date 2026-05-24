@@ -21,6 +21,10 @@ router.use('/_client-error', require('./clientError.routes'));
 // Mounted PRIMA di verifyToken perche' il SW non ha il JWT di sessione.
 router.use('/push-action', require('./pushAction.routes'));
 
+// Menu pubblico cliente (QR sul tavolo) + chiamata cameriere. Nessun login:
+// il tenant e' risolto dallo slug nell'URL. Montato PRIMA di verifyToken.
+router.use('/public', require('./public.routes'));
+
 // Protected (all routes below require JWT). Tenant is resolved from the
 // JWT claim set at login; falls back to header / default if missing
 // (covers tokens issued before the tenant_id claim was added).

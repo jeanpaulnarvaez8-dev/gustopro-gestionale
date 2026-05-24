@@ -199,6 +199,17 @@ export function SocketProvider({ children }) {
       });
     });
 
+    // Cliente chiama il cameriere dal menu QR sul tavolo.
+    socket.on('customer-call', (data) => {
+      try { playUrgentBeep() } catch {}
+      toast({
+        type: 'warning',
+        title: `🔔 Tavolo ${data.tableNumber} ti chiama`,
+        message: 'Il cliente ha chiamato dal menu QR. Vai al tavolo.',
+        duration: 15000,
+      });
+    });
+
     // Sprint 4: portata X servita > 20min senza items della successiva.
     socket.on('course-cycle-alert', (data) => {
       try { playUrgentBeep() } catch {}
@@ -299,6 +310,7 @@ export function SocketProvider({ children }) {
       socket.off('course-pre-alert');
       socket.off('course-send-alert');
       socket.off('course-delay-alert');
+      socket.off('customer-call');
     };
   }, [user, toast]);
 

@@ -110,6 +110,10 @@ body, body * { text-transform: uppercase; }
 .receipt-print, .receipt-print * { text-transform: none !important; }
 input::placeholder, textarea::placeholder { text-transform: uppercase; }
 
+/* .normalcase — sottoalberi che restano in caso normale (es. menu cliente QR,
+   leggibile e professionale per il cliente). */
+.normalcase, .normalcase * { text-transform: none !important; }
+
 /* Helper classes per tipografia display (titoli, brand, hero) */
 .serif {
   font-family: var(--font-serif);
