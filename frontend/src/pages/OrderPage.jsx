@@ -8,7 +8,7 @@ import {
 import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
-import { menuAPI, ordersAPI, tablesAPI, comboAPI, waitersAPI } from '../lib/api'
+import { menuAPI, ordersAPI, tablesAPI, comboAPI, waitersAPI, workflowAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { AllergenBadges } from '../lib/allergens'
 import { Card, Badge, Modal, BottomSheet, Button } from '../components/v2'
@@ -183,6 +183,17 @@ export default function OrderPage() {
   const [existingItems, setExistingItems] = useState([])
   const [showExisting, setShowExisting] = useState(true)
   const canRemove = ['admin', 'manager', 'cashier'].includes(authUser?.role)
+  const canFire = ['waiter', 'manager', 'admin'].includes(authUser?.role)
+  // Manda in cucina un piatto IN ATTESA (workflow attesa → produzione).
+  const fireToKitchen = async (it) => {
+    try {
+      await workflowAPI.changeStatus(it.id, 'production')
+      setExistingItems(prev => prev.map(x => x.id === it.id ? { ...x, workflow_status: 'production' } : x))
+      toast({ type: 'success', title: 'Mandato in cucina', message: it.item_name })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    }
+  }
   // Togli un piatto GIÀ ordinato. Admin/manager: diretto. Cassa: PIN responsabile.
   const removeExisting = async (it) => {
     if (!table?.active_order_id) return
@@ -523,14 +534,28 @@ export default function OrderPage() {
             <div className="px-4 pb-3 max-h-[30vh] overflow-y-auto space-y-1">
               {existingItems.map(it => {
                 const STAT = { pending: 'Da fare', cooking: 'In lavorazione', oven_done: 'Sfornata', ready: 'Pronto', served: 'Servito' }
+                const isWaiting = it.workflow_status === 'waiting'
                 return (
-                  <div key={it.id} className="flex items-start justify-between gap-2 text-sm py-1 border-b border-[var(--color-border-soft)] last:border-0">
+                  <div key={it.id} className={`flex items-start justify-between gap-2 text-sm py-1.5 border-b border-[var(--color-border-soft)] last:border-0 ${isWaiting ? 'bg-[var(--color-warn-soft)]/40 -mx-2 px-2 rounded' : ''}`}>
                     <span className="text-[var(--color-text)] min-w-0">
                       <span className="text-[var(--color-gold)] font-bold tnum">{it.quantity}×</span> {it.item_name}
                       {it.notes && <span className="text-[var(--color-warn)] text-xs ml-1 italic">({it.notes})</span>}
                     </span>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[var(--color-text-3)] text-[11px] whitespace-nowrap">{STAT[it.status] || it.status}</span>
+                      {isWaiting ? (
+                        canFire ? (
+                          <button
+                            onClick={() => fireToKitchen(it)}
+                            className="px-2.5 py-1 rounded-md bg-[var(--color-warn)] text-black text-[11px] font-bold uppercase active:scale-95 transition flex items-center gap-1"
+                          >
+                            <Send size={11} /> Manda in cucina
+                          </button>
+                        ) : (
+                          <span className="text-[var(--color-warn)] text-[11px] font-bold whitespace-nowrap">IN ATTESA</span>
+                        )
+                      ) : (
+                        <span className="text-[var(--color-text-3)] text-[11px] whitespace-nowrap">{STAT[it.status] || it.status}</span>
+                      )}
                       {canRemove && (
                         <button
                           onClick={() => removeExisting(it)}
