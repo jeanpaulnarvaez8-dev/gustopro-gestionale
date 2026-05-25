@@ -531,7 +531,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
         )}
 
         {!loading && orders.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             <AnimatePresence>
               {orders.map(order => {
                 // Schermo Simone: salta gli ordini SENZA pizza (non lo riguardano).
@@ -565,7 +565,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                   >
 
                     {/* Order header (urgency tinted) */}
-                    <div className={`px-4 py-3 flex items-center justify-between ${
+                    <div className={`px-3 py-2 flex items-center justify-between ${
                       urgency === 'err'  ? 'bg-[var(--color-err-soft)]'  :
                       urgency === 'warn' ? 'bg-[var(--color-warn-soft)]' :
                                             'bg-[var(--color-surface-2)]'
@@ -587,19 +587,19 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                           </div>
                         ) : (
                           <>
-                            <span className="serif text-[var(--color-text)] font-extrabold text-7xl tnum leading-none">
+                            <span className="serif text-[var(--color-text)] font-extrabold text-4xl tnum leading-none">
                               {order.table_number}
                             </span>
-                            <span className="text-[var(--color-text-2)] text-base font-semibold">{order.zone_name}</span>
+                            <span className="text-[var(--color-text-2)] text-xs font-semibold">{order.zone_name}</span>
                           </>
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {/* Numero piatti in GRANDE — anche se e' 1 */}
                         {totalPlates > 0 && (
-                          <div className="flex flex-col items-center justify-center rounded-xl bg-[var(--color-gold)] text-[#13181C] px-4 py-2 leading-none min-w-[80px]">
-                            <span className="text-6xl font-extrabold tnum">{totalPlates}</span>
-                            <span className="text-xs font-bold tracking-widest">{totalPlates === 1 ? 'PIATTO' : 'PIATTI'}</span>
+                          <div className="flex flex-col items-center justify-center rounded-lg bg-[var(--color-gold)] text-[#13181C] px-2 py-1 leading-none min-w-[46px]">
+                            <span className="text-2xl font-extrabold tnum">{totalPlates}</span>
+                            <span className="text-[8px] font-bold tracking-widest">{totalPlates === 1 ? 'PIATTO' : 'PIATTI'}</span>
                           </div>
                         )}
                         <ElapsedTick sentAt={oldest} />
@@ -674,15 +674,14 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                         return (
                           <div
                             key={item.id}
-                            className={`rounded-xl border-2 p-4 flex flex-col gap-3 ${cfg.bg} ${cfg.border}`}
+                            className={`rounded-lg border-2 p-2.5 flex flex-col gap-2 ${cfg.bg} ${cfg.border}`}
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  {item.quantity > 1 && (
-                                    <span className="text-[var(--color-gold)] tnum font-extrabold text-6xl leading-none">×{item.quantity}</span>
-                                  )}
-                                  <span className="text-[var(--color-text)] font-extrabold text-3xl uppercase tracking-wide leading-tight">
+                                  {/* Quantita' SEMPRE visibile: ×1, ×2, ×3… (mai confusione) */}
+                                  <span className="text-[var(--color-gold)] tnum font-extrabold text-3xl leading-none shrink-0">×{item.quantity}</span>
+                                  <span className="text-[var(--color-text)] font-extrabold text-xl uppercase tracking-wide leading-tight">
                                     {item.name}
                                   </span>
                                   {item.is_combo && (
@@ -703,19 +702,19 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                   </div>
                                 )}
                                 {!item.is_combo && item.modifiers?.length > 0 && (
-                                  <p className="text-[var(--color-text-2)] text-base mt-1 font-semibold">
+                                  <p className="text-[var(--color-text-2)] text-sm mt-0.5 font-semibold">
                                     {item.modifiers.join(', ')}
                                   </p>
                                 )}
                                 {item.notes && (
-                                  <p className="text-[var(--color-warn)] text-lg mt-1 italic font-bold">
+                                  <p className="text-[var(--color-warn)] text-base mt-0.5 italic font-bold">
                                     ⚠ {item.notes}
                                   </p>
                                 )}
                                 {/* Crudi: badge sicurezza alimentare. Anche se mostrati
                                     con gli antipasti, devono saltare la fila (freschezza). */}
                                 {item.requires_preallerta && (
-                                  <p className="text-[var(--color-sea)] text-base mt-1 font-bold flex items-center gap-1">
+                                  <p className="text-[var(--color-sea)] text-sm mt-0.5 font-bold flex items-center gap-1">
                                     🦪 CRUDO — priorità freschezza
                                   </p>
                                 )}
@@ -723,7 +722,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                     Mostrato in arancione per attirare attenzione: il cameriere
                                     DEVE portare il kit prima di arrivare al tavolo. */}
                                 {Array.isArray(item.required_kit) && item.required_kit.length > 0 && (
-                                  <p className="text-[var(--color-gold)] text-base mt-1 font-bold flex items-center gap-1">
+                                  <p className="text-[var(--color-gold)] text-sm mt-0.5 font-bold flex items-center gap-1">
                                     🛠️ Kit: {item.required_kit.join(' · ')}
                                   </p>
                                 )}
@@ -759,7 +758,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                 <button
                                   onClick={() => handleAdvance(item.id, nextStatus)}
                                   disabled={isUpdating}
-                                  className={`w-full py-4 rounded-xl text-3xl font-extrabold uppercase tracking-wide transition flex items-center justify-center gap-1 ${btnColor} disabled:opacity-50 min-h-[72px]`}
+                                  className={`w-full py-2.5 rounded-lg text-lg font-extrabold uppercase tracking-wide transition flex items-center justify-center gap-1 ${btnColor} disabled:opacity-50 min-h-[48px]`}
                                 >
                                   {isUpdating
                                     ? <RefreshCw size={22} className="animate-spin" />
