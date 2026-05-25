@@ -175,6 +175,16 @@ export default function TableMapPage() {
   }
 
   function handleNavigate(table) {
+    // SBARAZZO (priorità a tutti): qualsiasi utente — sala, bar, cassa, admin —
+    // può pulire un tavolo "da pulire" (dirty). Messo PER PRIMO così nessun
+    // ruolo viene intercettato prima (es. il modal bar dei bartender).
+    if (table.status === 'dirty') {
+      if (!confirm(`Tavolo ${table.table_number}: confermi sbarazzo + pulizia completata?`)) return
+      tablesAPI.setStatus(table.id, 'free')
+        .then(() => loadData())
+        .catch(() => toast({ type: 'error', title: 'Errore sbarazzo' }))
+      return
+    }
     const isCashier = ['cashier', 'admin', 'manager'].includes(user?.role)
     // Bartender (waiter/bar): click su tavolo NON apre l'ordine completo,
     // mostra invece il modal "Bevande di questo tavolo" filtrato. Cosi'
@@ -183,16 +193,6 @@ export default function TableMapPage() {
       (user?.sub_role === 'bar' || user?.sub_role === 'bar/caffetteria')
     if (isBartender && table.status !== 'free') {
       setBarTableModal(table)
-      return
-    }
-    // Tavolo dirty (post-pagamento, da pulire): chiedi conferma sbarazzo →
-    // re-imposta status='free'. Workflow operativo: pulizia → free → free
-    // visibile a tutti, alert al maitre si spegne automatico.
-    if (table.status === 'dirty') {
-      if (!confirm(`Tavolo ${table.table_number}: confermi sbarazzo + pulizia completata?`)) return
-      tablesAPI.setStatus(table.id, 'free')
-        .then(() => loadData())
-        .catch(() => toast({ type: 'error', title: 'Errore sbarazzo' }))
       return
     }
     // Cassa/admin/manager su tavolo con ordine: vai alla pagina ORDINE
