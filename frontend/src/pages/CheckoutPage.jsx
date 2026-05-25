@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Banknote, CreditCard, Smartphone, Receipt, RefreshCw,
-  CheckCircle2, Users, SplitSquareVertical, Pencil, Plus, Minus, X, Zap,
+  CheckCircle2, Users, SplitSquareVertical, Pencil, Plus, Minus, X, Zap, Trash2,
   Printer,
 } from 'lucide-react'
 import { billingAPI, tablesAPI, ordersAPI } from '../lib/api'
@@ -561,6 +561,25 @@ export default function CheckoutPage() {
     }
   }
 
+  // Togli un piatto dal conto. Admin/manager: diretto. Cassa/cameriere: PIN responsabile.
+  const removeBillItem = async (item) => {
+    if (!window.confirm(`Togliere "${item.item_name}" dal conto?`)) return
+    let override
+    if (!['admin', 'manager'].includes(user?.role)) {
+      const pin = window.prompt('PIN del responsabile per togliere il piatto:')
+      if (!pin) return
+      override = { pin, reason: 'Rimozione dal conto (cassa)' }
+    }
+    try {
+      await ordersAPI.cancelItem(orderId, item.id, override)
+      const updated = await billingAPI.preConto(orderId).then(r => r.data)
+      setBill(updated)
+      toast({ type: 'success', title: 'Piatto tolto dal conto', message: item.item_name })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    }
+  }
+
   // ── Done splash con RICEVUTA STAMPABILE ───────────────────
   if (done && finalReceipt) {
     return (
@@ -698,9 +717,21 @@ export default function CheckoutPage() {
                       </p>
                     )}
                   </div>
-                  <span className="text-[var(--color-text)] text-sm ml-4 flex-shrink-0 tnum font-semibold">
-                    {formatPrice(item.subtotal)}
-                  </span>
+                  <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                    <span className="text-[var(--color-text)] text-sm tnum font-semibold">
+                      {formatPrice(item.subtotal)}
+                    </span>
+                    {canAddCustom && (
+                      <button
+                        onClick={() => removeBillItem(item)}
+                        className="text-[var(--color-text-3)] hover:text-[var(--color-err)] p-1.5 rounded-lg active:scale-90 transition"
+                        title="Togli dal conto"
+                        aria-label="Togli dal conto"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </Card>

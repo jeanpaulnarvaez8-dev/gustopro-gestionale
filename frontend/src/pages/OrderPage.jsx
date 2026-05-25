@@ -155,6 +155,7 @@ export default function OrderPage() {
     removeItem, updateQuantity, setWorkflowStatus, setNotes, clearCart,
   } = useCart()
   const { toast } = useToast()
+  const { user: authUser } = useAuth()
 
   // Coperti dalla URL (?covers=N)
   const searchParams = new URLSearchParams(window.location.search)
@@ -181,6 +182,25 @@ export default function OrderPage() {
   // "Già al tavolo": cosa è stato già ordinato (se il tavolo ha un ordine aperto).
   const [existingItems, setExistingItems] = useState([])
   const [showExisting, setShowExisting] = useState(true)
+  const canRemove = ['admin', 'manager', 'cashier'].includes(authUser?.role)
+  // Togli un piatto GIÀ ordinato. Admin/manager: diretto. Cassa: PIN responsabile.
+  const removeExisting = async (it) => {
+    if (!table?.active_order_id) return
+    if (!window.confirm(`Togliere "${it.item_name}" dal tavolo?`)) return
+    let override
+    if (!['admin', 'manager'].includes(authUser?.role)) {
+      const pin = window.prompt('PIN del responsabile per togliere il piatto:')
+      if (!pin) return
+      override = { pin, reason: 'Rimozione dal tavolo' }
+    }
+    try {
+      await ordersAPI.cancelItem(table.active_order_id, it.id, override)
+      setExistingItems(prev => prev.filter(x => x.id !== it.id))
+      toast({ type: 'success', title: 'Piatto tolto', message: it.item_name })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    }
+  }
   const [weightInput, setWeightInput] = useState('')
   const [showMobileCart, setShowMobileCart] = useState(false)
   // "Codice 32" — modal delega ordine ad altro cameriere
@@ -188,7 +208,6 @@ export default function OrderPage() {
   const [waiters, setWaiters] = useState([])
   const [transferTo, setTransferTo] = useState('')
   const [transferring, setTransferring] = useState(false)
-  const { user: authUser } = useAuth()
 
   // Acqua + pane reminder: SOP Riva chiede di portarli SUBITO all'apertura.
   // Banner visivo dismissibile, persistito per tavolo in localStorage cosi'
@@ -510,7 +529,19 @@ export default function OrderPage() {
                       <span className="text-[var(--color-gold)] font-bold tnum">{it.quantity}×</span> {it.item_name}
                       {it.notes && <span className="text-[var(--color-warn)] text-xs ml-1 italic">({it.notes})</span>}
                     </span>
-                    <span className="text-[var(--color-text-3)] text-[11px] shrink-0 whitespace-nowrap">{STAT[it.status] || it.status}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[var(--color-text-3)] text-[11px] whitespace-nowrap">{STAT[it.status] || it.status}</span>
+                      {canRemove && (
+                        <button
+                          onClick={() => removeExisting(it)}
+                          className="text-[var(--color-text-3)] hover:text-[var(--color-err)] p-1 active:scale-90 transition"
+                          title="Togli dal tavolo"
+                          aria-label="Togli dal tavolo"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )
               })}
