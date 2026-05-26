@@ -93,11 +93,21 @@ export default function TableMapPage() {
       const zoneTableCount = (zoneId) =>
         tablesRes.data.filter(t => t.zone_id === zoneId).length
       const firstNonEmpty = allowedZones.find(z => zoneTableCount(z.id) > 0)
-      setActiveZone(prev =>
-        prev && allowedZones.some(z => z.id === prev)
+      // Admin vede SEMPRE tutti i tavoli di default — niente filtro zona iniziale.
+      // Richiesta esplicita di JP: "quando entro come admin fammi vedere sempre
+      // tutti i tavoli perche schiacciare ogni volta tutte mi rompo".
+      // Camerieri/manager/cassiere mantengono la zona di default (firstNonEmpty)
+      // per evitare overload visivo all'apertura.
+      setActiveZone(prev => {
+        if (user?.role === 'admin') {
+          // Se l'admin ha gia' scelto una zona durante la sessione la rispettiamo;
+          // altrimenti null = "Tutte".
+          return prev && allowedZones.some(z => z.id === prev) ? prev : null
+        }
+        return prev && allowedZones.some(z => z.id === prev)
           ? prev
           : (firstNonEmpty?.id ?? allowedZones[0]?.id ?? null)
-      )
+      })
     } catch {
       setError('Errore caricamento tavoli')
     } finally {
