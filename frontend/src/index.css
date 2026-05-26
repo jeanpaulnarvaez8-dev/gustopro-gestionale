@@ -97,13 +97,17 @@ body {
    font-size sul root scala tutte le misure rem di Tailwind.
    ───────────────────────────────────────────────────────────────── */
 html { font-size: 18px; }
-@media (min-width: 768px)  { html { font-size: 19px; } }
+@media (min-width: 768px)  { html { font-size: 17px; } }  /* TABLET: ridotto */
 @media (min-width: 1280px) { html { font-size: 20px; } }
 
 /* ZOOM globale: scala TUTTO (anche i testi a px fissi tipo text-[10px] che NON
-   seguono il font-size). Cosi' davvero tutta l'app e' piu' grande. */
+   seguono il font-size). Cosi' davvero tutta l'app e' piu' grande.
+   2026-05-26: i tablet (768-1279px) avevano zoom 1.25 ed era troppo grande,
+   abbassato a 1.0 per far entrare tutto in schermo. Desktop full (>=1280)
+   resta a 1.25 perche' lo schermo grande regge la dimensione. */
 #root { zoom: 1.15; }
-@media (min-width: 768px) { #root { zoom: 1.25; } }
+@media (min-width: 768px)  { #root { zoom: 1.00; } }  /* TABLET */
+@media (min-width: 1280px) { #root { zoom: 1.25; } }  /* DESKTOP */
 
 /* Tutto in MAIUSCOLO (richiesta operativa). Le ricevute restano normali. */
 body, body * { text-transform: uppercase; }

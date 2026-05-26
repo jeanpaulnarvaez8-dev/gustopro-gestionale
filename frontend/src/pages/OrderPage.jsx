@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -184,20 +184,63 @@ export default function OrderPage() {
   const [showExisting, setShowExisting] = useState(true)
   const canRemove = ['admin', 'manager', 'cashier'].includes(authUser?.role)
   const canFire = ['waiter', 'manager', 'admin'].includes(authUser?.role)
-  // Manda in cucina un piatto IN ATTESA (workflow attesa → produzione).
-  const fireToKitchen = async (it) => {
-    try {
-      await workflowAPI.changeStatus(it.id, 'production')
-      setExistingItems(prev => prev.map(x => x.id === it.id ? { ...x, workflow_status: 'production' } : x))
-      toast({ type: 'success', title: 'Mandato in cucina', message: it.item_name })
-    } catch (e) {
-      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+  // Aggrega visivamente le voci uguali nel pannello "Già al tavolo":
+  // se al tavolo c'e' x1 Impepata di Cozze e ne arriva un'altra uguale,
+  // mostriamo x2 invece di due righe separate. Aggreghiamo per
+  // (menu_item_id | combo_id | custom_name) + workflow_status + status
+  // + notes + modifiers + peso. Le azioni (manda in cucina / togli)
+  // agiscono sul "primo" item del gruppo, cosi' un trash decrementa
+  // la x di uno.
+  const existingGroups = useMemo(() => {
+    const groups = []
+    const index = new Map()
+    for (const it of existingItems) {
+      const refKey = it.menu_item_id
+        ? `m:${it.menu_item_id}`
+        : it.combo_id
+          ? `b:${it.combo_id}`
+          : `c:${it.custom_name || it.item_name || ''}`
+      const modKey = Array.isArray(it.modifiers) && it.modifiers.length > 0
+        ? JSON.stringify(it.modifiers.map(m => m.modifier_id || m.id).sort())
+        : ''
+      const weightKey = it.weight_g ? `w${it.weight_g}` : ''
+      const noteKey = it.notes ? `n:${it.notes}` : ''
+      const key = `${refKey}|${it.workflow_status || ''}|${it.status || ''}|${noteKey}|${modKey}|${weightKey}`
+      let g = index.get(key)
+      if (!g) {
+        g = { key, items: [], qty: 0, sample: it }
+        index.set(key, g)
+        groups.push(g)
+      }
+      g.items.push(it)
+      g.qty += Number(it.quantity || 0)
     }
+    return groups
+  }, [existingItems])
+  // Manda in cucina TUTTI gli item waiting di un gruppo (azione su gruppo).
+  const fireGroup = async (group) => {
+    const waitingItems = group.items.filter(x => x.workflow_status === 'waiting')
+    for (const it of waitingItems) {
+      try {
+        await workflowAPI.changeStatus(it.id, 'production')
+        setExistingItems(prev => prev.map(x => x.id === it.id ? { ...x, workflow_status: 'production' } : x))
+      } catch (e) {
+        toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+        return
+      }
+    }
+    toast({ type: 'success', title: 'Mandato in cucina', message: `${group.sample.item_name} × ${group.qty}` })
   }
-  // Togli un piatto GIÀ ordinato. Admin/manager: diretto. Cassa: PIN responsabile.
-  const removeExisting = async (it) => {
+  // Decrementa la quantita' del gruppo: rimuove l'ULTIMO item (cosi' x2 -> x1).
+  const removeOneFromGroup = async (group) => {
     if (!table?.active_order_id) return
-    if (!window.confirm(`Togliere "${it.item_name}" dal tavolo?`)) return
+    const target = group.items[group.items.length - 1]
+    if (!target) return
+    const remainingAfter = group.qty - Number(target.quantity || 1)
+    const promptMsg = group.items.length > 1
+      ? `Togliere 1 di "${group.sample.item_name}"? Restano ${remainingAfter}.`
+      : `Togliere "${group.sample.item_name}" dal tavolo?`
+    if (!window.confirm(promptMsg)) return
     let override
     if (!['admin', 'manager'].includes(authUser?.role)) {
       const pin = window.prompt('PIN del responsabile per togliere il piatto:')
@@ -205,9 +248,9 @@ export default function OrderPage() {
       override = { pin, reason: 'Rimozione dal tavolo' }
     }
     try {
-      await ordersAPI.cancelItem(table.active_order_id, it.id, override)
-      setExistingItems(prev => prev.filter(x => x.id !== it.id))
-      toast({ type: 'success', title: 'Piatto tolto', message: it.item_name })
+      await ordersAPI.cancelItem(table.active_order_id, target.id, override)
+      setExistingItems(prev => prev.filter(x => x.id !== target.id))
+      toast({ type: 'success', title: 'Piatto tolto', message: group.sample.item_name })
     } catch (e) {
       toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
     }
@@ -532,20 +575,21 @@ export default function OrderPage() {
           </button>
           {showExisting && (
             <div className="px-4 pb-3 max-h-[30vh] overflow-y-auto space-y-1">
-              {existingItems.map(it => {
+              {existingGroups.map(group => {
+                const it = group.sample
                 const STAT = { pending: 'Da fare', cooking: 'In lavorazione', oven_done: 'Sfornata', ready: 'Pronto', served: 'Servito' }
                 const isWaiting = it.workflow_status === 'waiting'
                 return (
-                  <div key={it.id} className={`flex items-start justify-between gap-2 text-sm py-1.5 border-b border-[var(--color-border-soft)] last:border-0 ${isWaiting ? 'bg-[var(--color-warn-soft)]/40 -mx-2 px-2 rounded' : ''}`}>
+                  <div key={group.key} className={`flex items-start justify-between gap-2 text-sm py-1.5 border-b border-[var(--color-border-soft)] last:border-0 ${isWaiting ? 'bg-[var(--color-warn-soft)]/40 -mx-2 px-2 rounded' : ''}`}>
                     <span className="text-[var(--color-text)] min-w-0">
-                      <span className="text-[var(--color-gold)] font-bold tnum">{it.quantity}×</span> {it.item_name}
+                      <span className="text-[var(--color-gold)] font-bold tnum">{group.qty}×</span> {it.item_name}
                       {it.notes && <span className="text-[var(--color-warn)] text-xs ml-1 italic">({it.notes})</span>}
                     </span>
                     <div className="flex items-center gap-2 shrink-0">
                       {isWaiting ? (
                         canFire ? (
                           <button
-                            onClick={() => fireToKitchen(it)}
+                            onClick={() => fireGroup(group)}
                             className="px-2.5 py-1 rounded-md bg-[var(--color-warn)] text-black text-[11px] font-bold uppercase active:scale-95 transition flex items-center gap-1"
                           >
                             <Send size={11} /> Manda in cucina
@@ -558,9 +602,9 @@ export default function OrderPage() {
                       )}
                       {canRemove && (
                         <button
-                          onClick={() => removeExisting(it)}
+                          onClick={() => removeOneFromGroup(group)}
                           className="text-[var(--color-text-3)] hover:text-[var(--color-err)] p-1 active:scale-90 transition"
-                          title="Togli dal tavolo"
+                          title={group.items.length > 1 ? 'Togli 1' : 'Togli dal tavolo'}
                           aria-label="Togli dal tavolo"
                         >
                           <Trash2 size={14} />
