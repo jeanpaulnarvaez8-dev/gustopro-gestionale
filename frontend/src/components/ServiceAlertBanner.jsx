@@ -1,14 +1,44 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, Clock, ChevronDown, ChevronUp, Check, Timer } from 'lucide-react'
+import { Bell, Clock, Check, Timer, X } from 'lucide-react'
 import { useSocket } from '../context/SocketContext'
 import { serviceAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
 
+/**
+ * ServiceAlertBanner — badge notifica piccolo (NON banner full-width).
+ *
+ * Storia: in origine era una barra rossa fissata in top-0 left-0 right-0 che
+ * occupava ~50px di altezza e bloccava la UI dell'admin. JP 2026-05-26:
+ * "fai in modo che i piatti che ci sono in servizio appaiano in piccolo o
+ *  in un posto dove ci sia la notifica perche' non mi fa vedere le cose
+ *  quando cerco di far qualcosa come admin".
+ *
+ * Soluzione: badge circolare fixed bottom-right con contatore + bell.
+ * Click → dropdown con la lista completa e le azioni "+3min" / "Servito".
+ * Stay fuori-vista quando non ci sono alert.
+ */
 export default function ServiceAlertBanner() {
   const { serviceAlerts, setServiceAlerts } = useSocket()
   const { toast } = useToast()
   const [expanded, setExpanded] = useState(false)
+  const panelRef = useRef(null)
+
+  // Chiudi il dropdown se clicchi fuori.
+  useEffect(() => {
+    if (!expanded) return
+    function onDown(e) {
+      if (panelRef.current && !panelRef.current.contains(e.target)) {
+        setExpanded(false)
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('touchstart', onDown)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('touchstart', onDown)
+    }
+  }, [expanded])
 
   if (!serviceAlerts || serviceAlerts.length === 0) return null
 
@@ -22,7 +52,7 @@ export default function ServiceAlertBanner() {
         type: isLast ? 'warning' : 'info',
         title: isLast ? 'Ultimo posticipo' : 'Posticipato +3 min',
         message: isLast
-          ? `Hai già posticipato ${deferCount}×. Prossimo: escalation manager.`
+          ? `Hai gia' posticipato ${deferCount}x. Prossimo: escalation manager.`
           : `Re-allarme tra 3 minuti se non servi.`
       })
     } catch (e) {
@@ -49,69 +79,84 @@ export default function ServiceAlertBanner() {
     }
   }
 
-  return (
-    <motion.div
-      initial={{ y: -60, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      className="fixed top-0 left-0 right-0 z-[100]"
-    >
-      {/* Header banner */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-2.5 bg-red-600 text-white shadow-lg"
-      >
-        <div className="flex items-center gap-2">
-          <Bell className="w-5 h-5 animate-pulse" />
-          <span className="font-semibold text-sm">
-            {serviceAlerts.length} piatt{serviceAlerts.length === 1 ? 'o' : 'i'} in attesa di servizio
-          </span>
-        </div>
-        {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-      </button>
+  const count = serviceAlerts.length
 
-      {/* Lista alert espansa */}
+  return (
+    <div ref={panelRef} className="fixed bottom-4 right-4 z-[100]">
+      {/* Badge piccolo — sempre visibile quando c'e' >0 alert */}
+      <motion.button
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        whileTap={{ scale: 0.92 }}
+        onClick={() => setExpanded(v => !v)}
+        className="relative flex items-center justify-center w-12 h-12 rounded-full bg-red-600 text-white shadow-lg hover:bg-red-700 transition-colors"
+        aria-label={`${count} piatti in attesa di servizio`}
+      >
+        <Bell className="w-5 h-5 animate-pulse" />
+        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-amber-400 text-black text-[11px] font-bold flex items-center justify-center tnum">
+          {count}
+        </span>
+      </motion.button>
+
+      {/* Dropdown espanso */}
       <AnimatePresence>
         {expanded && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="bg-red-50 border-b-2 border-red-200 shadow-lg overflow-hidden"
+            initial={{ opacity: 0, y: 8, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute bottom-14 right-0 w-[340px] max-w-[92vw] bg-white border border-red-200 rounded-xl shadow-2xl overflow-hidden"
           >
-            <div className="max-h-60 overflow-y-auto divide-y divide-red-100">
+            <div className="px-4 py-2.5 bg-red-600 text-white flex items-center justify-between">
+              <span className="font-semibold text-sm flex items-center gap-2">
+                <Bell className="w-4 h-4" />
+                {count} in attesa di servizio
+              </span>
+              <button
+                onClick={() => setExpanded(false)}
+                className="p-1 hover:bg-red-700 rounded transition-colors"
+                aria-label="Chiudi"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto divide-y divide-red-100">
               {serviceAlerts.map(alert => (
-                <div key={alert.alertId} className="px-4 py-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold ${
+                <div key={alert.alertId} className="px-3 py-2.5 flex items-center justify-between gap-2 hover:bg-red-50">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold ${
                       alert.isBeverage ? 'bg-purple-500' : 'bg-red-500'
                     }`}>
                       {alert.tableNumber}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-900 truncate">
-                        {alert.quantity}× {alert.itemName}
+                      <p className="text-xs font-medium text-slate-900 truncate">
+                        {alert.quantity}x {alert.itemName}
                       </p>
-                      <p className="text-xs text-red-600 flex items-center gap-1">
+                      <p className="text-[11px] text-red-600 flex items-center gap-1">
                         <Timer className="w-3 h-3" />
-                        {alert.elapsedMinutes} min in attesa
-                        {alert.zoneName && <span className="text-slate-500 ml-1">· {alert.zoneName}</span>}
+                        {alert.elapsedMinutes} min
+                        {alert.zoneName && <span className="text-slate-500 ml-1">{alert.zoneName}</span>}
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex gap-1 shrink-0">
                     <button
                       onClick={() => handlePostpone(alert.alertId)}
-                      className="px-3 py-1.5 text-xs font-medium rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors flex items-center gap-1"
+                      className="px-2 py-1 text-[11px] font-medium rounded bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors flex items-center gap-1"
+                      title="Posticipa +3 min"
                     >
-                      <Clock className="w-3.5 h-3.5" />
-                      +3 min
+                      <Clock className="w-3 h-3" />
+                      +3
                     </button>
                     <button
                       onClick={() => handleServed(alert.itemId, alert.alertId)}
-                      className="px-3 py-1.5 text-xs font-medium rounded-md bg-green-100 text-green-700 hover:bg-green-200 transition-colors flex items-center gap-1"
+                      className="px-2 py-1 text-[11px] font-medium rounded bg-green-100 text-green-700 hover:bg-green-200 transition-colors flex items-center gap-1"
+                      title="Servito"
                     >
-                      <Check className="w-3.5 h-3.5" />
-                      Servito
+                      <Check className="w-3 h-3" />
+                      OK
                     </button>
                   </div>
                 </div>
@@ -120,6 +165,6 @@ export default function ServiceAlertBanner() {
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   )
 }
