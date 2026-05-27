@@ -49,6 +49,7 @@ const DesignSystemPage       = lazy(() => import('./pages/DesignSystemPage'))
 
 // Componenti UI eager (sempre montati nelle route protette).
 import ServiceAlertBanner from './components/ServiceAlertBanner'
+import AdminAlertBell from './components/AdminAlertBell'
 import InstallPrompt from './components/InstallPrompt'
 import NotificationsPrompt from './components/NotificationsPrompt'
 import BarPersistentFAB from './components/BarPersistentFAB'
@@ -77,13 +78,24 @@ function RouteFallback() {
 function ProtectedRoute() {
   const { isAuthenticated, user } = useAuth()
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  // JP 2026-05-27: admin non vuole popup automatici. Usa una campanella
+  // unificata (AdminAlertBell) che mostra tutto solo su click esplicito.
+  // Altri ruoli operativi (waiter/manager/cashier/kitchen) continuano a
+  // ricevere ServiceAlertBanner + DirectDeliveredAlerts pop-up perche'
+  // sono alert d'azione: devono vederli on-screen senza dover cliccare.
+  const isAdmin = user?.role === 'admin'
   return (
     <>
-      <ServiceAlertBanner />
+      {isAdmin ? (
+        <AdminAlertBell />
+      ) : (
+        <>
+          <ServiceAlertBanner />
+          {user?.role === 'manager' && <DirectDeliveredAlerts />}
+        </>
+      )}
       {/* Alert obbligatorio per camerieri: scelta libera/rinvia */}
       {user?.role === 'waiter' && <MandatoryAlertModal />}
-      {/* Alert admin per voci consegnate senza passare da cucina */}
-      {['admin', 'manager'].includes(user?.role) && <DirectDeliveredAlerts />}
       <div className="pb-14 md:pb-0">
         <Outlet />
       </div>
