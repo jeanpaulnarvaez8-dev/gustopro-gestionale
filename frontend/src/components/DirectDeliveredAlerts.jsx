@@ -40,34 +40,37 @@ export default function DirectDeliveredAlerts() {
   const visibleAlerts = alerts.filter(a => !dismissed.has(a.id))
   if (visibleAlerts.length === 0) return null
 
+  // JP 2026-05-26: "fai vedere le notifiche piccole nel tablet perche se no
+  // e' troppo grande". Su tablet (md+) compattiamo: meno alert visibili
+  // contemporanei, padding minore, font piu' piccolo. Mobile resta come prima.
   return (
-    <div className="fixed top-4 right-4 z-[90] flex flex-col gap-2 max-w-sm">
+    <div className="fixed top-3 right-3 z-[90] flex flex-col gap-1.5 max-w-[280px] md:max-w-[220px]">
       <AnimatePresence>
-        {visibleAlerts.slice(0, 5).map(alert => (
+        {visibleAlerts.slice(0, 3).map(alert => (
           <motion.div key={alert.id}
             initial={{ opacity: 0, x: 100, scale: 0.9 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 100, scale: 0.9 }}
-            className="bg-[#2A2A2A] border border-red-500/40 rounded-xl p-3 shadow-lg shadow-red-900/20 flex items-start gap-3"
+            className="bg-[#2A2A2A] border border-red-500/40 rounded-lg p-2 md:p-1.5 shadow-lg shadow-red-900/20 flex items-start gap-2"
           >
-            <PackageCheck size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
+            <PackageCheck size={14} className="text-red-400 mt-0.5 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-red-400 text-xs font-bold">CONSEGNATO DIRETTO</p>
-              <p className="text-[#F5F5DC] text-sm font-semibold mt-0.5">
+              <p className="text-red-400 text-[10px] font-bold">CONSEGNATO DIRETTO</p>
+              <p className="text-[#F5F5DC] text-xs font-semibold mt-0.5 truncate">
                 {alert.metadata?.quantity > 1 && <span className="text-red-400">x{alert.metadata?.quantity} </span>}
                 {alert.metadata?.item_name || 'Item'}
               </p>
-              <div className="flex items-center gap-2 mt-1 text-[10px] text-[#888]">
-                <span>Tav. {alert.table_number}</span>
-                <span>-</span>
-                <span>{alert.user_name}</span>
-                <span>-</span>
+              <div className="flex items-center gap-1.5 mt-0.5 text-[9px] text-[#888] truncate">
+                <span>T.{alert.table_number}</span>
+                <span>·</span>
+                <span className="truncate">{alert.user_name}</span>
+                <span>·</span>
                 <span>{new Date(alert.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
             </div>
             <button onClick={() => setDismissed(prev => new Set([...prev, alert.id]))}
               className="text-[#555] hover:text-[#888] transition flex-shrink-0">
-              <X size={14} />
+              <X size={12} />
             </button>
           </motion.div>
         ))}

@@ -82,23 +82,24 @@ export default function ServiceAlertBanner() {
   const count = serviceAlerts.length
 
   return (
-    <div ref={panelRef} className="fixed bottom-4 right-4 z-[100]">
-      {/* Badge piccolo — sempre visibile quando c'e' >0 alert */}
+    <div ref={panelRef} className="fixed bottom-3 right-3 z-[100]">
+      {/* Badge piccolo — sempre visibile quando c'e' >0 alert.
+          Tablet (md+): leggermente piu' piccolo per non rubare spazio. */}
       <motion.button
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         whileTap={{ scale: 0.92 }}
         onClick={() => setExpanded(v => !v)}
-        className="relative flex items-center justify-center w-12 h-12 rounded-full bg-red-600 text-white shadow-lg hover:bg-red-700 transition-colors"
+        className="relative flex items-center justify-center w-12 h-12 md:w-10 md:h-10 rounded-full bg-red-600 text-white shadow-lg hover:bg-red-700 transition-colors"
         aria-label={`${count} piatti in attesa di servizio`}
       >
-        <Bell className="w-5 h-5 animate-pulse" />
-        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-amber-400 text-black text-[11px] font-bold flex items-center justify-center tnum">
+        <Bell className="w-5 h-5 md:w-4 md:h-4 animate-pulse" />
+        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400 text-black text-[10px] font-bold flex items-center justify-center tnum">
           {count}
         </span>
       </motion.button>
 
-      {/* Dropdown espanso */}
+      {/* Dropdown espanso — anch'esso un filo piu' stretto sul tablet */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -106,7 +107,7 @@ export default function ServiceAlertBanner() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-14 right-0 w-[340px] max-w-[92vw] bg-white border border-red-200 rounded-xl shadow-2xl overflow-hidden"
+            className="absolute bottom-14 right-0 w-[320px] md:w-[280px] max-w-[92vw] bg-white border border-red-200 rounded-xl shadow-2xl overflow-hidden"
           >
             <div className="px-4 py-2.5 bg-red-600 text-white flex items-center justify-between">
               <span className="font-semibold text-sm flex items-center gap-2">

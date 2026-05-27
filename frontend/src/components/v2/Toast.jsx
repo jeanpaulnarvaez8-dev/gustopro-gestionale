@@ -105,10 +105,10 @@ export function useToast() {
 
 function ToastViewport({ toasts, dismiss }) {
   if (typeof document === 'undefined') return null;
+  // JP 2026-05-26: toast piu' piccoli sul tablet (md+) per non bloccare la UI.
   return createPortal(
     <div
-      className="fixed z-[120] right-4 bottom-4 flex flex-col gap-2 pointer-events-none"
-      style={{ maxWidth: 380 }}
+      className="fixed z-[120] right-3 bottom-3 flex flex-col gap-1.5 pointer-events-none max-w-[320px] md:max-w-[260px]"
       aria-live="polite"
       aria-atomic="false"
     >
@@ -118,18 +118,18 @@ function ToastViewport({ toasts, dismiss }) {
           <div
             key={t.id}
             className={cn(
-              'pointer-events-auto bg-[var(--color-surface)] rounded-[10px]',
-              'shadow-[0_8px_24px_rgba(0,0,0,0.45)] flex items-start gap-2.5 p-3.5'
+              'pointer-events-auto bg-[var(--color-surface)] rounded-[8px]',
+              'shadow-[0_6px_20px_rgba(0,0,0,0.4)] flex items-start gap-2 p-2.5 md:p-2'
             )}
             style={{
               border: `1px solid ${color}`,
-              borderLeft: `4px solid ${color}`,
+              borderLeft: `3px solid ${color}`,
               animation: 'slide-up 200ms ease-out',
             }}
             role="status"
           >
-            <Icon size={18} style={{ color, flexShrink: 0, marginTop: 1 }} />
-            <div className="flex-1 text-[13px] text-[var(--color-text)] leading-snug min-w-0">
+            <Icon size={14} style={{ color, flexShrink: 0, marginTop: 1 }} />
+            <div className="flex-1 text-[12px] md:text-[11px] text-[var(--color-text)] leading-snug min-w-0">
               {t.title && <div className="font-semibold mb-0.5">{t.title}</div>}
               {t.text && <div className="text-[var(--color-text-2)]">{t.text}</div>}
             </div>
@@ -139,7 +139,7 @@ function ToastViewport({ toasts, dismiss }) {
               className="flex-shrink-0 text-[var(--color-text-3)] hover:text-[var(--color-text)] p-0.5"
               aria-label="Chiudi notifica"
             >
-              <X size={14} />
+              <X size={12} />
             </button>
           </div>
         );
