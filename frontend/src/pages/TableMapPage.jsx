@@ -15,7 +15,7 @@ import BarTableModal from '../components/BarTableModal'
 import { BottomSheet, Badge, StatusDot } from '../components/v2'
 import { storage } from '../lib/storage'
 import { isWaiterSoundEnabled, toggleWaiterSound } from '../lib/kdsBeep'
-import { List, Map as MapIcon, Bell, AlertTriangle, Wine, Clock as ClockIcon, Volume2, VolumeX } from 'lucide-react'
+import { List, Map as MapIcon, Bell, AlertTriangle, Wine, Clock as ClockIcon, Volume2, VolumeX, Trash2 } from 'lucide-react'
 
 // Status config: usa i tokens Riva Beach.
 // free=ok(verde), occupied=gold(oro Riva), reserved=sea(mare), dirty=warn(giallo), parked=park(viola)
@@ -168,6 +168,25 @@ export default function TableMapPage() {
   const [customCovers, setCustomCovers] = useState('') // numero persone oltre 10
   // BarTableModal: si apre quando bartender clicca un tavolo (vede solo bevande).
   const [barTableModal, setBarTableModal] = useState(null) // table object o null
+  // ReservedSheet: click su tavolo prenotato → modal con scelte
+  // (accomoda OR togli prenotazione).
+  const [reservedSheet, setReservedSheet] = useState(null) // table object o null
+
+  // Toglie la prenotazione di un tavolo (status reserved → free).
+  // Disponibile per admin/manager/cassa: il cameriere normale di solito
+  // non ha contesto sul perche' una prenotazione vada cancellata.
+  async function handleRemoveReservation(table) {
+    if (!table) return
+    if (!confirm(`Togliere la prenotazione del tavolo ${table.table_number}?`)) return
+    try {
+      await tablesAPI.setStatus(table.id, 'free')
+      setReservedSheet(null)
+      await loadData()
+      toast({ type: 'success', title: 'Prenotazione tolta', message: `Tavolo ${table.table_number} libero` })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    }
+  }
 
   // Toggle audio "piatto pronto" per i camerieri (default ON).
   // Persistito in localStorage tramite kdsBeep helpers.
@@ -193,6 +212,14 @@ export default function TableMapPage() {
       tablesAPI.setStatus(table.id, 'free')
         .then(() => loadData())
         .catch(() => toast({ type: 'error', title: 'Errore sbarazzo' }))
+      return
+    }
+    // PRENOTATO: apri sheet con scelte (accomoda OR togli prenotazione).
+    // JP 2026-05-27: "metti anche un tasto per togliere i tavoli gia'
+    // prenotati". Sheet mostra il bottone "Togli prenotazione" per
+    // admin/manager/cassa + "Accomoda cliente" per tutti.
+    if (table.status === 'reserved') {
+      setReservedSheet(table)
       return
     }
     const isCashier = ['cashier', 'admin', 'manager'].includes(user?.role)
@@ -502,6 +529,39 @@ export default function TableMapPage() {
         <p className="mt-3 text-center text-xs text-[var(--color-text-3)]">
           Tocca il numero (o scrivi quanti sono) per aprire l&apos;ordine coi coperti
         </p>
+      </BottomSheet>
+
+      {/* ─── BottomSheet tavolo PRENOTATO: accomoda OR togli ─────────── */}
+      <BottomSheet
+        open={!!reservedSheet}
+        onClose={() => setReservedSheet(null)}
+        title={reservedSheet ? `Tavolo ${reservedSheet.table_number} · prenotato` : ''}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-[var(--color-text-2)] text-center">
+            Cosa vuoi fare con questa prenotazione?
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              const t = reservedSheet
+              setReservedSheet(null)
+              setCoversSheet(t)
+            }}
+            className="w-full py-4 rounded-xl bg-[var(--color-gold)] text-[#13181C] font-extrabold text-lg active:scale-95 transition"
+          >
+            Accomoda cliente
+          </button>
+          {['admin', 'manager', 'cashier'].includes(user?.role) && (
+            <button
+              type="button"
+              onClick={() => handleRemoveReservation(reservedSheet)}
+              className="w-full py-4 rounded-xl bg-[var(--color-err-soft)] border-2 border-[var(--color-err)]/60 text-[var(--color-err)] font-extrabold text-lg active:scale-95 transition flex items-center justify-center gap-2"
+            >
+              <Trash2 size={20} /> Togli prenotazione
+            </button>
+          )}
+        </div>
       </BottomSheet>
 
       {/* ─── BottomSheet notifiche (campanella header) ───────────────── */}
