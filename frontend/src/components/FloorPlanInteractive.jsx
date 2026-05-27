@@ -16,6 +16,11 @@ const STATUS_COLORS = {
   dirty:    { fill: 'rgba(234,179,8,0.18)',  stroke: '#EAB308', glow: 'rgba(234,179,8,0.22)',  text: '#FDE68A' },
   parked:   { fill: 'rgba(168,85,247,0.18)', stroke: '#A855F7', glow: 'rgba(168,85,247,0.22)', text: '#D8B4FE' },
 }
+// JP 2026-05-27: tavolo con piatti IN ATTESA (workflow_status='waiting') deve
+// avere colore distintivo. Rosa magenta che vince sullo status base.
+const WAITING_COLOR = {
+  fill: 'rgba(244,114,182,0.28)', stroke: '#EC4899', glow: 'rgba(236,72,153,0.32)', text: '#FBCFE8'
+}
 
 // Status text breve (3 lettere, daltonici-friendly: stato visibile anche senza colore)
 const STATUS_SHORT = {
@@ -42,7 +47,8 @@ function TableShape({ table, zone, selected, onSelect, onDrag, editing, indexOrd
   const rippleIdRef = useRef(0)
   const w = table.width || 60, h = table.height || 60
   const shape = table.shape || 'circle'
-  const st = STATUS_COLORS[table.status] || STATUS_COLORS.free
+  const hasWaiting = Number(table.waiting_items_count) > 0
+  const st = hasWaiting ? WAITING_COLOR : (STATUS_COLORS[table.status] || STATUS_COLORS.free)
   const isOccupied = table.status === 'occupied'
   const isReserved = table.status === 'reserved'
   const isDirty    = table.status === 'dirty'

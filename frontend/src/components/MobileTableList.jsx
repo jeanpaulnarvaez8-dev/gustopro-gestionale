@@ -10,6 +10,15 @@ const STATUS_CFG = {
   dirty:    { bg: 'bg-[var(--color-warn-soft)]',  border: 'border-[var(--color-warn)]/40',   dot: 'bg-[var(--color-warn)]',  label: 'DA PULIRE',    text: 'text-[var(--color-warn)]' },
   parked:   { bg: 'bg-[var(--color-park-soft)]',  border: 'border-[var(--color-park)]/30',   dot: 'bg-[var(--color-park)]',  label: 'IN PAUSA',     text: 'text-[var(--color-park)]' },
 }
+// JP 2026-05-27: tavolo con piatti IN ATTESA (non mandati in cucina) deve
+// avere colore distintivo. Sovrascrive lo status base quando waiting_items_count>0.
+const WAITING_CFG = {
+  bg:     'bg-[rgba(244,114,182,0.18)]',  // rosa magenta soft
+  border: 'border-pink-400/70',
+  dot:    'bg-pink-500 animate-pulse',
+  label:  'IN ATTESA',
+  text:   'text-pink-300',
+}
 
 function elapsedMin(since) {
   if (!since) return null
@@ -59,7 +68,8 @@ export default function MobileTableList({ tables, zones, onTableClick, activeZon
             {/* Griglia responsive di card tavolo */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 px-3 py-3">
               {zoneTables.map(table => {
-                const cfg = STATUS_CFG[table.status] || STATUS_CFG.free
+                const hasWaiting = Number(table.waiting_items_count) > 0
+                const cfg = hasWaiting ? WAITING_CFG : (STATUS_CFG[table.status] || STATUS_CFG.free)
                 const busy = table.status === 'occupied' || table.status === 'seated'
                 const mins = busy ? elapsedMin(table.order_opened_at || table.seated_at || table.status_changed_at) : null
                 return (

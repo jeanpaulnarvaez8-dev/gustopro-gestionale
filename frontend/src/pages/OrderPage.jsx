@@ -579,6 +579,24 @@ export default function OrderPage() {
                 const it = group.sample
                 const STAT = { pending: 'Da fare', cooking: 'In lavorazione', oven_done: 'Sfornata', ready: 'Pronto', served: 'Servito' }
                 const isWaiting = it.workflow_status === 'waiting'
+                // "+" pulsante: aggiunge 1 unita' al carrello (poi mandata in cucina
+                // al "Manda comanda"). Disponibile solo se il gruppo ha menu_item_id
+                // e nessun peso (i piatti a peso sono unici per quantita').
+                const canAddMore = !!it.menu_item_id && !it.weight_g && !it.combo_id
+                const addOne = () => {
+                  addItem(
+                    {
+                      id: it.menu_item_id,
+                      name: it.item_name,
+                      base_price: it.unit_price,
+                      pricing_type: it.pricing_type || 'fixed',
+                    },
+                    1,
+                    [],
+                    it.notes || null,
+                  )
+                  toast({ type: 'success', title: 'Aggiunto', message: `+1 ${it.item_name} nel carrello` })
+                }
                 return (
                   <div key={group.key} className={`flex items-start justify-between gap-2 text-sm py-1.5 border-b border-[var(--color-border-soft)] last:border-0 ${isWaiting ? 'bg-[var(--color-warn-soft)]/40 -mx-2 px-2 rounded' : ''}`}>
                     <span className="text-[var(--color-text)] min-w-0">
@@ -599,6 +617,19 @@ export default function OrderPage() {
                         )
                       ) : (
                         <span className="text-[var(--color-text-3)] text-[11px] whitespace-nowrap">{STAT[it.status] || it.status}</span>
+                      )}
+                      {/* JP 2026-05-27: "il x1 quando mi fa vedere quello che ce
+                          nel tavolo devo avere la possibilita' di aumentare le
+                          cose". Aggiungiamo "+" che mette +1 nel carrello. */}
+                      {canAddMore && (
+                        <button
+                          onClick={addOne}
+                          className="w-7 h-7 rounded-md bg-[var(--color-gold-soft)] border border-[var(--color-gold-ring)] text-[var(--color-gold)] hover:bg-[var(--color-gold)] hover:text-[#13181C] flex items-center justify-center active:scale-90 transition"
+                          title="Aggiungi 1 al carrello"
+                          aria-label="Aggiungi 1 al carrello"
+                        >
+                          <Plus size={14} strokeWidth={3} />
+                        </button>
                       )}
                       {canRemove && (
                         <button

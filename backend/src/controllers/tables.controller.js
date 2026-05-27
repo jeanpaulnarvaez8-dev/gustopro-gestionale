@@ -17,7 +17,8 @@ async function listTables(req, res, next) {
       `SELECT t.*,
               r.reservation_at,
               r.customer_name AS next_reservation_guest,
-              r.party_size    AS next_reservation_party_size
+              r.party_size    AS next_reservation_party_size,
+              COALESCE(w.waiting_count, 0) AS waiting_items_count
        FROM tables_with_active_order t
        LEFT JOIN LATERAL (
          SELECT
@@ -32,6 +33,15 @@ async function listTables(req, res, next) {
          ORDER BY reserved_date, reserved_time
          LIMIT 1
        ) r ON true
+       LEFT JOIN LATERAL (
+         /* JP 2026-05-27: tavoli con piatti IN ATTESA (workflow_status='waiting',
+            non ancora mandati in cucina) devono avere colore diverso. */
+         SELECT COUNT(*)::int AS waiting_count
+         FROM order_items oi
+         WHERE oi.order_id = t.active_order_id
+           AND oi.workflow_status = 'waiting'
+           AND oi.status <> 'cancelled'
+       ) w ON true
        WHERE t.tenant_id = $1
        ORDER BY t.table_number`,
       [TENANT(req)]
