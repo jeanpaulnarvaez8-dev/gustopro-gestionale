@@ -94,15 +94,18 @@ body {
 
 /* ─────────────────────────────────────────────────────────────────
    Dimensioni "giuste" su tutti i dispositivi.
-   Storia: avevamo zoom 1.15-1.25 + font 18-20px per "ingrandire tutto"
-   ma su tablet/desktop diventava ENORME. JP 2026-05-26: "non enorme
-   la grandezza giusta ok?". Riportiamo a baseline standard:
-   - 16px ovunque (Tailwind default = misure rem corrette)
-   - niente zoom (i componenti gestiscono le proprie taglie con classi
-     responsive di Tailwind tipo md:text-xl, lg:text-2xl)
-   - KDS e conto restano grossi grazie alle classi sui propri componenti.
+   - Mobile (<768px):  16px baseline, no zoom
+   - Tablet (768-1279): TUTTO PIU' PICCOLO: font 13px + zoom 0.85
+     (richiesta JP 2026-05-27 "METTILO PIU' PICCOLO IL TUTTO COL TABLET").
+   - Desktop (>=1280): 16px, no zoom
+   Lo zoom scala anche le misure in px-fissi (border, gap, padding-px),
+   non solo rem — cosi' tutto si rimpicciolisce uniformemente.
    ───────────────────────────────────────────────────────────────── */
 html { font-size: 16px; }
+@media (min-width: 768px) and (max-width: 1279px) {
+  html { font-size: 13px; }
+  #root { zoom: 0.85; }
+}
 
 /* Tutto in MAIUSCOLO (richiesta operativa). Le ricevute restano normali. */
 body, body * { text-transform: uppercase; }
