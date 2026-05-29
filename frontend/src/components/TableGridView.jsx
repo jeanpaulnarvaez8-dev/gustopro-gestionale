@@ -14,15 +14,18 @@ import { ChefHat, Clock } from 'lucide-react'
  */
 
 // Colori stato (allineati a MobileTableList). hasWaiting vince su tutto.
+// `border` + `bg` rendono ogni cella un quadrato ben definito (richiesta JP
+// 2026-05-27: sul tablet i quadrati si vedevano poco → bordo colorato spesso
+// + sfondo tinto per stato).
 const STATUS_CFG = {
-  free:     { strip: 'bg-[var(--color-ok)]',    chip: 'bg-[var(--color-ok-soft)] text-[var(--color-ok)]',     label: 'LIBERO' },
-  seated:   { strip: 'bg-[var(--color-sea)]',   chip: 'bg-[var(--color-sea-soft)] text-[var(--color-sea)]',   label: 'ACCOMODATO' },
-  occupied: { strip: 'bg-[var(--color-gold)]',  chip: 'bg-[var(--color-gold-soft)] text-[var(--color-gold)]', label: 'OCCUPATO' },
-  reserved: { strip: 'bg-[var(--color-sea)]',   chip: 'bg-[var(--color-sea-soft)] text-[var(--color-sea)]',   label: 'RISERVATO' },
-  dirty:    { strip: 'bg-[var(--color-warn)]',  chip: 'bg-[var(--color-warn-soft)] text-[var(--color-warn)]', label: 'DA PULIRE' },
-  parked:   { strip: 'bg-[var(--color-park)]',  chip: 'bg-[var(--color-park-soft)] text-[var(--color-park)]', label: 'IN PAUSA' },
+  free:     { strip: 'bg-[var(--color-ok)]',    chip: 'bg-[var(--color-ok-soft)] text-[var(--color-ok)]',     border: 'border-[var(--color-ok)]/60',        bg: 'bg-[var(--color-ok-soft)]/30',   label: 'LIBERO' },
+  seated:   { strip: 'bg-[var(--color-sea)]',   chip: 'bg-[var(--color-sea-soft)] text-[var(--color-sea)]',   border: 'border-[var(--color-sea)]/70',       bg: 'bg-[var(--color-sea-soft)]/40',  label: 'ACCOMODATO' },
+  occupied: { strip: 'bg-[var(--color-gold)]',  chip: 'bg-[var(--color-gold-soft)] text-[var(--color-gold)]', border: 'border-[var(--color-gold-ring)]',    bg: 'bg-[var(--color-gold-soft)]/40', label: 'OCCUPATO' },
+  reserved: { strip: 'bg-[var(--color-sea)]',   chip: 'bg-[var(--color-sea-soft)] text-[var(--color-sea)]',   border: 'border-[var(--color-sea)]/50',       bg: 'bg-[var(--color-sea-soft)]/30',  label: 'RISERVATO' },
+  dirty:    { strip: 'bg-[var(--color-warn)]',  chip: 'bg-[var(--color-warn-soft)] text-[var(--color-warn)]', border: 'border-[var(--color-warn)]/70',      bg: 'bg-[var(--color-warn-soft)]/40', label: 'DA PULIRE' },
+  parked:   { strip: 'bg-[var(--color-park)]',  chip: 'bg-[var(--color-park-soft)] text-[var(--color-park)]', border: 'border-[var(--color-park)]/60',      bg: 'bg-[var(--color-park-soft)]/30', label: 'IN PAUSA' },
 }
-const WAITING_CFG = { strip: 'bg-pink-500', chip: 'bg-[rgba(244,114,182,0.18)] text-pink-300', label: 'IN ATTESA' }
+const WAITING_CFG = { strip: 'bg-pink-500', chip: 'bg-[rgba(244,114,182,0.18)] text-pink-300', border: 'border-pink-400', bg: 'bg-[rgba(244,114,182,0.15)]', label: 'IN ATTESA' }
 
 function elapsedMin(since) {
   if (!since) return null
@@ -59,8 +62,9 @@ export default function TableGridView({ tables, zones, onTableClick, activeZoneI
               </span>
             </div>
 
-            {/* Griglia calendario: gap-px su sfondo bordo = linee pulite */}
-            <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 xl:grid-cols-10 gap-px bg-[var(--color-border-soft)] border-b border-[var(--color-border-soft)]">
+            {/* Griglia calendario: quadrati definiti con bordo colorato per
+                stato (gap + padding invece di hairline → si vedono meglio). */}
+            <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 xl:grid-cols-10 gap-2 p-2">
               {zoneTables.map(table => {
                 const hasWaiting = Number(table.waiting_items_count) > 0
                 const cfg = hasWaiting ? WAITING_CFG : (STATUS_CFG[table.status] || STATUS_CFG.free)
@@ -71,8 +75,8 @@ export default function TableGridView({ tables, zones, onTableClick, activeZoneI
                   <motion.button
                     key={table.id}
                     onClick={() => onTableClick(table)}
-                    whileTap={{ scale: 0.97 }}
-                    className="relative bg-[var(--color-surface)] min-h-[92px] p-1.5 flex flex-col text-left active:opacity-80 transition hover:bg-[var(--color-surface-2)]"
+                    whileTap={{ scale: 0.96 }}
+                    className={`relative min-h-[92px] p-1.5 flex flex-col text-left rounded-xl border-2 ${cfg.border} ${cfg.bg} ${hasWaiting ? 'shadow-[0_0_0_2px_rgba(244,114,182,0.35)]' : 'shadow-sm'} active:opacity-80 transition hover:brightness-110`}
                   >
                     {/* Barra stato in alto (come "evento" del calendario) */}
                     <span className={`h-1.5 w-full rounded-full ${cfg.strip} ${hasWaiting ? 'animate-pulse' : ''}`} />
