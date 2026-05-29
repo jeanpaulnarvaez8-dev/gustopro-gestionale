@@ -595,11 +595,12 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {/* Numero piatti in GRANDE — anche se e' 1 */}
+                        {/* Conteggio piatti — PICCOLO (JP 2026-05-29: era grande
+                            e si confondeva col numero del tavolo). Pill compatto. */}
                         {totalPlates > 0 && (
-                          <div className="flex flex-col items-center justify-center rounded-lg bg-[var(--color-gold)] text-[#13181C] px-2 py-1 leading-none min-w-[46px]">
-                            <span className="text-2xl font-extrabold tnum">{totalPlates}</span>
-                            <span className="text-[8px] font-bold tracking-widest">{totalPlates === 1 ? 'PIATTO' : 'PIATTI'}</span>
+                          <div className="flex items-center gap-1 rounded-md bg-[var(--color-gold-soft)] text-[var(--color-gold)] px-1.5 py-0.5 leading-none">
+                            <span className="text-xs font-bold tnum">{totalPlates}</span>
+                            <span className="text-[8px] font-semibold tracking-wider">{totalPlates === 1 ? 'PIATTO' : 'PIATTI'}</span>
                           </div>
                         )}
                         <ElapsedTick sentAt={oldest} />
