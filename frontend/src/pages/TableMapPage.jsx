@@ -172,6 +172,23 @@ export default function TableMapPage() {
   // ReservedSheet: click su tavolo prenotato → modal con scelte
   // (accomoda OR togli prenotazione).
   const [reservedSheet, setReservedSheet] = useState(null) // table object o null
+  // SeatedSheet: click su tavolo accomodato → prendi comanda OR libera.
+  const [seatedSheet, setSeatedSheet] = useState(null) // table object o null
+
+  // Libera un tavolo ACCOMODATO (status seated → free), se l'accomodamento
+  // era un errore o il cliente se n'e' andato. Admin/manager/cassa.
+  async function handleFreeSeated(table) {
+    if (!table) return
+    if (!confirm(`Liberare il tavolo ${table.table_number}? (annulla l'accomodamento)`)) return
+    try {
+      await tablesAPI.setStatus(table.id, 'free')
+      setSeatedSheet(null)
+      await loadData()
+      toast({ type: 'success', title: 'Tavolo liberato', message: `Tavolo ${table.table_number} libero` })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    }
+  }
 
   // Toglie la prenotazione di un tavolo (status reserved → free).
   // Disponibile per admin/manager/cassa: il cameriere normale di solito
@@ -259,8 +276,10 @@ export default function TableMapPage() {
       // Tavolo libero → chiedi coperti (poi accomoda → seated → ordine)
       setCoversSheet(table)
     } else if (table.status === 'seated') {
-      // Cliente gia' accomodato → vai direttamente a prendere comanda
-      navigate(`/order/${table.id}`)
+      // Cliente accomodato → sheet con scelte: prendi comanda OPPURE libera.
+      // JP 2026-05-27: "se uno fa una prenotazione e dice accomodato poi
+      // devo avere la possibilita' di toglierlo" → bottone "Libera tavolo".
+      setSeatedSheet(table)
     } else if (!table.active_order_id) {
       setCoversSheet(table)
     } else {
@@ -616,6 +635,39 @@ export default function TableMapPage() {
               className="w-full py-4 rounded-xl bg-[var(--color-err-soft)] border-2 border-[var(--color-err)]/60 text-[var(--color-err)] font-extrabold text-lg active:scale-95 transition flex items-center justify-center gap-2"
             >
               <Trash2 size={20} /> Togli prenotazione
+            </button>
+          )}
+        </div>
+      </BottomSheet>
+
+      {/* ─── BottomSheet tavolo ACCOMODATO: comanda OR libera ─────────── */}
+      <BottomSheet
+        open={!!seatedSheet}
+        onClose={() => setSeatedSheet(null)}
+        title={seatedSheet ? `Tavolo ${seatedSheet.table_number} · accomodato` : ''}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-[var(--color-text-2)] text-center">
+            Cliente accomodato. Cosa vuoi fare?
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              const t = seatedSheet
+              setSeatedSheet(null)
+              navigate(`/order/${t.id}`)
+            }}
+            className="w-full py-4 rounded-xl bg-[var(--color-gold)] text-[#13181C] font-extrabold text-lg active:scale-95 transition"
+          >
+            Prendi comanda
+          </button>
+          {['admin', 'manager', 'cashier'].includes(user?.role) && (
+            <button
+              type="button"
+              onClick={() => handleFreeSeated(seatedSheet)}
+              className="w-full py-4 rounded-xl bg-[var(--color-err-soft)] border-2 border-[var(--color-err)]/60 text-[var(--color-err)] font-extrabold text-lg active:scale-95 transition flex items-center justify-center gap-2"
+            >
+              <Trash2 size={20} /> Libera tavolo
             </button>
           )}
         </div>
