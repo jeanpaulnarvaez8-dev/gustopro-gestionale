@@ -78,8 +78,8 @@ export default function TableGridView({ tables, zones, onTableClick, activeZoneI
                     whileTap={{ scale: 0.96 }}
                     className={`relative min-h-[92px] p-1.5 flex flex-col text-left rounded-xl border-2 ${cfg.border} ${cfg.bg} ${hasWaiting ? 'shadow-[0_0_0_2px_rgba(244,114,182,0.35)]' : 'shadow-sm'} active:opacity-80 transition hover:brightness-110`}
                   >
-                    {/* Barra stato in alto (come "evento" del calendario) */}
-                    <span className={`h-1.5 w-full rounded-full ${cfg.strip} ${hasWaiting ? 'animate-pulse' : ''}`} />
+                    {/* JP 2026-05-27: tolta la strisciolina stato — basta il
+                        quadrato colorato (bordo+sfondo) che cambia da solo. */}
 
                     {/* Numero tavolo GRANDE in alto a destra (come la data) */}
                     <span
