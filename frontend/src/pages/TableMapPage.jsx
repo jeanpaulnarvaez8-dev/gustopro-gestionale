@@ -188,6 +188,21 @@ export default function TableMapPage() {
     }
   }
 
+  // Segna un tavolo LIBERO come PRENOTATO manualmente (status free → reserved).
+  // JP 2026-05-27: "io posso metterli prenotati e liberarli quando io voglio".
+  // Controllo manuale senza data/ora: lo schiaccia quando vuole.
+  async function handleMarkReserved(table) {
+    if (!table) return
+    try {
+      await tablesAPI.setStatus(table.id, 'reserved')
+      setCoversSheet(null)
+      await loadData()
+      toast({ type: 'success', title: 'Prenotato', message: `Tavolo ${table.table_number} segnato prenotato` })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    }
+  }
+
   // Toggle audio "piatto pronto" per i camerieri (default ON).
   // Persistito in localStorage tramite kdsBeep helpers.
   const [waiterSoundOn, setWaiterSoundOn] = useState(() => isWaiterSoundEnabled())
@@ -529,6 +544,18 @@ export default function TableMapPage() {
         <p className="mt-3 text-center text-xs text-[var(--color-text-3)]">
           Tocca il numero (o scrivi quanti sono) per aprire l&apos;ordine coi coperti
         </p>
+
+        {/* Segna come PRENOTATO (admin/manager/cassa): controllo manuale —
+            il tavolo diventa "riservato" finche' non lo liberi tu. */}
+        {['admin', 'manager', 'cashier'].includes(user?.role) && coversSheet && (
+          <button
+            type="button"
+            onClick={() => handleMarkReserved(coversSheet)}
+            className="mt-4 w-full py-3.5 rounded-xl bg-[var(--color-sea-soft)] border-2 border-[var(--color-sea)]/60 text-[var(--color-sea)] font-extrabold text-base active:scale-95 transition flex items-center justify-center gap-2"
+          >
+            <ClockIcon size={18} /> Segna come PRENOTATO
+          </button>
+        )}
       </BottomSheet>
 
       {/* ─── BottomSheet tavolo PRENOTATO: accomoda OR togli ─────────── */}
