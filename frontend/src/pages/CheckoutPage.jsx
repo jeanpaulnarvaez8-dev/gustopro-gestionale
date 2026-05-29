@@ -628,6 +628,31 @@ export default function CheckoutPage() {
     }
   }
 
+  // Aggiungi +1 a una voce del conto. JP 2026-05-29: "se si e' aggiunta una
+  // persona dopo devo aggiungerlo dal x1 a x2, fallo modificabile".
+  //  - Coperto / voce a prezzo libero (surcharge): aggiunge un'altra unita'
+  //    come surcharge (NON va in cucina). Si accumula a x N+1.
+  //  - Piatto vero (menu_item_id): lo ri-manda (va in cucina come nuovo piatto
+  //    per la persona aggiunta).
+  const addOneBillItem = async (item) => {
+    try {
+      if (item.is_surcharge || !item.menu_item_id) {
+        await ordersAPI.addCustomItem(orderId, {
+          custom_name: item.item_name,
+          unit_price: parseFloat(item.unit_price) || 0,
+          quantity: 1,
+        })
+      } else {
+        await ordersAPI.addItems(orderId, [{ menu_item_id: item.menu_item_id, quantity: 1 }])
+      }
+      const updated = accumulateBill(await billingAPI.preConto(orderId).then(r => r.data))
+      setBill(updated)
+      toast({ type: 'success', title: 'Aggiunto', message: `+1 ${item.item_name}` })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    }
+  }
+
   // ── Done splash con RICEVUTA STAMPABILE ───────────────────
   if (done && finalReceipt) {
     return (
@@ -766,18 +791,32 @@ export default function CheckoutPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-                    <span className="text-[var(--color-text)] text-sm tnum font-semibold">
+                    <span className="text-[var(--color-text)] text-sm tnum font-semibold w-[68px] text-right">
                       {formatPrice(item.subtotal)}
                     </span>
                     {canAddCustom && (
-                      <button
-                        onClick={() => removeBillItem(item)}
-                        className="text-[var(--color-text-3)] hover:text-[var(--color-err)] p-1.5 rounded-lg active:scale-90 transition"
-                        title="Togli dal conto"
-                        aria-label="Togli dal conto"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        {/* − togli 1 */}
+                        <button
+                          onClick={() => removeBillItem(item)}
+                          className="w-8 h-8 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] hover:text-[var(--color-err)] hover:border-[var(--color-err)]/60 flex items-center justify-center active:scale-90 transition"
+                          title="Togli 1"
+                          aria-label="Togli 1"
+                        >
+                          <Minus size={16} strokeWidth={2.5} />
+                        </button>
+                        {/* quantità corrente */}
+                        <span className="text-[var(--color-gold)] font-bold tnum text-base w-7 text-center">{item.quantity}</span>
+                        {/* + aggiungi 1 */}
+                        <button
+                          onClick={() => addOneBillItem(item)}
+                          className="w-8 h-8 rounded-lg bg-[var(--color-gold-soft)] border border-[var(--color-gold-ring)] text-[var(--color-gold)] hover:bg-[var(--color-gold)] hover:text-[#13181C] flex items-center justify-center active:scale-90 transition"
+                          title="Aggiungi 1"
+                          aria-label="Aggiungi 1"
+                        >
+                          <Plus size={16} strokeWidth={2.5} />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>

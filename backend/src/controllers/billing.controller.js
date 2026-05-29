@@ -18,7 +18,7 @@ async function generatePreConto(req, res, next) {
       `SELECT
          oi.id, oi.quantity, oi.unit_price, oi.modifier_total, oi.subtotal, oi.notes, oi.status,
          COALESCE(oi.is_surcharge, false) AS is_surcharge,
-         oi.custom_name,
+         oi.custom_name, oi.menu_item_id,
          COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name,
          COALESCE(
            json_agg(json_build_object('name', m.name, 'price_extra', oim.price_extra))
