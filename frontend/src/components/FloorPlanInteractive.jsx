@@ -11,7 +11,7 @@ const snap = v => Math.round(v / GRID) * GRID
 // Tutti i valori sono espliciti perché finiscono dentro SVG (non Tailwind).
 const STATUS_COLORS = {
   free:     { fill: 'rgba(34,197,94,0.18)',  stroke: '#22C55E', glow: 'rgba(34,197,94,0.22)',  text: '#86EFAC' },
-  occupied: { fill: 'rgba(212,175,55,0.18)', stroke: '#D4AF37', glow: 'rgba(212,175,55,0.28)', text: '#F0E9D2' },
+  occupied: { fill: 'rgba(229,72,77,0.20)',  stroke: '#E5484D', glow: 'rgba(229,72,77,0.30)',  text: '#FCA5A5' },
   reserved: { fill: 'rgba(62,122,147,0.20)', stroke: '#3E7A93', glow: 'rgba(62,122,147,0.25)', text: '#A5C8DA' },
   dirty:    { fill: 'rgba(234,179,8,0.18)',  stroke: '#EAB308', glow: 'rgba(234,179,8,0.22)',  text: '#FDE68A' },
   parked:   { fill: 'rgba(168,85,247,0.18)', stroke: '#A855F7', glow: 'rgba(168,85,247,0.22)', text: '#D8B4FE' },

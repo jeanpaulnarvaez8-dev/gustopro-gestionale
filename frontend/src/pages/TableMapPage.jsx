@@ -477,7 +477,7 @@ export default function TableMapPage() {
       {!loading && !error && (
         <div className="px-3 py-1.5 bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] flex items-center gap-3 text-[11px] text-[var(--color-text-3)] shrink-0">
           <span className="flex items-center gap-1 tnum"><StatusDot tone="ok" size="xs" />{stats.free} liberi</span>
-          <span className="flex items-center gap-1 tnum"><StatusDot tone="gold" size="xs" />{stats.occupied} occupati</span>
+          <span className="flex items-center gap-1 tnum"><StatusDot tone="err" size="xs" />{stats.occupied} occupati</span>
           <span className="text-[var(--color-text-3)]">/ {stats.total} totali</span>
 
           {/* Toggle vista: Griglia (calendario) ↔ Lista (card) */}

@@ -20,7 +20,7 @@ import { ChefHat, Clock } from 'lucide-react'
 const STATUS_CFG = {
   free:     { strip: 'bg-[var(--color-ok)]',    chip: 'bg-[var(--color-ok-soft)] text-[var(--color-ok)]',     border: 'border-[var(--color-ok)]/60',        bg: 'bg-[var(--color-ok-soft)]/30',   label: 'LIBERO' },
   seated:   { strip: 'bg-[var(--color-sea)]',   chip: 'bg-[var(--color-sea-soft)] text-[var(--color-sea)]',   border: 'border-[var(--color-sea)]/70',       bg: 'bg-[var(--color-sea-soft)]/40',  label: 'ACCOMODATO' },
-  occupied: { strip: 'bg-[var(--color-gold)]',  chip: 'bg-[var(--color-gold-soft)] text-[var(--color-gold)]', border: 'border-[var(--color-gold-ring)]',    bg: 'bg-[var(--color-gold-soft)]/40', label: 'OCCUPATO' },
+  occupied: { strip: 'bg-[var(--color-err)]',   chip: 'bg-[var(--color-err-soft)] text-[var(--color-err)]',   border: 'border-[var(--color-err)]/70',       bg: 'bg-[var(--color-err-soft)]/40',  label: 'OCCUPATO' },
   reserved: { strip: 'bg-[var(--color-sea)]',   chip: 'bg-[var(--color-sea-soft)] text-[var(--color-sea)]',   border: 'border-[var(--color-sea)]/50',       bg: 'bg-[var(--color-sea-soft)]/30',  label: 'RISERVATO' },
   dirty:    { strip: 'bg-[var(--color-warn)]',  chip: 'bg-[var(--color-warn-soft)] text-[var(--color-warn)]', border: 'border-[var(--color-warn)]/70',      bg: 'bg-[var(--color-warn-soft)]/40', label: 'DA PULIRE' },
   parked:   { strip: 'bg-[var(--color-park)]',  chip: 'bg-[var(--color-park-soft)] text-[var(--color-park)]', border: 'border-[var(--color-park)]/60',      bg: 'bg-[var(--color-park-soft)]/30', label: 'IN PAUSA' },
