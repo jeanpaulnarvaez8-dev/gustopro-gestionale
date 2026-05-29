@@ -81,8 +81,11 @@ export default function TableGridView({ tables, zones, onTableClick, activeZoneI
                     {/* Barra stato in alto (come "evento" del calendario) */}
                     <span className={`h-1.5 w-full rounded-full ${cfg.strip} ${hasWaiting ? 'animate-pulse' : ''}`} />
 
-                    {/* Numero tavolo in alto a destra (come la data) */}
-                    <span className="absolute top-2.5 right-2 text-[var(--color-text)] font-extrabold text-lg leading-none tnum">
+                    {/* Numero tavolo GRANDE in alto a destra (come la data) */}
+                    <span
+                      className="absolute top-2 right-2.5 text-[var(--color-text)] font-black text-3xl leading-none tnum"
+                      style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}
+                    >
                       {table.table_number}
                     </span>
 
