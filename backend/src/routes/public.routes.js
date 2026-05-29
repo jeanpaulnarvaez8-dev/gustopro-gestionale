@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const rateLimit = require('express-rate-limit');
-const { getPublicMenu, callWaiter } = require('../controllers/public.controller');
+const { getPublicMenu, callWaiter, getPublicReceipt } = require('../controllers/public.controller');
 
 const router = Router();
 
@@ -16,5 +16,7 @@ const callLimiter = rateLimit({
 
 router.get('/menu/:slug', getPublicMenu);
 router.post('/call-waiter/:slug', callLimiter, callWaiter);
+// Scontrino pubblico (link condivisibile via WhatsApp/SMS/Mail).
+router.get('/receipt/:id', getPublicReceipt);
 
 module.exports = router;

@@ -433,6 +433,7 @@ const publicApi = axios.create({
 export const publicAPI = {
   menu:       (slug, lang)         => publicApi.get(`/public/menu/${slug}`, { params: lang ? { lang } : {} }),
   callWaiter: (slug, tableNumber)  => publicApi.post(`/public/call-waiter/${slug}`, { table_number: tableNumber }),
+  receipt:    (id)                 => publicApi.get(`/public/receipt/${id}`),
 };
 
 // Debug helper opt-in (solo se localStorage.gustopro_dev_mode === '1')

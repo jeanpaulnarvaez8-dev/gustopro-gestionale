@@ -144,4 +144,44 @@ async function callWaiter(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getPublicMenu, callWaiter };
+// GET /public/receipt/:id — scontrino pubblico per invio digitale (link
+// condivisibile via WhatsApp/SMS/Mail). L'id e' un UUID non indovinabile.
+// Ritorna SOLO dati di visualizzazione: voci, totali, nome ristorante,
+// tavolo, data. Nessun dato sensibile (no carte, no PII cliente).
+async function getPublicReceipt(req, res, next) {
+  try {
+    const { id } = req.params;
+    // Guard: UUID valido (evita query inutili / errori 500 su id malformati).
+    if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) {
+      return res.status(404).json({ error: 'Scontrino non trovato' });
+    }
+    const { rows: [r] } = await pool.query(
+      `SELECT r.id, r.total_amount, r.tax_amount, r.is_split, r.split_index,
+              r.split_total, r.receipt_data, r.created_at,
+              t.name AS restaurant_name, t.fiscal_data,
+              COALESCE(tb.table_number::text, 'Asporto') AS table_number
+         FROM receipts r
+         JOIN tenants t ON t.id = r.tenant_id
+         JOIN orders  o ON o.id = r.order_id
+         LEFT JOIN tables tb ON tb.id = o.table_id
+        WHERE r.id = $1`,
+      [id]
+    );
+    if (!r) return res.status(404).json({ error: 'Scontrino non trovato' });
+    res.json({
+      id: r.id,
+      created_at: r.created_at,
+      total_amount: parseFloat(r.total_amount),
+      tax_amount: parseFloat(r.tax_amount),
+      is_split: r.is_split,
+      split_index: r.split_index,
+      split_total: r.split_total,
+      restaurant_name: r.restaurant_name,
+      fiscal_data: r.fiscal_data || {},
+      table_number: r.table_number,
+      items: (r.receipt_data && r.receipt_data.items) || [],
+    });
+  } catch (err) { next(err); }
+}
+
+module.exports = { getPublicMenu, callWaiter, getPublicReceipt };

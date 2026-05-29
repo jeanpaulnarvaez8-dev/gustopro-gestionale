@@ -28,6 +28,7 @@ const MenuAdminPage          = lazy(() => import('./pages/MenuAdminPage'))
 const VenueAdminPage         = lazy(() => import('./pages/VenueAdminPage'))
 const TableQRCodesPage       = lazy(() => import('./pages/TableQRCodesPage'))
 const PublicMenuPage         = lazy(() => import('./pages/PublicMenuPage'))
+const PublicReceiptPage      = lazy(() => import('./pages/PublicReceiptPage'))
 const MenuQRPage             = lazy(() => import('./pages/MenuQRPage'))
 const AuditReportPage        = lazy(() => import('./pages/AuditReportPage'))
 const DayClosePage           = lazy(() => import('./pages/DayClosePage'))
@@ -170,6 +171,10 @@ export default function App() {
               risolto dallo slug. Con o senza numero tavolo (per "chiama cameriere"). */}
           <Route path="/menu/:slug" element={<PublicMenuPage />} />
           <Route path="/menu/:slug/:table" element={<PublicMenuPage />} />
+
+          {/* Scontrino pubblico via link condivisibile (WhatsApp/SMS/Mail) —
+              PUBBLICO (no login). id = UUID non indovinabile. */}
+          <Route path="/receipt/:id" element={<PublicReceiptPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<HomeRedirect />} />

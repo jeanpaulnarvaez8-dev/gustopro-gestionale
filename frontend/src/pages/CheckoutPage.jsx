@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Banknote, CreditCard, Smartphone, Receipt, RefreshCw,
   CheckCircle2, Users, SplitSquareVertical, Pencil, Plus, Minus, X, Zap, Trash2,
-  Printer,
+  Printer, Share2,
 } from 'lucide-react'
 import { billingAPI, tablesAPI, ordersAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
@@ -653,6 +653,38 @@ export default function CheckoutPage() {
     }
   }
 
+  // Invia scontrino al cliente via link condivisibile (WhatsApp/SMS/Mail).
+  // JP 2026-05-29. Usa Web Share API (menu di condivisione nativo del tablet);
+  // fallback desktop: copia il link negli appunti.
+  const shareReceipt = async () => {
+    const rid = finalReceipt?.receipt?.id
+    if (!rid) { toast({ type: 'error', title: 'Scontrino non disponibile' }); return }
+    const url = `${window.location.origin}/receipt/${rid}`
+    const shareData = {
+      title: 'Scontrino',
+      text: `Ecco il tuo scontrino da ${finalReceipt?.bill?.tenant?.name || 'Riva Beach'} 🧾`,
+      url,
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+      } else {
+        await navigator.clipboard.writeText(url)
+        toast({ type: 'success', title: 'Link copiato', message: 'Incollalo su WhatsApp / SMS / Mail' })
+      }
+    } catch (e) {
+      // L'utente ha annullato la condivisione → non è un errore.
+      if (e?.name !== 'AbortError') {
+        try {
+          await navigator.clipboard.writeText(url)
+          toast({ type: 'success', title: 'Link copiato', message: 'Incollalo dove vuoi' })
+        } catch {
+          toast({ type: 'error', title: 'Impossibile condividere', message: url })
+        }
+      }
+    }
+  }
+
   // ── Done splash con RICEVUTA STAMPABILE ───────────────────
   if (done && finalReceipt) {
     return (
@@ -685,15 +717,24 @@ export default function CheckoutPage() {
         </div>
 
         {/* Pulsanti azione (nascosti in stampa) */}
-        <div className="no-print flex gap-3 mt-2 sticky bottom-4">
+        <div className="no-print flex flex-wrap justify-center gap-3 mt-2 sticky bottom-4">
           <Button
             variant="primary"
+            size="lg"
+            leftIcon={<Share2 size={18} />}
+            onClick={shareReceipt}
+            className="shadow-lg"
+          >
+            Invia scontrino
+          </Button>
+          <Button
+            variant="secondary"
             size="lg"
             leftIcon={<Printer size={18} />}
             onClick={() => window.print()}
             className="shadow-lg"
           >
-            Stampa ricevuta
+            Stampa
           </Button>
           <Button
             variant="secondary"
