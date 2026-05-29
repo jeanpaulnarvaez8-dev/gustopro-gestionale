@@ -11,6 +11,7 @@ import { useSocket } from '../context/SocketContext'
 import { tablesAPI, zonesAPI, assignmentsAPI } from '../lib/api'
 import FloorPlanInteractive from '../components/FloorPlanInteractive'
 import MobileTableList from '../components/MobileTableList'
+import TableGridView from '../components/TableGridView'
 import BarTableModal from '../components/BarTableModal'
 import { BottomSheet, Badge, StatusDot } from '../components/v2'
 import { storage } from '../lib/storage'
@@ -208,10 +209,10 @@ export default function TableMapPage() {
   const [waiterSoundOn, setWaiterSoundOn] = useState(() => isWaiterSoundEnabled())
   const handleToggleWaiterSound = () => setWaiterSoundOn(toggleWaiterSound())
 
-  // Toggle Lista ↔ Pianta su mobile. Persistito in localStorage per ricordare
-  // la preferenza del cameriere tra sessioni.
+  // Toggle vista tavoli: 'grid' (calendario, default JP 2026-05-27) o 'list'
+  // (card classiche). Persistito in localStorage per ricordare la preferenza.
   const [mobileView, setMobileView] = useState(() =>
-    storage.get('gustopro_mobile_view', 'list')
+    storage.get('gustopro_mobile_view', 'grid')
   )
   const switchMobileView = (v) => {
     setMobileView(v)
@@ -459,8 +460,30 @@ export default function TableMapPage() {
           <span className="flex items-center gap-1 tnum"><StatusDot tone="ok" size="xs" />{stats.free} liberi</span>
           <span className="flex items-center gap-1 tnum"><StatusDot tone="gold" size="xs" />{stats.occupied} occupati</span>
           <span className="text-[var(--color-text-3)]">/ {stats.total} totali</span>
+
+          {/* Toggle vista: Griglia (calendario) ↔ Lista (card) */}
+          <div className="ml-auto flex items-center gap-1 bg-[var(--color-surface-2)] rounded-lg p-0.5 border border-[var(--color-border-soft)]">
+            <button
+              onClick={() => switchMobileView('grid')}
+              className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 transition ${
+                mobileView === 'grid' ? 'bg-[var(--color-gold)] text-[#13181C]' : 'text-[var(--color-text-3)] hover:text-[var(--color-text)]'
+              }`}
+              title="Vista griglia (calendario)"
+            >
+              <LayoutDashboard size={13} /> Griglia
+            </button>
+            <button
+              onClick={() => switchMobileView('list')}
+              className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 transition ${
+                mobileView === 'list' ? 'bg-[var(--color-gold)] text-[#13181C]' : 'text-[var(--color-text-3)] hover:text-[var(--color-text)]'
+              }`}
+              title="Vista lista (card)"
+            >
+              <List size={13} /> Lista
+            </button>
+          </div>
           {canEdit && (
-            <button onClick={() => navigate('/floor-plan')} className="ml-auto text-[var(--color-text-3)] hover:text-[var(--color-gold)] underline">
+            <button onClick={() => navigate('/floor-plan')} className="text-[var(--color-text-3)] hover:text-[var(--color-gold)] underline">
               Editor pianta
             </button>
           )}
@@ -480,6 +503,13 @@ export default function TableMapPage() {
           <div className="flex items-center justify-center h-64">
             <Badge tone="err">{error}</Badge>
           </div>
+        ) : mobileView === 'grid' ? (
+          <TableGridView
+            tables={tables}
+            zones={zones}
+            onTableClick={handleNavigate}
+            activeZoneId={activeZone}
+          />
         ) : (
           <MobileTableList
             tables={tables}
