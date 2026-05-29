@@ -17,6 +17,8 @@ async function generatePreConto(req, res, next) {
     const { rows: items } = await pool.query(
       `SELECT
          oi.id, oi.quantity, oi.unit_price, oi.modifier_total, oi.subtotal, oi.notes, oi.status,
+         COALESCE(oi.is_surcharge, false) AS is_surcharge,
+         oi.custom_name,
          COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name,
          COALESCE(
            json_agg(json_build_object('name', m.name, 'price_extra', oim.price_extra))
@@ -28,7 +30,8 @@ async function generatePreConto(req, res, next) {
        LEFT JOIN modifiers m ON m.id = oim.modifier_id
        WHERE oi.order_id = $1 AND oi.tenant_id = $2 AND oi.status != 'cancelled'
        GROUP BY oi.id, mi.name, oi.combo_menu_name
-       ORDER BY oi.sent_at`,
+       -- JP 2026-05-27: i coperti devono uscire per primi nel conto.
+       ORDER BY (CASE WHEN oi.custom_name = 'Coperto' THEN 0 ELSE 1 END), oi.sent_at NULLS FIRST`,
       [orderId, tenantId]
     );
 
@@ -112,13 +115,19 @@ async function processPayment(req, res, next) {
     payment.change_given = changeGiven;
     payment.received_amount = parseFloat(amount);
 
-    // Snapshot receipt data
+    // Snapshot receipt data — JP 2026-05-27: voci uguali accumulate (×N) e
+    // coperti per primi. Raggruppo per nome+prezzo unitario, sommo qty/subtotal.
     const { rows: items } = await client.query(
-      `SELECT oi.quantity, oi.subtotal,
-              COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name
+      `SELECT
+         SUM(oi.quantity)::int AS quantity,
+         SUM(oi.subtotal) AS subtotal,
+         COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name,
+         BOOL_OR(oi.custom_name = 'Coperto') AS is_coperto
        FROM order_items oi
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
-       WHERE oi.order_id=$1 AND oi.tenant_id=$2 AND oi.status != 'cancelled'`,
+       WHERE oi.order_id=$1 AND oi.tenant_id=$2 AND oi.status != 'cancelled'
+       GROUP BY COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item'), oi.unit_price
+       ORDER BY (CASE WHEN BOOL_OR(oi.custom_name = 'Coperto') THEN 0 ELSE 1 END), MIN(oi.sent_at) NULLS FIRST`,
       [order_id, tenantId]
     );
 

@@ -23,6 +23,47 @@ const PAY_METHODS = [
 // Colori "persone" per split — palette Riva (gold + accenti mediterranei)
 const PERSON_COLORS = ['#D4AF37','#3E7A93','#4A7A5C','#C9A96E','#B85C3C','#A855F7']
 
+// JP 2026-05-27: "gli ordini uguali si devono accumulare e i coperti devono
+// uscire per primo". Accumula le voci identiche del conto in una sola riga
+// con quantita'/subtotale sommati. Chiave merge: nome + prezzo unitario +
+// note + firma modificatori. Conserva gli id originali (ids[]) per la
+// rimozione e l'id rappresentativo (primo) per l'assegnazione split.
+// L'ordine in ingresso e' gia' coperti-first dal backend: lo preserviamo
+// creando i gruppi al primo incontro.
+function accumulateBillItems(items) {
+  if (!Array.isArray(items)) return []
+  const groups = []
+  const index = new Map()
+  for (const it of items) {
+    const modKey = Array.isArray(it.modifiers) && it.modifiers.length > 0
+      ? JSON.stringify(it.modifiers.map(m => `${m.name}:${m.price_extra}`).sort())
+      : ''
+    const key = `${it.item_name}|${it.unit_price}|${it.notes || ''}|${modKey}`
+    let g = index.get(key)
+    if (!g) {
+      g = {
+        ...it,
+        ids: [it.id],
+        quantity: Number(it.quantity || 0),
+        subtotal: parseFloat(it.subtotal || 0),
+      }
+      index.set(key, g)
+      groups.push(g)
+    } else {
+      g.ids.push(it.id)
+      g.quantity += Number(it.quantity || 0)
+      g.subtotal = parseFloat(g.subtotal) + parseFloat(it.subtotal || 0)
+    }
+  }
+  return groups
+}
+
+// Applica l'accumulo all'oggetto bill restituito dal backend.
+function accumulateBill(data) {
+  if (!data) return data
+  return { ...data, items: accumulateBillItems(data.items) }
+}
+
 const TONE_BTN = {
   ok:   'border-[var(--color-ok)]/60   text-[var(--color-ok)]   bg-[var(--color-ok-soft)]',
   sea:  'border-[var(--color-sea)]/60  text-[var(--color-sea)]  bg-[var(--color-sea-soft)]',
@@ -479,7 +520,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     billingAPI.preConto(orderId)
-      .then(r => setBill(r.data))
+      .then(r => setBill(accumulateBill(r.data)))
       .catch(() => setError('Ordine non trovato'))
       .finally(() => setLoading(false))
   }, [orderId])
@@ -513,7 +554,7 @@ export default function CheckoutPage() {
         register,
       }).then(r => r.data)
 
-      const updatedBill = await billingAPI.preConto(orderId).then(r => r.data)
+      const updatedBill = accumulateBill(await billingAPI.preConto(orderId).then(r => r.data))
       setBill(updatedBill)
 
       if (updatedBill.payment_status === 'paid') {
@@ -550,7 +591,7 @@ export default function CheckoutPage() {
     setAddingItem(true)
     try {
       await ordersAPI.addCustomItem(orderId, { custom_name: name, unit_price: price, quantity: qty })
-      const updatedBill = await billingAPI.preConto(orderId).then(r => r.data)
+      const updatedBill = accumulateBill(await billingAPI.preConto(orderId).then(r => r.data))
       setBill(updatedBill)
       setCustomName(''); setCustomPrice(''); setCustomQty(1); setShowAddItem(false)
       toast({ type: 'success', title: 'Voce aggiunta', message: `${name} · ${formatPrice(price * qty)}` })
@@ -563,7 +604,14 @@ export default function CheckoutPage() {
 
   // Togli un piatto dal conto. Admin/manager: diretto. Cassa/cameriere: PIN responsabile.
   const removeBillItem = async (item) => {
-    if (!window.confirm(`Togliere "${item.item_name}" dal conto?`)) return
+    // item ora e' un GRUPPO accumulato (ids[] = voci sottostanti). Togliamo
+    // 1 unita' alla volta: rimuoviamo l'ultimo id del gruppo (x3 -> x2 -> ...).
+    const groupIds = Array.isArray(item.ids) && item.ids.length ? item.ids : [item.id]
+    const targetId = groupIds[groupIds.length - 1]
+    const msg = groupIds.length > 1
+      ? `Togliere 1 di "${item.item_name}" dal conto? (restano ${groupIds.length - 1})`
+      : `Togliere "${item.item_name}" dal conto?`
+    if (!window.confirm(msg)) return
     let override
     if (!['admin', 'manager'].includes(user?.role)) {
       const pin = window.prompt('PIN del responsabile per togliere il piatto:')
@@ -571,8 +619,8 @@ export default function CheckoutPage() {
       override = { pin, reason: 'Rimozione dal conto (cassa)' }
     }
     try {
-      await ordersAPI.cancelItem(orderId, item.id, override)
-      const updated = await billingAPI.preConto(orderId).then(r => r.data)
+      await ordersAPI.cancelItem(orderId, targetId, override)
+      const updated = accumulateBill(await billingAPI.preConto(orderId).then(r => r.data))
       setBill(updated)
       toast({ type: 'success', title: 'Piatto tolto dal conto', message: item.item_name })
     } catch (e) {
