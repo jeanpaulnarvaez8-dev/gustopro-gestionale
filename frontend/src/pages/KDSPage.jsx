@@ -264,7 +264,11 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
           const newItems = order.items.map(it =>
             it.id === itemId ? { ...it, status } : it
           )
-          const active = newItems.filter(it => it.status === 'pending' || it.status === 'cooking')
+          // JP 2026-05-29: la comanda deve restare visibile in cucina (anche
+          // con voci in PRONTO) fino a che il cameriere non fa SERVITO.
+          // Solo allora sparisce. Quindi consideriamo "active" tutto cio' che
+          // NON e' served/cancelled (incluso 'ready').
+          const active = newItems.filter(it => it.status !== 'served' && it.status !== 'cancelled')
           if (active.length === 0) return null
           return { ...order, items: newItems }
         })
@@ -305,11 +309,13 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
     if (!nextStatus) return
     setUpdating(prev => { const n = { ...prev, [itemId]: true }; updatingRef.current = n; return n })
 
-    // Optimistic update
+    // Optimistic update — vedi commento su onItemUpdated: la comanda resta
+    // visibile in cucina anche dopo PRONTO, sparisce solo quando il cameriere
+    // fa SERVITO (status=served).
     setOrders(prev => {
       const updated = prev.map(order => {
         const newItems = order.items.map(it => it.id === itemId ? { ...it, status: nextStatus } : it)
-        const active = newItems.filter(it => it.status === 'pending' || it.status === 'cooking')
+        const active = newItems.filter(it => it.status !== 'served' && it.status !== 'cancelled')
         if (active.length === 0) return null
         return { ...order, items: newItems }
       })
