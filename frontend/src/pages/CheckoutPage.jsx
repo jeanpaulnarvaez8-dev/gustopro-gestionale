@@ -503,6 +503,11 @@ export default function CheckoutPage() {
   const [customPrice, setCustomPrice] = useState('')
   const [customQty, setCustomQty]     = useState(1)
   const [addingItem, setAddingItem]   = useState(false)
+  // Sconto (JP 2026-05-31): applica sconto al conto come voce negativa.
+  const [showDiscount, setShowDiscount] = useState(false)
+  const [discountAmount, setDiscountAmount] = useState('')
+  const [discountReason, setDiscountReason] = useState('')
+  const [applyingDiscount, setApplyingDiscount] = useState(false)
 
   // Cassa fisica: persistita in localStorage per device. Default null,
   // l'utente la seleziona dalla pillola in alto. Inviata al backend con
@@ -599,6 +604,33 @@ export default function CheckoutPage() {
       toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
     } finally {
       setAddingItem(false)
+    }
+  }
+
+  // Applica uno sconto al conto come riga negativa "Sconto …". JP 2026-05-31.
+  // Si appoggia ad addCustomItem (gia' riservato a cashier/admin/manager) con
+  // unit_price negativo. Il backend ora accetta valori negativi per surcharge.
+  const handleApplyDiscount = async () => {
+    const amount = parseFloat(discountAmount)
+    if (!(amount > 0)) { toast({ type: 'warning', title: 'Inserisci un importo in €' }); return }
+    // Cap di sicurezza: non oltre il totale corrente (sconto > totale → totale negativo).
+    const currentTotal = parseFloat(bill?.total_amount || 0)
+    if (amount > currentTotal) {
+      if (!window.confirm(`Lo sconto (${amount.toFixed(2)} €) e' superiore al totale (${currentTotal.toFixed(2)} €). Continuare lo stesso?`)) return
+    }
+    const reason = (discountReason || '').trim()
+    const label = reason ? `Sconto · ${reason}`.slice(0, 120) : 'Sconto'
+    setApplyingDiscount(true)
+    try {
+      await ordersAPI.addCustomItem(orderId, { custom_name: label, unit_price: -amount, quantity: 1 })
+      const updatedBill = accumulateBill(await billingAPI.preConto(orderId).then(r => r.data))
+      setBill(updatedBill)
+      setDiscountAmount(''); setDiscountReason(''); setShowDiscount(false)
+      toast({ type: 'success', title: 'Sconto applicato', message: `-${formatPrice(amount)}` })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    } finally {
+      setApplyingDiscount(false)
     }
   }
 
@@ -940,6 +972,68 @@ export default function CheckoutPage() {
                     onClick={handleAddCustom}
                   >
                     Aggiungi al conto{parseFloat(customPrice) > 0 ? ` · ${formatPrice(parseFloat(customPrice) * customQty)}` : ''}
+                  </Button>
+                </Card>
+              )
+            )}
+
+            {/* APPLICA SCONTO — JP 2026-05-31: voce negativa nel conto. */}
+            {canAddCustom && (
+              !showDiscount ? (
+                <button
+                  onClick={() => setShowDiscount(true)}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-[var(--color-err-soft)] border-2 border-[var(--color-err)]/50 text-[var(--color-err)] text-base font-extrabold uppercase tracking-wide hover:brightness-110 active:scale-[0.98] transition"
+                >
+                  <Minus size={20} strokeWidth={3} /> Applica sconto
+                </button>
+              ) : (
+                <Card padding="md" className="flex flex-col gap-3 border-2 border-[var(--color-err)]/60">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--color-text)] text-base font-bold uppercase tracking-wider">
+                      Applica sconto
+                    </span>
+                    <button
+                      onClick={() => { setShowDiscount(false); setDiscountAmount(''); setDiscountReason('') }}
+                      className="text-[var(--color-text-3)] hover:text-[var(--color-err)] p-1"
+                      aria-label="Chiudi"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Importo sconto in € */}
+                  <div className="flex items-center gap-2 bg-[var(--color-canvas)] border-2 border-[var(--color-border-strong)] focus-within:border-[var(--color-err)] rounded-xl px-4 py-3">
+                    <span className="text-[var(--color-err)] text-3xl font-bold">-€</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      value={discountAmount}
+                      onChange={e => setDiscountAmount(e.target.value)}
+                      placeholder="0,00"
+                      autoFocus
+                      className="w-full bg-transparent text-[var(--color-text)] text-4xl font-extrabold text-right outline-none tnum"
+                    />
+                  </div>
+
+                  {/* Motivo opzionale (es. "cliente abituale") */}
+                  <input
+                    value={discountReason}
+                    onChange={e => setDiscountReason(e.target.value)}
+                    placeholder="Motivo (opzionale, es. cliente abituale)"
+                    className="bg-[var(--color-canvas)] border border-[var(--color-border-strong)] focus:border-[var(--color-err)] rounded-lg px-3 py-2.5 text-[var(--color-text)] text-base outline-none transition"
+                  />
+
+                  <Button
+                    size="lg"
+                    fullWidth
+                    loading={applyingDiscount}
+                    disabled={!(parseFloat(discountAmount) > 0)}
+                    leftIcon={<Minus size={18} />}
+                    onClick={handleApplyDiscount}
+                  >
+                    Applica sconto{parseFloat(discountAmount) > 0 ? ` · -${formatPrice(parseFloat(discountAmount))}` : ''}
                   </Button>
                 </Card>
               )

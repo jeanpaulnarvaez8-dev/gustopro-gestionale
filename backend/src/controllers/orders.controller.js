@@ -101,7 +101,10 @@ async function insertComboItem(client, order_id, item, userId, tenantId) {
 async function insertSurchargeItem(client, order_id, { label, unit_price, quantity = 1 }, userId, tenantId) {
   const qty = Math.max(1, parseInt(quantity, 10) || 1);
   const price = Math.round((parseFloat(unit_price) || 0) * 100) / 100;
-  if (!(price >= 0)) throw { status: 400, message: 'Prezzo voce non valido' };
+  // JP 2026-05-31: prezzo NEGATIVO ammesso per gli sconti (label "Sconto …").
+  // Il privilegio sta sul route (solo cashier/manager/admin possono usare
+  // type='custom' nel POST /orders/:id/items, vedi addItems).
+  if (!Number.isFinite(price)) throw { status: 400, message: 'Prezzo voce non valido' };
   const subtotal = Math.round(price * qty * 100) / 100;
   const name = String(label || 'Extra').trim().slice(0, 120) || 'Extra';
   const { rows: [oi] } = await client.query(
