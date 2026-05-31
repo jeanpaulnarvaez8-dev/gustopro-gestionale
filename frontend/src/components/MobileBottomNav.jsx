@@ -34,7 +34,18 @@ export default function MobileBottomNav() {
   if (!user) return null
 
   let tabs
-  if (user.role === 'kitchen') tabs = KITCHEN_TABS
+  if (user.role === 'kitchen') {
+    // JP 2026-05-31: il pizzaiolo (sub_role='pizzeria') vedeva /kds generico
+    // dove le pizze non venivano emphasizzate ne filtrate → "non arrivano
+    // le pizze". Adesso la sua tab punta direttamente a /kds/pizzeria.
+    if (user.sub_role === 'pizzeria') {
+      tabs = [{ path: '/kds/pizzeria', icon: KITCHEN_TABS[0].icon, label: 'Pizzeria' }]
+    } else if (user.sub_role === 'pasticceria') {
+      tabs = [{ path: '/kds/pasticceria', icon: KITCHEN_TABS[0].icon, label: 'Pasticceria' }]
+    } else {
+      tabs = KITCHEN_TABS
+    }
+  }
   else if (user.role === 'waiter') tabs = WAITER_TABS
   else if (user.role === 'cashier') tabs = CASHIER_TABS
   else tabs = ADMIN_TABS // admin, manager
