@@ -211,6 +211,9 @@ export const ordersAPI = {
   // cancelItem: opzionalmente passa override = { pin, reason } se chi
   // chiama non e' manager/admin (servira' PIN responsabile fisico).
   cancelItem: (id, itemId, override)   => api.delete(`/orders/${id}/items/${itemId}`, { data: override ? { override } : undefined }),
+  // Modifica prezzo unitario di una voce (sconto inline su conto). Cassa+.
+  setItemPrice: (id, itemId, unit_price) =>
+                  api.patch(`/orders/${id}/items/${itemId}/price`, { unit_price }),
 };
 
 // KDS — cucina principale (default station=cucina; supporta anche

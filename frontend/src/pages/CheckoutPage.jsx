@@ -508,6 +508,11 @@ export default function CheckoutPage() {
   const [discountAmount, setDiscountAmount] = useState('')
   const [discountReason, setDiscountReason] = useState('')
   const [applyingDiscount, setApplyingDiscount] = useState(false)
+  // Edit prezzo inline (JP 2026-05-31): tap sul prezzo di una riga del conto
+  // per cambiarlo direttamente. editingPriceFor = group representative id.
+  const [editingPriceFor, setEditingPriceFor] = useState(null)
+  const [editPriceInput, setEditPriceInput] = useState('')
+  const [editingPrice, setEditingPrice] = useState(false)
 
   // Cassa fisica: persistita in localStorage per device. Default null,
   // l'utente la seleziona dalla pillola in alto. Inviata al backend con
@@ -631,6 +636,45 @@ export default function CheckoutPage() {
       toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
     } finally {
       setApplyingDiscount(false)
+    }
+  }
+
+  // Tap su un prezzo nel conto per modificarlo direttamente. JP 2026-05-31.
+  // L'utente scrive il NUOVO TOTALE per la riga (subtotale del gruppo); il
+  // sistema calcola il unit_price = nuovoTotale / qty_totale e lo applica a
+  // tutti gli order_items sottostanti del gruppo.
+  const startEditPrice = (item) => {
+    setEditingPriceFor(item.id)
+    setEditPriceInput(String(parseFloat(item.subtotal).toFixed(2)))
+  }
+  const cancelEditPrice = () => {
+    setEditingPriceFor(null); setEditPriceInput('')
+  }
+  const applyPriceEdit = async (item) => {
+    const newSubtotal = parseFloat(editPriceInput)
+    if (!Number.isFinite(newSubtotal)) {
+      toast({ type: 'warning', title: 'Inserisci un importo valido' }); return
+    }
+    if (newSubtotal < 0) {
+      toast({ type: 'warning', title: 'Il prezzo non puo’ essere negativo' }); return
+    }
+    const totalQty = Number(item.quantity) || 1
+    const newUnitPrice = Math.round((newSubtotal / totalQty) * 100) / 100
+    const ids = Array.isArray(item.ids) && item.ids.length ? item.ids : [item.id]
+    setEditingPrice(true)
+    try {
+      // Applica il nuovo unit_price a tutti gli order_items sottostanti.
+      for (const id of ids) {
+        await ordersAPI.setItemPrice(orderId, id, newUnitPrice)
+      }
+      const updatedBill = accumulateBill(await billingAPI.preConto(orderId).then(r => r.data))
+      setBill(updatedBill)
+      cancelEditPrice()
+      toast({ type: 'success', title: 'Prezzo aggiornato', message: `${item.item_name} · ${formatPrice(newSubtotal)}` })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    } finally {
+      setEditingPrice(false)
     }
   }
 
@@ -864,10 +908,52 @@ export default function CheckoutPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-                    <span className="text-[var(--color-text)] text-sm tnum font-semibold w-[68px] text-right">
-                      {formatPrice(item.subtotal)}
-                    </span>
-                    {canAddCustom && (
+                    {/* Prezzo cliccabile (solo cassa+): tap → input inline */}
+                    {canAddCustom && editingPriceFor === item.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          autoFocus
+                          value={editPriceInput}
+                          onChange={e => setEditPriceInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') applyPriceEdit(item)
+                            if (e.key === 'Escape') cancelEditPrice()
+                          }}
+                          className="w-[80px] bg-[var(--color-canvas)] border-2 border-[var(--color-gold)] rounded-md px-2 py-1 text-[var(--color-text)] text-sm font-bold text-right outline-none tnum"
+                        />
+                        <button
+                          onClick={() => applyPriceEdit(item)}
+                          disabled={editingPrice}
+                          className="w-7 h-7 rounded-md bg-[var(--color-gold)] text-[#13181C] flex items-center justify-center active:scale-90 disabled:opacity-50"
+                          title="Conferma"
+                          aria-label="Conferma prezzo"
+                        >
+                          <CheckCircle2 size={16} strokeWidth={2.5} />
+                        </button>
+                        <button
+                          onClick={cancelEditPrice}
+                          className="w-7 h-7 rounded-md bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] flex items-center justify-center active:scale-90"
+                          title="Annulla"
+                          aria-label="Annulla"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => canAddCustom && startEditPrice(item)}
+                        disabled={!canAddCustom}
+                        className={`text-[var(--color-text)] text-sm tnum font-semibold w-[68px] text-right ${canAddCustom ? 'hover:text-[var(--color-gold)] hover:underline decoration-dotted cursor-pointer' : 'cursor-default'}`}
+                        title={canAddCustom ? 'Tocca per modificare il prezzo' : ''}
+                      >
+                        {formatPrice(item.subtotal)}
+                      </button>
+                    )}
+                    {canAddCustom && editingPriceFor !== item.id && (
                       <div className="flex items-center gap-1">
                         {/* − togli 1 */}
                         <button

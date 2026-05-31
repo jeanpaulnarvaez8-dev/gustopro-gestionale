@@ -892,4 +892,44 @@ async function transferOrder(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder };
+// ── setItemPrice ─────────────────────────────────────────────
+// JP 2026-05-31: la cassa puo' cliccare sul prezzo di una voce del conto e
+// modificarlo (sconto specifico, correzione, prezzo concordato). Aggiorna
+// unit_price e ricalcola subtotal = unit_price * quantity. Permesso solo a
+// cashier/admin/manager (gate sul route).
+async function setItemPrice(req, res, next) {
+  try {
+    const { id: order_id, itemId } = req.params;
+    const tenantId = TENANT(req);
+    const { unit_price } = req.body || {};
+    const price = Math.round((parseFloat(unit_price) || 0) * 100) / 100;
+    if (!Number.isFinite(price)) {
+      return res.status(400).json({ error: 'Prezzo non valido' });
+    }
+    // Verifica che l'item appartenga all'ordine + tenant; ricava qty per
+    // ricalcolare il subtotal in modo coerente con la riga.
+    const { rows: [item] } = await pool.query(
+      `SELECT oi.id, oi.quantity, oi.modifier_total, oi.status, o.status AS order_status
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+        WHERE oi.id = $1 AND oi.order_id = $2 AND oi.tenant_id = $3`,
+      [itemId, order_id, tenantId]
+    );
+    if (!item) return res.status(404).json({ error: 'Voce non trovata' });
+    if (item.status === 'cancelled') return res.status(400).json({ error: 'Voce cancellata' });
+    if (item.order_status !== 'open') return res.status(400).json({ error: 'Ordine chiuso, non modificabile' });
+    const qty = Number(item.quantity) || 1;
+    const modTot = Number(item.modifier_total) || 0;
+    const newSubtotal = Math.round((price + modTot) * qty * 100) / 100;
+    const { rows: [updated] } = await pool.query(
+      `UPDATE order_items
+          SET unit_price = $1, subtotal = $2
+        WHERE id = $3 AND tenant_id = $4
+        RETURNING id, unit_price, subtotal, quantity`,
+      [price, newSubtotal, itemId, tenantId]
+    );
+    res.json(updated);
+  } catch (err) { next(err); }
+}
+
+module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice };
