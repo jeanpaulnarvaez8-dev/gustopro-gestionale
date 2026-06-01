@@ -127,6 +127,10 @@ async function pushToPizzaioli(tenantId, tableNumber, qty, orderId) {
         AND role = 'kitchen' AND sub_role = 'pizzeria'`,
     [tenantId]
   );
+  // JP 2026-06-01: emetti subito un socket dedicato cosi' la KDS pizzeria
+  // (Simone) lo intercetta in tempo reale e suona il beep ANCHE su pizze
+  // aggiunte a un ordine gia' aperto (prima il beep partiva solo su new-order).
+  getIO()?.emit('pizza-added', { orderId, qty, tableNumber });
   if (pizzaioli.length === 0) return;
   const pushService = require('../services/pushService');
   await Promise.all(pizzaioli.map(p => pushService.sendToUser(p.id, {

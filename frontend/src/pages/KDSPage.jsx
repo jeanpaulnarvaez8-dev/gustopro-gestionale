@@ -256,6 +256,16 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
       loadOrders()
     }
     const onItemAdded = () => loadOrders()
+    // JP 2026-06-01: il backend emette 'pizza-added' quando spinge una nuova
+    // pizza al pizzaiolo (sia su new-order che su addItems). Simone (focusPizza)
+    // suona il beep su quell'evento, cosi' sente immediatamente la pizza anche
+    // se e' stata AGGIUNTA a un ordine gia' aperto.
+    const onPizzaAdded = () => {
+      if (focusPizza) {
+        try { playNewOrderBeep() } catch {}
+      }
+      loadOrders()
+    }
 
     const onItemUpdated = ({ orderId, itemId, status }) => {
       setOrders(prev => {
@@ -280,6 +290,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
 
     socket.on('new-order', onNewOrder)
     socket.on('order-item-added', onItemAdded)
+    socket.on('pizza-added', onPizzaAdded)
     socket.on('item-status-updated', onItemUpdated)
     socket.on('workflow-status-changed', onWorkflowChanged)
     socket.on('item-released-to-production', onWorkflowChanged)
@@ -290,6 +301,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
     return () => {
       socket.off('new-order', onNewOrder)
       socket.off('order-item-added', onItemAdded)
+      socket.off('pizza-added', onPizzaAdded)
       socket.off('item-status-updated', onItemUpdated)
       socket.off('workflow-status-changed', onWorkflowChanged)
       socket.off('item-released-to-production', onWorkflowChanged)
