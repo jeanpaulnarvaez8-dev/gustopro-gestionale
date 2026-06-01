@@ -160,6 +160,13 @@ export default function OrderPage() {
   // Coperti dalla URL (?covers=N)
   const searchParams = new URLSearchParams(window.location.search)
   const initialCovers = parseInt(searchParams.get('covers'), 10) || 1
+  // JP 2026-06-01: incroci tavoli — ?cross=id1,id2,id3 → ogni item del
+  // carrello viene replicato anche sui tavoli incroci (ciascuno mantiene
+  // il proprio conto). I tavoli incroci devono gia' avere un ordine
+  // attivo (creato in TableMapPage.confirmCrossTables).
+  const crossTableIds = (searchParams.get('cross') || '')
+    .split(',').map(s => s.trim()).filter(Boolean)
+  const [crossOrders, setCrossOrders] = useState([]) // array di {tableId,orderId,tableNumber}
 
   const [table, setTableData]         = useState(null)
   const [categories, setCategories]   = useState([])
@@ -291,6 +298,14 @@ export default function OrderPage() {
         if (!t) { navigate('/tables', { replace: true }); return }
         setTableData(t)
         setTable(t.id, t.table_number)
+        // Tavoli incroci: popola crossOrders con i tavoli ?cross=ids.
+        if (crossTableIds.length > 0) {
+          const cross = crossTableIds
+            .map(id => tablesRes.data.find(x => x.id === id))
+            .filter(x => x && x.active_order_id)
+            .map(x => ({ tableId: x.id, orderId: x.active_order_id, tableNumber: x.table_number }))
+          setCrossOrders(cross)
+        }
         setCategories(catsRes.data)
         setCombos(combosRes.data.filter(c => c.is_active !== false))
         if (catsRes.data.length > 0) setActiveCategory(catsRes.data[0].id)
@@ -365,6 +380,7 @@ export default function OrderPage() {
 
       const items = [...regularItems, ...comboItems]
 
+      // Tavolo principale: addItems se ordine aperto, altrimenti create.
       if (table?.active_order_id) {
         await ordersAPI.addItems(table.active_order_id, items)
       } else {
@@ -372,10 +388,8 @@ export default function OrderPage() {
           await ordersAPI.create({ table_id: tableId, items, covers })
           await tablesAPI.setStatus(tableId, 'occupied').catch(() => {})
         } catch (e) {
-          // 409 = race condition: un altro cameriere ha appena aperto il
-          // tavolo prima di noi (codice 32, o stato locale stale). Il backend
-          // ci passa existing_order_id → trasformiamo il create in addItems
-          // sullo stesso ordine. Niente DOPPIO conto.
+          // 409 race: altro cameriere ha aperto il tavolo → addItems sullo
+          // stesso ordine (niente doppio conto).
           const existing = e?.response?.data?.existing_order_id
           if (e?.response?.status === 409 && existing) {
             await ordersAPI.addItems(existing, items)
@@ -388,6 +402,17 @@ export default function OrderPage() {
             throw e
           }
         }
+      }
+      // JP 2026-06-01: REPLICA su tavoli INCROCI. Ogni cross order riceve
+      // gli stessi items in parallelo. Ciascun tavolo mantiene il proprio
+      // conto (sono ordini distinti). La cucina li raggruppera' via Abbina.
+      if (crossOrders.length > 0 && items.length > 0) {
+        await Promise.all(crossOrders.map(c =>
+          ordersAPI.addItems(c.orderId, items).catch(err => {
+            toast({ type: 'warning', title: `Tav ${c.tableNumber}: errore replica`, message: err?.response?.data?.error || '' })
+          })
+        ))
+        toast({ type: 'success', title: `Incrocio: replicato su ${crossOrders.length + 1} tavoli` })
       }
 
       clearCart()
@@ -421,6 +446,12 @@ export default function OrderPage() {
     <div className="min-h-screen flex flex-col">
 
       {/* ─── Header ─────────────────────────────────────────────── */}
+      {/* Banner incroci attivo — JP 2026-06-01 */}
+      {crossOrders.length > 0 && (
+        <div className="bg-[var(--color-gold)] text-[#13181C] px-3 py-1.5 text-xs font-bold flex items-center gap-2 sticky top-0 z-30">
+          🔗 INCROCIO: Tav {table?.table_number} + {crossOrders.map(c => c.tableNumber).join(' + ')} · ogni piatto va su tutti
+        </div>
+      )}
       <header className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-3 sm:px-4 py-3 flex items-center gap-3 sticky top-0 z-20">
         <button
           onClick={() => navigate('/tables')}

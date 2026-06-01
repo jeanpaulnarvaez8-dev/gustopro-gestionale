@@ -245,7 +245,69 @@ export default function TableMapPage() {
     storage.set('gustopro_mobile_view', v)
   }
 
+  // JP 2026-06-01: modalita' "Incrocia tavoli". Quando attiva, il tap sui
+  // tavoli li SELEZIONA invece di aprire la comanda. Quando si conferma,
+  // si apre una comanda condivisa per tutti i tavoli scelti — ogni piatto
+  // aggiunto viene replicato su tutti (ognuno mantiene il proprio conto).
+  const [crossMode, setCrossMode] = useState(false)
+  const [crossSelected, setCrossSelected] = useState([]) // array di table id
+  const toggleCrossSelect = (table) => {
+    setCrossSelected(prev =>
+      prev.includes(table.id) ? prev.filter(id => id !== table.id) : [...prev, table.id]
+    )
+  }
+  const exitCrossMode = () => { setCrossMode(false); setCrossSelected([]) }
+  // Conferma incroci: per ogni tavolo libero crea un ordine (covers=1), poi
+  // naviga al primo con ?cross=otherIds. OrderPage gestisce la replica items.
+  async function confirmCrossTables() {
+    if (crossSelected.length < 2) {
+      toast({ type: 'warning', title: 'Seleziona almeno 2 tavoli' })
+      return
+    }
+    const selected = crossSelected.map(id => tables.find(t => t.id === id)).filter(Boolean)
+    // Risolvi/crea ordine attivo per ciascun tavolo
+    try {
+      const ordered = []
+      for (const t of selected) {
+        let orderId = t.active_order_id
+        if (!orderId) {
+          // Crea ordine vuoto (covers=1, sara' aggiornato in cucina)
+          const { data } = await (await import('../lib/api')).ordersAPI.create({
+            table_id: t.id, items: [], covers: 1, order_type: 'table',
+          })
+          orderId = data.order_id || data.id
+        }
+        ordered.push({ tableId: t.id, orderId, tableNumber: t.table_number })
+      }
+      // Memorizza il "cross group" in storage per OrderPage
+      try {
+        storage.set('gustopro_cross_group', {
+          createdAt: Date.now(),
+          tables: ordered,
+        })
+      } catch {}
+      exitCrossMode()
+      await loadData()
+      const first = ordered[0]
+      const otherIds = ordered.slice(1).map(o => o.tableId).join(',')
+      navigate(`/order/${first.tableId}?cross=${otherIds}`)
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore incroci', message: e?.response?.data?.error || 'Riprova' })
+    }
+  }
+
   function handleNavigate(table) {
+    // JP 2026-06-01: in modalita' incroci il tap SELEZIONA il tavolo invece
+    // di aprire la comanda. Solo tavoli liberi/occupati possono essere
+    // incrociati (no dirty/reserved).
+    if (crossMode) {
+      if (table.status === 'dirty' || table.status === 'reserved') {
+        toast({ type: 'warning', title: 'Tavolo non disponibile per incroci' })
+        return
+      }
+      toggleCrossSelect(table)
+      return
+    }
     // SBARAZZO (priorità a tutti): qualsiasi utente — sala, bar, cassa, admin —
     // può pulire un tavolo "da pulire" (dirty). Messo PER PRIMO così nessun
     // ruolo viene intercettato prima (es. il modal bar dei bartender).
@@ -482,12 +544,45 @@ export default function TableMapPage() {
         </div>
       )}
 
+      {/* Barra "Incrocia tavoli" — sticky in alto quando attiva */}
+      {crossMode && (
+        <div className="px-3 py-2 bg-[var(--color-gold)] text-[#13181C] flex items-center gap-2 shrink-0 z-20">
+          <span className="font-extrabold text-sm flex-1">
+            🔗 INCROCIA: tocca i tavoli da unire ({crossSelected.length} scelti)
+          </span>
+          <button
+            onClick={confirmCrossTables}
+            disabled={crossSelected.length < 2}
+            className="px-3 py-1.5 rounded-lg bg-[#13181C] text-[var(--color-gold)] font-bold text-xs disabled:opacity-40 active:scale-95"
+          >
+            Conferma
+          </button>
+          <button
+            onClick={exitCrossMode}
+            className="px-3 py-1.5 rounded-lg bg-black/30 text-[#13181C] font-bold text-xs active:scale-95"
+          >
+            Annulla
+          </button>
+        </div>
+      )}
+
       {/* Stats riga riepilogo (libero/occupato/totale) */}
       {!loading && !error && (
         <div className="px-3 py-1.5 bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] flex items-center gap-3 text-[11px] text-[var(--color-text-3)] shrink-0">
           <span className="flex items-center gap-1 tnum"><StatusDot tone="ok" size="xs" />{stats.free} liberi</span>
           <span className="flex items-center gap-1 tnum"><StatusDot tone="err" size="xs" />{stats.occupied} occupati</span>
           <span className="text-[var(--color-text-3)]">/ {stats.total} totali</span>
+
+          {/* Tasto Incrocia tavoli (admin/manager/cassa/waiter) */}
+          {!crossMode && (
+            <button
+              onClick={() => { setCrossMode(true); setCrossSelected([]) }}
+              className="px-2 py-1 rounded-md bg-[var(--color-gold-soft)] border border-[var(--color-gold-ring)] text-[var(--color-gold)] text-[11px] font-bold hover:bg-[var(--color-gold)] hover:text-[#13181C] transition active:scale-95"
+              title="Servi più tavoli insieme (incrocia)"
+            >
+              🔗 Incrocia
+            </button>
+          )}
 
           {/* Toggle vista: Griglia (calendario) ↔ Lista (card) */}
           <div className="ml-auto flex items-center gap-1 bg-[var(--color-surface-2)] rounded-lg p-0.5 border border-[var(--color-border-soft)]">
