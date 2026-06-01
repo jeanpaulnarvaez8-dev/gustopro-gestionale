@@ -143,12 +143,21 @@ export default function TableMapPage() {
     socket.on('new-order',             debouncedRefresh)
     socket.on('order-item-added',      debouncedRefresh)
     socket.on('order-settled',         debouncedRefresh)
+    // JP 2026-05-31: il cameriere fa "Manda in cucina" su una voce IN ATTESA
+    // (workflow waiting → production). Senza questi listener il badge
+    // "IN ATTESA" rosa sul tavolo restava stale finche' non si refreshava
+    // la pagina. Ora il backend emette workflow-status-changed +
+    // item-released-to-production e la mappa si aggiorna in tempo reale.
+    socket.on('workflow-status-changed',       debouncedRefresh)
+    socket.on('item-released-to-production',   debouncedRefresh)
     return () => {
       clearTimeout(pendingRefresh)
       socket.off('table-status-changed', debouncedRefresh)
       socket.off('new-order',             debouncedRefresh)
       socket.off('order-item-added',      debouncedRefresh)
       socket.off('order-settled',         debouncedRefresh)
+      socket.off('workflow-status-changed',       debouncedRefresh)
+      socket.off('item-released-to-production',   debouncedRefresh)
     }
   }, [socket])
 

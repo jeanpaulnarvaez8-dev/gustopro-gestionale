@@ -200,11 +200,29 @@ async function openDay(req, res, next) {
       [tenantId, date, req.user.id, req.user.name]
     );
 
-    getIO()?.emit('day-status-changed', {
+    // JP 2026-05-31: all'apertura giornata, sbarazzo automatico dei tavoli
+    // rimasti "da pulire" la sera prima. Si assume che il locale sia stato
+    // pulito durante la chiusura. Senza questo, JP si trovava i 'dirty' del
+    // giorno precedente la mattina dopo (es. pagamenti tardivi o sbarazzo
+    // dimenticato a fine servizio).
+    const { rows: cleared } = await pool.query(
+      `UPDATE tables SET status='free'
+        WHERE tenant_id=$1 AND status='dirty'
+        RETURNING id`,
+      [tenantId]
+    );
+    const io = getIO();
+    if (cleared.length > 0 && io) {
+      for (const t of cleared) {
+        io.emit('table-status-changed', { tableId: t.id, status: 'free' });
+      }
+    }
+
+    io?.emit('day-status-changed', {
       tenantId, businessDate: date, isOpen: true,
       openedByName: req.user.name,
     });
-    res.status(201).json(row);
+    res.status(201).json({ ...row, tables_cleaned: cleared.length });
   } catch (err) { next(err); }
 }
 
