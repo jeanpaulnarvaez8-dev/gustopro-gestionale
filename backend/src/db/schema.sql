@@ -293,6 +293,14 @@ ALTER TABLE order_items ADD COLUMN IF NOT EXISTS combo_menu_name  VARCHAR(255);
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS combo_selections JSONB;
 ALTER TABLE order_items ALTER COLUMN menu_item_id DROP NOT NULL;
 
+-- JP 2026-06-01: timer "in attesa" che si fira da solo. Il cameriere mette il
+-- piatto in attesa con tempo (es. tra 15 min) e quando scocca passa in
+-- 'production' automaticamente (cron in serviceTimer).
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS fire_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_order_items_fire_at_waiting
+  ON order_items (fire_at)
+  WHERE workflow_status = 'waiting' AND fire_at IS NOT NULL;
+
 -- Extend orders: asporto support
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_type     VARCHAR(20) NOT NULL DEFAULT 'table';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name  VARCHAR(255);

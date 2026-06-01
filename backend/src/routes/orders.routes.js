@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { requireRole } = require('../middleware/requireRole');
-const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice } = require('../controllers/orders.controller');
+const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice, setItemFireAt } = require('../controllers/orders.controller');
 
 const router = Router();
 
@@ -15,6 +15,8 @@ router.post('/:id/transfer',        requireRole('waiter','manager','admin'), tra
 router.delete('/:id/items/:itemId', requireRole('waiter','manager','admin','cashier'), cancelItem);
 // JP 2026-05-31: la cassa puo' modificare il prezzo di una voce (sconto inline).
 router.patch('/:id/items/:itemId/price', requireRole('cashier','manager','admin'), setItemPrice);
+// JP 2026-06-01: cameriere imposta i minuti di auto-fire su voce in attesa.
+router.patch('/:id/items/:itemId/fire-at', requireRole('waiter','manager','admin','cashier'), setItemFireAt);
 router.delete('/:id',               requireRole('manager','admin'),          cancelOrder);
 
 module.exports = router;

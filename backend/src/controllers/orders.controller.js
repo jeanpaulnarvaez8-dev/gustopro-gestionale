@@ -936,4 +936,45 @@ async function setItemPrice(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice };
+// ── setItemFireAt ────────────────────────────────────────────
+// JP 2026-06-01: il cameriere imposta i minuti tra cui un piatto in attesa
+// deve auto-firare in cucina. Body: { minutes } (intero >0). Per annullare,
+// PATCH con minutes=null/0 → fire_at=NULL.
+async function setItemFireAt(req, res, next) {
+  try {
+    const { id: order_id, itemId } = req.params;
+    const tenantId = TENANT(req);
+    const { minutes } = req.body || {};
+    const mins = Number(minutes);
+    if (mins !== null && !Number.isFinite(mins)) {
+      return res.status(400).json({ error: 'minutes non valido' });
+    }
+    // Verifica item: deve essere in waiting (i piatti gia' firati non si
+    // ri-programmano), in ordine aperto, nello stesso tenant.
+    const { rows: [item] } = await pool.query(
+      `SELECT oi.id, oi.workflow_status, o.status AS order_status
+         FROM order_items oi JOIN orders o ON o.id = oi.order_id
+        WHERE oi.id = $1 AND oi.order_id = $2 AND oi.tenant_id = $3`,
+      [itemId, order_id, tenantId]
+    );
+    if (!item) return res.status(404).json({ error: 'Voce non trovata' });
+    if (item.order_status !== 'open') return res.status(400).json({ error: 'Ordine chiuso' });
+    if (item.workflow_status !== 'waiting') {
+      return res.status(400).json({ error: 'Il timer si imposta solo su voci IN ATTESA' });
+    }
+    const fireAtSql = mins > 0 ? `NOW() + ($1::int || ' minutes')::interval` : `NULL`;
+    const params = mins > 0 ? [Math.max(1, Math.round(mins)), itemId, tenantId] : [itemId, tenantId];
+    const { rows: [updated] } = await pool.query(
+      `UPDATE order_items SET fire_at = ${fireAtSql}
+         WHERE id = ${mins > 0 ? '$2' : '$1'} AND tenant_id = ${mins > 0 ? '$3' : '$2'}
+         RETURNING id, fire_at, workflow_status`,
+      params
+    );
+    getIO()?.emit('item-fire-at-updated', {
+      orderId: order_id, itemId, fireAt: updated.fire_at,
+    });
+    res.json(updated);
+  } catch (err) { next(err); }
+}
+
+module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice, setItemFireAt };

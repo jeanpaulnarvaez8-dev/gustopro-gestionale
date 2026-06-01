@@ -610,6 +610,47 @@ export default function OrderPage() {
                 const it = group.sample
                 const STAT = { pending: 'Da fare', cooking: 'In lavorazione', oven_done: 'Sfornata', ready: 'Pronto', served: 'Servito' }
                 const isWaiting = it.workflow_status === 'waiting'
+                // JP 2026-06-01: timer auto-fire sui waiting. Se gia' impostato
+                // mostriamo il countdown; altrimenti il bottone "⏰ tempo".
+                const fireAtAny = group.items.find(x => x.fire_at)?.fire_at
+                const minsToFire = fireAtAny
+                  ? Math.max(0, Math.round((new Date(fireAtAny).getTime() - Date.now()) / 60000))
+                  : null
+                const setTimerForGroup = async () => {
+                  const ans = window.prompt('Tra quanti minuti mandare in cucina?', '15')
+                  if (ans === null) return
+                  const mins = parseInt(ans, 10)
+                  if (!(mins > 0)) {
+                    toast({ type: 'warning', title: 'Inserisci minuti validi' })
+                    return
+                  }
+                  try {
+                    for (const x of group.items.filter(i => i.workflow_status === 'waiting')) {
+                      await ordersAPI.setItemFireAt(table.active_order_id, x.id, mins)
+                    }
+                    setExistingItems(prev => prev.map(x =>
+                      group.items.some(g => g.id === x.id)
+                        ? { ...x, fire_at: new Date(Date.now() + mins * 60000).toISOString() }
+                        : x
+                    ))
+                    toast({ type: 'success', title: `Partira' in cucina tra ${mins} min`, message: it.item_name })
+                  } catch (e) {
+                    toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+                  }
+                }
+                const cancelTimerForGroup = async () => {
+                  try {
+                    for (const x of group.items.filter(i => i.workflow_status === 'waiting' && i.fire_at)) {
+                      await ordersAPI.setItemFireAt(table.active_order_id, x.id, null)
+                    }
+                    setExistingItems(prev => prev.map(x =>
+                      group.items.some(g => g.id === x.id) ? { ...x, fire_at: null } : x
+                    ))
+                    toast({ type: 'info', title: 'Timer annullato', message: it.item_name })
+                  } catch (e) {
+                    toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+                  }
+                }
                 // "+" pulsante: aggiunge 1 unita' al carrello (poi mandata in cucina
                 // al "Manda comanda"). Disponibile solo se il gruppo ha menu_item_id
                 // e nessun peso (i piatti a peso sono unici per quantita').
@@ -637,12 +678,31 @@ export default function OrderPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       {isWaiting ? (
                         canFire ? (
-                          <button
-                            onClick={() => fireGroup(group)}
-                            className="px-2.5 py-1 rounded-md bg-[var(--color-warn)] text-black text-[11px] font-bold uppercase active:scale-95 transition flex items-center gap-1"
-                          >
-                            <Send size={11} /> Manda in cucina
-                          </button>
+                          <div className="flex items-center gap-1">
+                            {minsToFire !== null ? (
+                              <button
+                                onClick={cancelTimerForGroup}
+                                className="px-2 py-1 rounded-md bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/50 text-[var(--color-sea)] text-[11px] font-bold flex items-center gap-1"
+                                title="Annulla timer"
+                              >
+                                ⏰ {minsToFire}m
+                              </button>
+                            ) : (
+                              <button
+                                onClick={setTimerForGroup}
+                                className="px-2 py-1 rounded-md bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/40 text-[var(--color-sea)] text-[11px] font-bold flex items-center gap-1"
+                                title="Programma quando mandare in cucina"
+                              >
+                                ⏰ tempo
+                              </button>
+                            )}
+                            <button
+                              onClick={() => fireGroup(group)}
+                              className="px-2.5 py-1 rounded-md bg-[var(--color-warn)] text-black text-[11px] font-bold uppercase active:scale-95 transition flex items-center gap-1"
+                            >
+                              <Send size={11} /> Manda
+                            </button>
+                          </div>
                         ) : (
                           <span className="text-[var(--color-warn)] text-[11px] font-bold whitespace-nowrap">IN ATTESA</span>
                         )

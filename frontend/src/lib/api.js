@@ -214,6 +214,9 @@ export const ordersAPI = {
   // Modifica prezzo unitario di una voce (sconto inline su conto). Cassa+.
   setItemPrice: (id, itemId, unit_price) =>
                   api.patch(`/orders/${id}/items/${itemId}/price`, { unit_price }),
+  // Timer auto-fire su voce in attesa. minutes=0/null annulla. JP 2026-06-01.
+  setItemFireAt: (id, itemId, minutes) =>
+                  api.patch(`/orders/${id}/items/${itemId}/fire-at`, { minutes }),
 };
 
 // KDS — cucina principale (default station=cucina; supporta anche

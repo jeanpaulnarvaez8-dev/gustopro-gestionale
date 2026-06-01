@@ -529,6 +529,8 @@ async function tick() {
       // Riattivare la riga sotto per ripristinarlo.
       // await checkSeatingTimersForTenant(client, tenantId);
       await checkCourseCycleForTenant(client, tenantId);
+      // JP 2026-06-01: piatti in attesa con fire_at scaduto → auto-fire.
+      await checkScheduledFiresForTenant(client, tenantId);
     });
   } catch (err) {
     // Errori transient (es. tabella non ancora migrata, DB non pronto)
@@ -539,6 +541,36 @@ async function tick() {
     if (!/relation .* does not exist/i.test(err.message)) {
       logger.error({ err }, 'tick error');
     }
+  }
+}
+
+// ─── Auto-fire piatti in attesa con fire_at scaduto ──────────
+// JP 2026-06-01: il cameriere imposta fire_at sulle voci "in attesa".
+// Quando scade, le passiamo a 'production' (visibili al KDS subito).
+async function checkScheduledFiresForTenant(client, tenantId) {
+  const { rows } = await client.query(
+    `UPDATE order_items
+        SET workflow_status = 'production',
+            released_at     = NOW(),
+            status          = 'pending'
+      WHERE tenant_id = $1
+        AND workflow_status = 'waiting'
+        AND fire_at IS NOT NULL
+        AND fire_at <= NOW()
+      RETURNING id, order_id`,
+    [tenantId]
+  );
+  if (rows.length === 0) return;
+  const io = getIO();
+  if (!io) return;
+  for (const r of rows) {
+    io.emit('workflow-status-changed', {
+      orderId: r.order_id, itemId: r.id, workflow_status: 'production',
+      auto: true,
+    });
+    io.emit('item-released-to-production', {
+      orderId: r.order_id, itemId: r.id, auto: true,
+    });
   }
 }
 
