@@ -23,19 +23,21 @@ const ITEM_STATUS = {
     bg: 'bg-[var(--color-warn-soft)]',
     border: 'border-[var(--color-warn)]/50',
     text: 'text-[var(--color-warn)]',
-    // 1° tap: "In lavorazione" → la cucina segna che sta facendo il piatto.
+    // JP 2026-06-01: "togli IN LAVORAZIONE, metti START".
+    // 1° tap: il cuoco INIZIA a cuocere il piatto.
     next: 'cooking',
-    nextLabel: 'IN LAVORAZIONE',
+    nextLabel: 'START',
     nextBtn: 'bg-[var(--color-terracotta)] hover:brightness-110 text-white',
   },
   cooking: {
-    label: 'IN LAVORAZIONE',
+    label: 'IN COTTURA',
     bg: 'bg-[var(--color-terracotta-soft)]',
     border: 'border-[var(--color-terracotta)]/50',
     text: 'text-[var(--color-terracotta)]',
-    // 2° tap: "Pronto" → notifica il cameriere.
+    // JP 2026-06-01: "quando e' finito, chiama cameriere".
+    // 2° tap: piatto pronto → notifica il cameriere per il ritiro.
     next: 'ready',
-    nextLabel: 'PRONTO',
+    nextLabel: 'CHIAMA CAMERIERE',
     nextBtn: 'bg-[var(--color-ok)] hover:brightness-110 text-white',
   },
   // Fase intermedia solo per pizza: sfornata, in attesa di impiattamento.
@@ -669,14 +671,17 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                           )
                         }
 
-                        // ── WAITING (A) — secondario ──
+                        // ── WAITING (ATTESA) — secondario, JP 2026-06-01:
+                        // mostra "ATTESA" come badge (prima era una "A" piccola).
                         if (ds === 'waiting') {
                           return (
                             <div
                               key={item.id}
-                              className="flex items-center gap-2 px-2 py-1 rounded border border-[var(--color-border-strong)] bg-[var(--color-surface-2)]/50 opacity-60"
+                              className="flex items-center gap-2 px-2 py-1 rounded border border-[var(--color-warn)]/40 bg-[var(--color-warn-soft)]/30 opacity-80"
                             >
-                              <span className="text-base font-bold text-[var(--color-warn)] w-5">A</span>
+                              <span className="px-1.5 py-0.5 rounded bg-[var(--color-warn)] text-black text-[9px] font-extrabold tracking-wider shrink-0">
+                                ATTESA
+                              </span>
                               <span className="text-[var(--color-text-2)] text-base font-semibold">
                                 {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
                               </span>
