@@ -573,16 +573,6 @@ export default function TableMapPage() {
           <span className="flex items-center gap-1 tnum"><StatusDot tone="err" size="xs" />{stats.occupied} occupati</span>
           <span className="text-[var(--color-text-3)]">/ {stats.total} totali</span>
 
-          {/* Tasto Incrocia tavoli (admin/manager/cassa/waiter) */}
-          {!crossMode && (
-            <button
-              onClick={() => { setCrossMode(true); setCrossSelected([]) }}
-              className="px-2 py-1 rounded-md bg-[var(--color-gold-soft)] border border-[var(--color-gold-ring)] text-[var(--color-gold)] text-[11px] font-bold hover:bg-[var(--color-gold)] hover:text-[#13181C] transition active:scale-95"
-              title="Servi più tavoli insieme (incrocia)"
-            >
-              🔗 Incrocia
-            </button>
-          )}
 
           {/* Toggle vista: Griglia (calendario) ↔ Lista (card) */}
           <div className="ml-auto flex items-center gap-1 bg-[var(--color-surface-2)] rounded-lg p-0.5 border border-[var(--color-border-soft)]">
@@ -843,6 +833,19 @@ export default function TableMapPage() {
           </div>
         )}
       </BottomSheet>
+
+      {/* FAB "Incrocia tavoli" — JP 2026-06-01: bottone GRANDE in basso a
+          sinistra (per non collidere con la campanella admin in bottom-right).
+          Visibile sempre quando NON in crossMode. */}
+      {!crossMode && (
+        <button
+          onClick={() => { setCrossMode(true); setCrossSelected([]) }}
+          className="fixed bottom-3 left-3 z-[80] flex items-center gap-2 px-4 py-3 rounded-full bg-[var(--color-gold)] text-[#13181C] font-extrabold text-sm shadow-2xl border-2 border-[var(--color-gold-ring)] hover:brightness-110 active:scale-95 transition"
+          title="Servi più tavoli insieme"
+        >
+          🔗 INCROCIA TAVOLI
+        </button>
+      )}
 
       {/* Placeholder esistente — non rendiamo nulla */}
       <AnimatePresence>{null}</AnimatePresence>
