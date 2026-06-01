@@ -50,7 +50,10 @@ async function getPendingOrders(req, res, next) {
          oi.id             AS item_id,
          oi.quantity,
          oi.status         AS item_status,
-         oi.display_status AS display_status,
+         -- JP 2026-06-01: gli item ancora non firati (workflow_status='waiting')
+         -- forzati a display 'waiting' cosi' la UI li mostra in piccolo/grigio
+         -- (preview "in arrivo"), indipendentemente dal display_status reale.
+         CASE WHEN oi.workflow_status = 'waiting' THEN 'waiting' ELSE oi.display_status END AS display_status,
          oi.workflow_status AS workflow_status,
          oi.notes          AS item_notes,
          oi.sent_at,
@@ -81,7 +84,12 @@ async function getPendingOrders(req, res, next) {
          -- quando vengono serviti. Esclude solo served/cancelled.
          -- Storico completo (incluso served/cancelled) in /kds/history.
          AND oi.status NOT IN ('served','cancelled')
-         AND oi.workflow_status = 'production'
+         -- JP 2026-06-01: la cucina deve vedere ANCHE i piatti in attesa
+         -- (workflow_status='waiting' = cameriere li ha messi nel carrello
+         -- ma non ha ancora fatto "manda comanda"). Cosi' lo chef sa cosa sta
+         -- per arrivare. La UI li mostra in piccolo/secondario via
+         -- display_status='waiting'.
+         AND oi.workflow_status IN ('waiting', 'production')
          AND oi.tenant_id = $1
          AND COALESCE(oi.is_surcharge, false) = false
          AND (c.is_beverage IS NULL OR c.is_beverage = false)
