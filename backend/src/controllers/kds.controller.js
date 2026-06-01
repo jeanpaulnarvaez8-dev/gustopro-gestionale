@@ -54,6 +54,7 @@ async function getPendingOrders(req, res, next) {
          -- forzati a display 'waiting' cosi' la UI li mostra in piccolo/grigio
          -- (preview "in arrivo"), indipendentemente dal display_status reale.
          CASE WHEN oi.workflow_status = 'waiting' THEN 'waiting' ELSE oi.display_status END AS display_status,
+         oi.fire_at,
          oi.workflow_status AS workflow_status,
          oi.notes          AS item_notes,
          oi.sent_at,
@@ -127,6 +128,7 @@ async function getPendingOrders(req, res, next) {
         status:           row.item_status,
         display_status:   row.display_status,
         workflow_status:  row.workflow_status,
+        fire_at:          row.fire_at, // timer auto-fire (per voci in attesa)
         course_type:      row.course_type,
         prep_station:     row.prep_station,
         required_kit:     row.required_kit,  // JSONB array di stringhe o null

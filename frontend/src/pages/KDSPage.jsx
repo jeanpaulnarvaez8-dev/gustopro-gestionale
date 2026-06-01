@@ -672,8 +672,12 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                         }
 
                         // ── WAITING (ATTESA) — secondario, JP 2026-06-01:
-                        // mostra "ATTESA" come badge (prima era una "A" piccola).
+                        // mostra "ATTESA" + countdown se c'e' fire_at impostato
+                        // (timer auto-fire del cameriere).
                         if (ds === 'waiting') {
+                          const minsToFire = item.fire_at
+                            ? Math.max(0, Math.round((new Date(item.fire_at).getTime() - Date.now()) / 60000))
+                            : null
                           return (
                             <div
                               key={item.id}
@@ -682,6 +686,11 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                               <span className="px-1.5 py-0.5 rounded bg-[var(--color-warn)] text-black text-[9px] font-extrabold tracking-wider shrink-0">
                                 ATTESA
                               </span>
+                              {minsToFire !== null && (
+                                <span className="px-1.5 py-0.5 rounded bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/60 text-[var(--color-sea)] text-[9px] font-bold tnum shrink-0">
+                                  ⏰ {minsToFire}m
+                                </span>
+                              )}
                               <span className="text-[var(--color-text-2)] text-base font-semibold">
                                 {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
                               </span>
