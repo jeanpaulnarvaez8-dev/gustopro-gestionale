@@ -484,9 +484,10 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
         </div>
       )}
 
-      {/* Sprint 5: pannello Abbina (gruppi di items duplicati per batch).
-          Solo per la cucina, non per il bar (drink son sempre 1-off). */}
-      {!isBar && (
+      {/* AbbinaPanel disabilitato JP 2026-06-02 ("toglimi gli incroci al KDS").
+          Componente ancora importato per riattivazione futura senza rimuovere
+          le sue dipendenze. Per riabilitarlo decommentare il blocco sotto. */}
+      {false && !isBar && (
         <AbbinaPanel station={station} socket={socket} onUpdate={loadOrders} />
       )}
 
@@ -511,8 +512,9 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
         {/* Sezione "IN ARRIVO" rimossa su richiesta: lo chef vede solo le
             comande da fare, niente anteprime. */}
 
-        {/* Incroci: piatti uguali su più tavoli — render difensivo per React #31 */}
-        {!loading && crossmatches.length > 0 && (
+        {/* Incroci disabilitati JP 2026-06-02 ("toglimi gli incroci al KDS").
+            Per riattivare: cambia false in true. */}
+        {false && !loading && crossmatches.length > 0 && (
           <Card variant="elevated" padding="md" className="mb-4 border-[var(--color-park)]/40">
             <div className="flex items-center gap-2 mb-3">
               <Badge tone="park" solid>INCROCI</Badge>
