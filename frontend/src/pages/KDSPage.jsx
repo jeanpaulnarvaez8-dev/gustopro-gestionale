@@ -671,9 +671,9 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                           )
                         }
 
-                        // ── WAITING (ATTESA) — secondario, JP 2026-06-01:
-                        // mostra "ATTESA" + countdown se c'e' fire_at impostato
-                        // (timer auto-fire del cameriere).
+                        // ── WAITING (ATTESA) — JP 2026-06-02: BEN EVIDENZIATO.
+                        // Lo chef deve vederla a colpo d'occhio: bordo spesso
+                        // giallo + sfondo tinto + ring pulsante + nome grande.
                         if (ds === 'waiting') {
                           const minsToFire = item.fire_at
                             ? Math.max(0, Math.round((new Date(item.fire_at).getTime() - Date.now()) / 60000))
@@ -681,21 +681,21 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                           return (
                             <div
                               key={item.id}
-                              className="flex items-center gap-2 px-2 py-1 rounded border border-[var(--color-warn)]/40 bg-[var(--color-warn-soft)]/30 opacity-80"
+                              className="flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-[var(--color-warn)] bg-[var(--color-warn-soft)]/60 shadow-[0_0_0_2px_rgba(212,175,55,0.18)]"
                             >
-                              <span className="px-1.5 py-0.5 rounded bg-[var(--color-warn)] text-black text-[9px] font-extrabold tracking-wider shrink-0">
-                                ATTESA
+                              <span className="px-2 py-0.5 rounded-md bg-[var(--color-warn)] text-black text-xs font-extrabold tracking-widest shrink-0 animate-pulse">
+                                ⏳ ATTESA
                               </span>
                               {minsToFire !== null && (
-                                <span className="px-1.5 py-0.5 rounded bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/60 text-[var(--color-sea)] text-[9px] font-bold tnum shrink-0">
+                                <span className="px-2 py-0.5 rounded-md bg-[var(--color-sea)] text-white text-xs font-bold tnum shrink-0">
                                   ⏰ {minsToFire}m
                                 </span>
                               )}
-                              <span className="text-[var(--color-text-2)] text-base font-semibold">
+                              <span className="text-[var(--color-text)] text-lg font-bold">
                                 {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
                               </span>
                               {item.course_type && (
-                                <span className="ml-auto text-[9px] text-[var(--color-text-3)] italic">
+                                <span className="ml-auto text-[10px] text-[var(--color-text-3)] italic uppercase tracking-wider">
                                   {item.course_type}
                                 </span>
                               )}
