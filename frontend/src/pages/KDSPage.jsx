@@ -742,7 +742,10 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                   </p>
                                 )}
                                 {item.notes && (
-                                  <p className="text-[var(--color-warn)] text-base mt-0.5 italic font-bold">
+                                  // JP 2026-06-02: la nota cliente deve essere
+                                  // grande quasi quanto il nome del piatto,
+                                  // cosi' lo chef non rischia di ignorarla.
+                                  <p className="text-[var(--color-warn)] text-xl mt-1 italic font-extrabold leading-tight bg-[var(--color-warn-soft)]/70 px-2 py-1 rounded inline-block">
                                     ⚠ {item.notes}
                                   </p>
                                 )}
