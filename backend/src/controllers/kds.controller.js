@@ -253,12 +253,17 @@ async function updateItemStatus(req, res, next) {
         [id, tenantId]
       );
       if (info) {
-        getIO()?.to(`user:${info.waiter_id}`).emit('item-ready-notify', {
+        // JP 2026-06-02: l'evento "piatto pronto" ora va a TUTTI i camerieri
+        // + admin/manager (non solo al cameriere assegnato all'ordine). Cosi'
+        // Marco vede sempre i piatti pronti anche se l'ordine non e' suo.
+        const io = getIO();
+        io?.to('role:waiter').to('role:admin').to('role:manager').emit('item-ready-notify', {
           orderId: item.order_id,
           itemId: id,
           itemName: info.item_name,
           quantity: info.quantity,
           tableNumber: info.table_number,
+          waiterId: info.waiter_id, // chi tiene il tavolo (info utile)
         });
         // Web Push: anche se l'app del cameriere e' chiusa, riceve push.
         // tag = orderId per non duplicare alert sullo stesso ordine.
