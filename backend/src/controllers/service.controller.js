@@ -32,25 +32,32 @@ async function getAlerts(req, res, next) {
 
 async function getReadyItems(req, res, next) {
   try {
+    // JP 2026-06-02: TUTTI i camerieri (e admin/manager) vedono TUTTI i
+    // piatti pronti, non solo quelli dei propri tavoli. Cosi' qualsiasi
+    // cameriere libero puo' portare il piatto a tavola, non bloccato
+    // dall'assegnazione formale dell'ordine. waiter_name nel payload
+    // per sapere chi tiene formalmente il tavolo.
     const { rows } = await pool.query(
       `SELECT oi.id AS item_id, oi.order_id, oi.quantity, oi.ready_at,
               COALESCE(mi.name, oi.combo_menu_name, 'Piatto') AS item_name,
               COALESCE(t.table_number, 'ASPORTO') AS table_number,
               COALESCE(z.name, '') AS zone_name,
-              COALESCE(c.is_beverage, false) AS is_beverage
+              COALESCE(c.is_beverage, false) AS is_beverage,
+              o.waiter_id,
+              COALESCE(u.name, '') AS waiter_name
        FROM order_items oi
        JOIN orders o       ON o.id = oi.order_id
+       LEFT JOIN users u   ON u.id = o.waiter_id
        LEFT JOIN tables t  ON t.id = o.table_id
        LEFT JOIN zones z   ON z.id = t.zone_id
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        LEFT JOIN categories c  ON c.id = mi.category_id
        WHERE oi.status = 'ready'
          AND oi.served_at IS NULL
-         AND o.waiter_id = $1
          AND o.status = 'open'
-         AND oi.tenant_id = $2
+         AND oi.tenant_id = $1
        ORDER BY oi.ready_at ASC`,
-      [req.user.id, TENANT(req)]
+      [TENANT(req)]
     );
     res.json(rows);
   } catch (err) { next(err); }
