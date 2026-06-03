@@ -1014,6 +1014,11 @@ async function dispatchOrder(req, res, next) {
   try {
     const { id: order_id } = req.params;
     const tenantId = TENANT(req);
+    // JP 2026-06-03: INIZIA TAVOLO rispetta il timer fire_at che il cameriere
+    // ha messo su singoli piatti. Solo i waiting SENZA timer (fire_at IS NULL)
+    // o con timer GIA' scaduto vengono rilasciati. Quelli con fire_at futuro
+    // restano in attesa: serviceTimer.checkScheduledFiresForTenant li libera
+    // automaticamente quando arriva l'ora.
     const { rows: items } = await pool.query(
       `UPDATE order_items
           SET workflow_status = 'production',
@@ -1022,7 +1027,17 @@ async function dispatchOrder(req, res, next) {
         WHERE order_id = $1 AND tenant_id = $2
           AND workflow_status = 'waiting'
           AND COALESCE(is_surcharge, false) = false
+          AND (fire_at IS NULL OR fire_at <= NOW())
         RETURNING id`,
+      [order_id, tenantId]
+    );
+    // Quanti restano in attesa (timer ancora attivo)? Lo segnalo al chef.
+    const { rows: [pending] } = await pool.query(
+      `SELECT COUNT(*)::int AS n
+         FROM order_items
+        WHERE order_id = $1 AND tenant_id = $2
+          AND workflow_status = 'waiting'
+          AND fire_at IS NOT NULL AND fire_at > NOW()`,
       [order_id, tenantId]
     );
     const io = getIO();
@@ -1034,7 +1049,7 @@ async function dispatchOrder(req, res, next) {
         orderId: order_id, itemId: it.id, dispatched: true,
       });
     }
-    res.json({ dispatched: items.length, order_id });
+    res.json({ dispatched: items.length, still_waiting: pending?.n || 0, order_id });
   } catch (err) { next(err); }
 }
 

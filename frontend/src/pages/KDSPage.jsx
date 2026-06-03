@@ -339,10 +339,13 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
     setDispatching(p => ({ ...p, [orderId]: true }))
     try {
       const { data } = await ordersAPI.dispatch(orderId)
+      const still = Number(data.still_waiting || 0)
       toast({
         type: 'success',
-        title: `🚀 Tavolo ${tableNumber}: ${data.dispatched || ''} piatti partiti`,
-        message: 'Inviati alle stazioni',
+        title: `🚀 Tavolo ${tableNumber}: ${data.dispatched || 0} piatti partiti`,
+        message: still > 0
+          ? `${still} ancora in attesa (timer del cameriere)`
+          : 'Inviati alle stazioni',
       })
       loadOrders()
     } catch (e) {
