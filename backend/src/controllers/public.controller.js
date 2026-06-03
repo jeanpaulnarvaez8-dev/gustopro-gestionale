@@ -184,4 +184,147 @@ async function getPublicReceipt(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getPublicMenu, callWaiter, getPublicReceipt };
+// ---------------------------------------------------------------------------
+// PRECONTO HTML stampabile (JP 2026-06-03).
+// Restituisce una pagina HTML pronta per la stampa termica 80mm, con
+// window.print() onload. Pensato per essere aperto dal tablet del cameriere
+// sullo stesso WiFi della stampante: il browser dialog manda direttamente
+// alla TM-m30II selezionata come default.
+// NESSUNA AUTH: l'order_id e' un UUID non enumerabile + non muta DB.
+// ---------------------------------------------------------------------------
+const esc = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const money = (n) => Number(n || 0).toFixed(2).replace('.', ',') + ' €';
+
+async function getPrecontoHtml(req, res, next) {
+  try {
+    const { order_id } = req.params;
+    if (!/^[0-9a-f-]{36}$/i.test(String(order_id || ''))) {
+      return res.status(404).type('html').send('<h1>Ordine non trovato</h1>');
+    }
+    const { rows: [o] } = await pool.query(
+      `SELECT o.id, o.status, o.covers, o.subtotal, o.total_amount, o.notes,
+              o.order_type, o.customer_name, o.created_at,
+              COALESCE(tb.table_number::text, 'Asporto') AS table_number,
+              z.name AS zone_name,
+              t.name AS restaurant_name, t.fiscal_data,
+              COALESCE(t.coperto_price, 0)::numeric AS coperto_price
+         FROM orders o
+         JOIN tenants t ON t.id = o.tenant_id
+         LEFT JOIN tables tb ON tb.id = o.table_id
+         LEFT JOIN zones z ON z.id = tb.zone_id
+        WHERE o.id = $1`,
+      [order_id]
+    );
+    if (!o) return res.status(404).type('html').send('<h1>Ordine non trovato</h1>');
+
+    const { rows: items } = await pool.query(
+      `SELECT mi.name, oi.quantity, oi.unit_price, oi.modifier_total,
+              oi.subtotal, oi.notes, oi.status, oi.workflow_status
+         FROM order_items oi
+         JOIN menu_items mi ON mi.id = oi.menu_item_id
+        WHERE oi.order_id = $1 AND oi.status <> 'cancelled'
+        ORDER BY mi.name`,
+      [order_id]
+    );
+
+    const fd = o.fiscal_data || {};
+    const restoLine1 = esc(o.restaurant_name || '');
+    const restoLine2 = [fd.address, fd.city].filter(Boolean).map(esc).join(' · ');
+    const restoLine3 = [fd.piva ? 'P.IVA ' + fd.piva : null, fd.phone].filter(Boolean).map(esc).join(' · ');
+    const dt = new Date(o.created_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+    const itemsSum = items.reduce((s, it) => s + Number(it.subtotal || 0), 0);
+    const copertoTot = Number(o.coperto_price || 0) * Number(o.covers || 0);
+    const grandTotal = itemsSum + copertoTot;
+
+    const itemRows = items.map(it => `
+      <tr>
+        <td class="qty">${Number(it.quantity)}</td>
+        <td class="name">
+          ${esc(it.name)}
+          ${it.notes ? `<div class="notes">${esc(it.notes)}</div>` : ''}
+        </td>
+        <td class="price">${money(it.subtotal)}</td>
+      </tr>`).join('');
+
+    const html = `<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<title>Preconto ${esc(o.table_number)} — ${esc(o.restaurant_name)}</title>
+<style>
+  /* 80mm thermal: area stampabile ~72mm. Font monospace per allineamento. */
+  @page { size: 80mm auto; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+  body { font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.25; padding: 4mm 3mm; width: 80mm; }
+  .center { text-align: center; }
+  .right  { text-align: right; }
+  .bold   { font-weight: 700; }
+  .big    { font-size: 14px; }
+  .huge   { font-size: 18px; font-weight: 700; }
+  .sep    { border-top: 1px dashed #000; margin: 4px 0; }
+  table   { width: 100%; border-collapse: collapse; }
+  td      { padding: 1px 0; vertical-align: top; font-size: 12px; }
+  td.qty  { width: 8mm; text-align: left; font-weight: 700; }
+  td.name { font-weight: 600; }
+  td.price{ width: 18mm; text-align: right; font-variant-numeric: tabular-nums; }
+  .notes  { font-size: 10px; font-style: italic; color: #444; padding-left: 2px; }
+  .totals td { padding: 2px 0; }
+  .totals td.lbl { font-weight: 600; }
+  .totals td.val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .grand td { border-top: 1px solid #000; padding-top: 4px; font-size: 16px; font-weight: 800; }
+  .preconto-badge { display: inline-block; padding: 2px 8px; border: 2px solid #000; font-size: 14px; font-weight: 800; margin-bottom: 4px; }
+  .footer { margin-top: 6px; font-size: 10px; text-align: center; color: #333; }
+  /* Schermo (preview): aggiungi cornice grigia + bottone */
+  @media screen {
+    body { background: #f3f3f3; padding-top: 6mm; }
+    .receipt { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.15); padding: 4mm 3mm; }
+    .print-btn {
+      position: fixed; top: 8px; right: 8px;
+      background: #000; color: #fff; border: 0; padding: 8px 14px;
+      font-weight: 700; border-radius: 6px; cursor: pointer;
+    }
+  }
+  @media print {
+    .print-btn { display: none; }
+  }
+</style></head>
+<body>
+<button class="print-btn" onclick="window.print()">🖨 STAMPA</button>
+<div class="receipt">
+  <div class="center bold big">${restoLine1}</div>
+  ${restoLine2 ? `<div class="center" style="font-size:10px">${restoLine2}</div>` : ''}
+  ${restoLine3 ? `<div class="center" style="font-size:10px">${restoLine3}</div>` : ''}
+  <div class="sep"></div>
+  <div class="center"><span class="preconto-badge">PRECONTO — NON FISCALE</span></div>
+  <div class="center bold huge">TAVOLO ${esc(o.table_number)}</div>
+  ${o.zone_name ? `<div class="center" style="font-size:10px">${esc(o.zone_name)}</div>` : ''}
+  <div class="center" style="font-size:10px">${dt} · Coperti: ${Number(o.covers || 0)}</div>
+  <div class="sep"></div>
+  ${items.length === 0 ? '<div class="center">Nessuna voce</div>' : `
+    <table>
+      <tbody>${itemRows}</tbody>
+    </table>`}
+  <div class="sep"></div>
+  <table class="totals">
+    <tr><td class="lbl">Subtotale piatti</td><td class="val">${money(itemsSum)}</td></tr>
+    ${copertoTot > 0 ? `<tr><td class="lbl">Coperto (${Number(o.covers || 0)} × ${money(o.coperto_price)})</td><td class="val">${money(copertoTot)}</td></tr>` : ''}
+    <tr class="grand"><td>TOTALE</td><td class="val">${money(grandTotal)}</td></tr>
+  </table>
+  <div class="footer">
+    Grazie per la visita · arrivederci<br/>
+    ${esc(String(o.id).slice(0, 8))}
+  </div>
+</div>
+<script>
+  // Auto-apri il dialog di stampa appena renderizzato. Il cameriere deve
+  // solo confermare. Se l'utente preme Annulla puo' ri-cliccare il bottone.
+  window.addEventListener('load', () => { setTimeout(() => window.print(), 250); });
+</script>
+</body></html>`;
+
+    res.type('html').send(html);
+  } catch (err) { next(err); }
+}
+
+module.exports = { getPublicMenu, callWaiter, getPublicReceipt, getPrecontoHtml };
