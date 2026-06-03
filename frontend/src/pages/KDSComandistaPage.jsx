@@ -164,11 +164,22 @@ export default function KDSComandistaPage() {
                   exit={{ opacity: 0, scale: 0.95 }}
                   className="bg-[var(--color-surface)] border-2 border-[var(--color-gold)]/40 rounded-xl overflow-hidden flex flex-col shadow-lg"
                 >
-                  {/* Card header */}
+                  {/* Card header con numero tavolo */}
                   <div className="px-3 py-2 bg-[var(--color-gold)] text-[#13181C] flex items-center justify-between">
                     <span className="font-extrabold text-2xl tnum leading-none">{order.table_number}</span>
                     <span className="text-[10px] font-bold uppercase tracking-wider">{order.zone_name || 'sala'}</span>
                   </div>
+
+                  {/* JP 2026-06-03: bottone INIZIA TAVOLO IN ALTO (sopra la lista
+                      piatti) per dispatch rapido senza scrollare a fondo card. */}
+                  <button
+                    onClick={() => handleDispatch(order.order_id, order.table_number)}
+                    disabled={dispatching[order.order_id]}
+                    className="w-full py-4 bg-[var(--color-ok)] hover:brightness-110 text-white font-extrabold text-lg uppercase tracking-wider active:scale-[0.98] transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <Play size={22} fill="currentColor" />
+                    {dispatching[order.order_id] ? '…' : 'INIZIA TAVOLO'}
+                  </button>
 
                   {/* Lista piatti waiting */}
                   <div className="p-3 flex-1 space-y-1.5 max-h-[40vh] overflow-y-auto">
@@ -193,16 +204,6 @@ export default function KDSComandistaPage() {
                       </div>
                     ))}
                   </div>
-
-                  {/* Bottone INIZIA TAVOLO */}
-                  <button
-                    onClick={() => handleDispatch(order.order_id, order.table_number)}
-                    disabled={dispatching[order.order_id]}
-                    className="w-full py-4 bg-[var(--color-ok)] hover:brightness-110 text-white font-extrabold text-lg uppercase tracking-wider active:scale-[0.98] transition disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    <Play size={20} fill="currentColor" />
-                    {dispatching[order.order_id] ? '…' : 'INIZIA TAVOLO'}
-                  </button>
                 </motion.div>
               ))}
             </AnimatePresence>
