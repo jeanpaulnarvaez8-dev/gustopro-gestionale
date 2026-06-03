@@ -585,24 +585,23 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
             return (
               <div
                 key={name}
-                className="shrink-0 flex items-center gap-2.5 px-4 py-2 rounded-lg bg-[var(--color-surface)] border-2 border-[var(--color-gold)]/60"
+                className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-surface)] border-2 border-[var(--color-gold)]/60"
               >
-                {e.ready > 0 && (
-                  <span className="flex items-baseline gap-1 text-[var(--color-gold)] font-extrabold leading-none">
-                    <span className="text-3xl tnum">×{e.ready}</span>
-                    {e.waiting > 0 && (
-                      <span className="text-[10px] uppercase tracking-wider">DA FARE</span>
-                    )}
-                  </span>
-                )}
-                <span className="text-[var(--color-text)] text-lg font-extrabold uppercase whitespace-nowrap leading-tight">
+                <span className="text-[var(--color-text)] text-lg font-extrabold uppercase whitespace-nowrap leading-tight mr-1">
                   {name}
                 </span>
+                {e.ready > 0 && (
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-gold)] text-black font-extrabold leading-none">
+                    <span className="text-2xl tnum">×{e.ready}</span>
+                    <span className="text-sm uppercase tracking-wider">DA FARE</span>
+                  </span>
+                )}
                 {e.waiting > 0 && (
-                  <span className="ml-1 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--color-warn)] text-black font-extrabold text-base tnum animate-pulse">
-                    ⏳ {e.waiting} ATTESA
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-warn)] text-black font-extrabold leading-none animate-pulse">
+                    <span className="text-2xl tnum">×{e.waiting}</span>
+                    <span className="text-sm uppercase tracking-wider">IN ATTESA</span>
                     {minsLeft !== null && (
-                      <span className="px-1.5 py-0.5 rounded bg-black/35 text-white text-sm tnum">
+                      <span className="ml-1 px-2 py-1 rounded bg-black/35 text-white text-base tnum">
                         ⏰ {minsLeft === 0 ? 'ORA' : `${minsLeft}m`}
                       </span>
                     )}
