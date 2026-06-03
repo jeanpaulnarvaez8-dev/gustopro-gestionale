@@ -389,8 +389,10 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
 
   // JP 2026-06-03: barra "totali per piatto" in alto. Il cuoco deve sapere
   // a colpo d'occhio quante linguine totali deve fare, senza scorrere
-  // tavolo per tavolo. Aggrega per name, somma quantity, mostra solo i
-  // piatti con totale >= 2 (un solo piatto non aggiunge informazione).
+  // tavolo per tavolo. Aggrega per name, somma quantity.
+  // Distingue DA FARE (production) da ATTESA (waiting col timer attivo —
+  // pre-allerta). Mostra solo i piatti con totale >= 2 (un solo piatto
+  // non aggiunge informazione) o con almeno 1 attesa visibile.
   // Solo status pending/cooking — i ready/served sono fatti.
   const dishTotals = (() => {
     const map = new Map()
@@ -400,12 +402,16 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
         const key = String(it.name || '').trim()
         if (!key) continue
         const q = Number(it.quantity) || 1
-        map.set(key, (map.get(key) || 0) + q)
+        const isWaiting = it.workflow_status === 'waiting'
+        const entry = map.get(key) || { ready: 0, waiting: 0 }
+        if (isWaiting) entry.waiting += q
+        else entry.ready += q
+        map.set(key, entry)
       }
     }
     return Array.from(map.entries())
-      .filter(([, n]) => n >= 2)
-      .sort((a, b) => b[1] - a[1])
+      .filter(([, e]) => (e.ready + e.waiting) >= 2 || e.waiting > 0)
+      .sort((a, b) => (b[1].ready + b[1].waiting) - (a[1].ready + a[1].waiting))
   })()
 
   return (
@@ -557,17 +563,24 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
           <span className="text-lg uppercase tracking-wider text-[var(--color-gold)] font-extrabold mr-2 shrink-0">
             TOTALI
           </span>
-          {dishTotals.map(([name, qty]) => (
+          {dishTotals.map(([name, e]) => (
             <div
               key={name}
               className="shrink-0 flex items-center gap-2.5 px-4 py-2 rounded-lg bg-[var(--color-surface)] border-2 border-[var(--color-gold)]/60"
             >
-              <span className="text-[var(--color-gold)] font-extrabold text-3xl tnum leading-none">
-                ×{qty}
-              </span>
+              {e.ready > 0 && (
+                <span className="text-[var(--color-gold)] font-extrabold text-3xl tnum leading-none">
+                  ×{e.ready}
+                </span>
+              )}
               <span className="text-[var(--color-text)] text-lg font-extrabold uppercase whitespace-nowrap leading-tight">
                 {name}
               </span>
+              {e.waiting > 0 && (
+                <span className="ml-1 flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--color-warn)] text-black font-extrabold text-base tnum animate-pulse">
+                  ⏳ {e.waiting} ATTESA
+                </span>
+              )}
             </div>
           ))}
         </div>
