@@ -701,7 +701,10 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
         )}
 
         {!loading && orders.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {/* JP 2026-06-03: max 3 tavoli per riga su tablet 11" e PC 14",
+              poi a capo. Card piu' larghe (no xl:grid-cols-4) per riempire
+              meglio lo schermo. Sotto lg torna a 2 / 1 colonna. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <AnimatePresence>
               {orders.map(order => {
                 // Schermo Simone: salta gli ordini SENZA pizza (non lo riguardano).
