@@ -33,8 +33,10 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
     'SELECT COALESCE(requires_dispatch,false) AS requires_dispatch FROM tenants WHERE id=$1',
     [tenantId]
   );
+  console.log('[DISPATCH-CHECK]', { name: menuItem.name, requires_dispatch: tcfg?.requires_dispatch, is_beverage: menuItem.is_beverage, ws_in: workflow_status });
   if (tcfg?.requires_dispatch && !menuItem.is_beverage && workflow_status === 'production') {
     workflow_status = 'waiting';
+    console.log('[DISPATCH-CHECK] → forced to waiting');
   }
 
   let modifierTotal = 0;
