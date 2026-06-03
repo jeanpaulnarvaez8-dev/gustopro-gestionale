@@ -523,21 +523,22 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
 
       {/* Totali piatti aggregati — il cuoco non deve piu' contare tavolo per
           tavolo. Visibile solo in cucina (non bar) e solo se almeno un piatto
-          appare >= 2 volte sommando tutti i tavoli. */}
+          appare >= 2 volte sommando tutti i tavoli. JP 2026-06-03: dimensioni
+          enormi per essere leggibile a colpo d'occhio da distanza. */}
       {!isBar && dishTotals.length > 0 && (
-        <div className="bg-[var(--color-gold)]/10 border-b-2 border-[var(--color-gold)] px-3 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0 sticky top-[52px] z-10">
-          <span className="text-[10px] uppercase tracking-wider text-[var(--color-gold)] font-extrabold mr-1 shrink-0">
+        <div className="bg-[var(--color-gold)]/10 border-b-4 border-[var(--color-gold)] px-4 py-3 flex items-center gap-3 overflow-x-auto scrollbar-none shrink-0 sticky top-[52px] z-10">
+          <span className="text-lg uppercase tracking-wider text-[var(--color-gold)] font-extrabold mr-2 shrink-0">
             TOTALI
           </span>
           {dishTotals.map(([name, qty]) => (
             <div
               key={name}
-              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--color-surface)] border border-[var(--color-gold)]/40"
+              className="shrink-0 flex items-center gap-2.5 px-4 py-2 rounded-lg bg-[var(--color-surface)] border-2 border-[var(--color-gold)]/60"
             >
-              <span className="text-[var(--color-gold)] font-extrabold text-base tnum leading-none">
+              <span className="text-[var(--color-gold)] font-extrabold text-3xl tnum leading-none">
                 ×{qty}
               </span>
-              <span className="text-[var(--color-text)] text-xs font-bold uppercase whitespace-nowrap">
+              <span className="text-[var(--color-text)] text-lg font-extrabold uppercase whitespace-nowrap leading-tight">
                 {name}
               </span>
             </div>
