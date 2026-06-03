@@ -36,6 +36,15 @@ async function getPendingOrders(req, res, next) {
     } else if (stationParam === 'cucina') {
       stationFilter = `${effectiveStation} = 'cucina'`;
       params = [TENANT(req)];
+    } else if (stationParam === 'primi' || stationParam === 'secondi' || stationParam === 'primi_secondi') {
+      // JP 2026-06-03: il PIN 2003 (sub_role='primi') fa primi + secondi.
+      // Quindi station IN ('primi','secondi','primi_secondi') sono tre
+      // alias dello stesso tablet: vedono i piatti con override
+      // mi.prep_station='primi'/'secondi' E quelli che cadono sul fallback
+      // di categoria c.prep_station='primi_secondi' (Cotoletta, Fiorentina,
+      // Seppia, ecc. quando l'override è NULL).
+      stationFilter = `${effectiveStation} IN ('primi','secondi','primi_secondi')`;
+      params = [TENANT(req)];
     } else {
       stationFilter = `${effectiveStation} = $2`;
       params = [TENANT(req), stationParam];
