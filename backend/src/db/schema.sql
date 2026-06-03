@@ -208,14 +208,29 @@ CREATE OR REPLACE TRIGGER order_items_total_sync
     AFTER INSERT OR UPDATE OR DELETE ON order_items
     FOR EACH ROW EXECUTE FUNCTION recalculate_order_total();
 
--- Auto-sync table status when order opens/closes
+-- Auto-sync table status when order opens/closes.
+-- JP 2026-06-02 fix: il trigger metteva 'dirty' SEMPRE quando un ordine
+-- passava a completed/cancelled, anche se il tavolo era gia' 'free' da
+-- ore (caso tipico: chiusura in massa di ordini residui notturna → 17
+-- tavoli puliti tornano dirty il giorno dopo). Ora:
+--  - INSERT open: occupied SOLO se non gia' occupied/seated (no override
+--    di stati piu' avanzati come 'seated').
+--  - UPDATE completed/cancelled: dirty SOLO se OLD.status='open' (cambio
+--    reale) E tavolo attualmente occupied/seated (no ribalta di free).
 CREATE OR REPLACE FUNCTION sync_table_status()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-    IF TG_OP = 'INSERT' AND NEW.status = 'open' THEN
-        UPDATE tables SET status = 'occupied' WHERE id = NEW.table_id;
-    ELSIF TG_OP = 'UPDATE' AND NEW.status IN ('completed','cancelled') THEN
-        UPDATE tables SET status = 'dirty' WHERE id = NEW.table_id;
+    IF TG_OP = 'INSERT' AND NEW.status = 'open' AND NEW.table_id IS NOT NULL THEN
+        UPDATE tables SET status = 'occupied'
+         WHERE id = NEW.table_id
+           AND status NOT IN ('occupied','seated');
+    ELSIF TG_OP = 'UPDATE'
+          AND NEW.status IN ('completed','cancelled')
+          AND NEW.table_id IS NOT NULL
+          AND OLD.status = 'open' THEN
+        UPDATE tables SET status = 'dirty'
+         WHERE id = NEW.table_id
+           AND status IN ('occupied','seated');
     END IF;
     RETURN NEW;
 END;
