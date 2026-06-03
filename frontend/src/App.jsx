@@ -130,9 +130,14 @@ function QRTableRedirect() {
 function HomeRedirect() {
   const { user } = useAuth()
   if (user?.role === 'kitchen') {
-    // Kitchen con sub_role specifico → atterra sul KDS della propria stazione
+    // Kitchen con sub_role specifico → atterra sul KDS della propria stazione.
+    // JP 2026-06-02: stazioni frittura/antipasti/primi via query param.
     if (user?.sub_role === 'pizzeria')    return <Navigate to="/kds/pizzeria" replace />
     if (user?.sub_role === 'pasticceria') return <Navigate to="/kds/pasticceria" replace />
+    if (user?.sub_role === 'frittura')    return <Navigate to="/kds?station=frittura" replace />
+    if (user?.sub_role === 'antipasti')   return <Navigate to="/kds?station=antipasti" replace />
+    if (user?.sub_role === 'primi')       return <Navigate to="/kds?station=primi" replace />
+    if (user?.sub_role === 'secondi')     return <Navigate to="/kds?station=secondi" replace />
     // chef / aiuto cucina / nessuno → KDS cucina principale (default)
     return <Navigate to="/kds" replace />
   }

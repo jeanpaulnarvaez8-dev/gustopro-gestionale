@@ -142,11 +142,20 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
   // emphasize='pizzeria' (schermo Simone): pizze GRANDI, resto cucina piccolo.
   // default (cucina): pizze PICCOLE (awareness), resto grande.
   const focusPizza = emphasize === 'pizzeria'
-  // Station: prop (route dedicata) ha priorita'. Altrimenti localStorage,
+  // Station: prop (route dedicata) ha priorita'. Altrimenti URL ?station=X
+  // (utile per sub_role kitchen senza route dedicata), poi localStorage,
   // altrimenti 'all'. Picker visibile solo se station NON forzata da prop.
   const [stationSel, setStationSel] = useState(() => {
     if (stationProp) return stationProp
-    try { return localStorage.getItem(STATION_LS_KEY) || 'all' } catch { return 'all' }
+    try {
+      const qsStation = new URLSearchParams(window.location.search).get('station')
+      const VALID = ['all','cucina','frittura','primi','secondi','primi_secondi','antipasti','pizzeria','pasticceria','crudi']
+      if (qsStation && VALID.includes(qsStation)) {
+        localStorage.setItem(STATION_LS_KEY, qsStation)
+        return qsStation
+      }
+      return localStorage.getItem(STATION_LS_KEY) || 'all'
+    } catch { return 'all' }
   })
   const station = stationProp || stationSel
   const showPicker = !isBar && !stationProp
