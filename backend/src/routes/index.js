@@ -57,5 +57,6 @@ router.use('/service',      require('./service.routes'));
 router.use('/assignments',  require('./assignments.routes'));
 router.use('/courses',      require('./courses.routes'));
 router.use('/workflow',     require('./workflow.routes'));
+router.use('/print',        require('./print.routes'));
 
 module.exports = router;

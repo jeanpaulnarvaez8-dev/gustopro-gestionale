@@ -268,6 +268,13 @@ export const billingAPI = {
   receipts: ()        => api.get('/billing/receipts'),
 };
 
+// JP 2026-06-03: print queue verso agente locale sulla LAN del ristorante.
+// Il backend mette in coda → agent (sul Mac/RPi) polla → stampa sulla TP808.
+export const printAPI = {
+  enqueue:   (kind, order_id) => api.post('/print/enqueue', { kind, order_id }),
+  queueSize: ()               => api.get('/print/queue-size'),
+};
+
 // Admin
 export const adminAPI = {
   stats:     ()            => api.get('/admin/stats'),

@@ -6,7 +6,7 @@ import {
   CheckCircle2, Users, SplitSquareVertical, Pencil, Plus, Minus, X, Zap, Trash2,
   Printer, Share2,
 } from 'lucide-react'
-import { billingAPI, tablesAPI, ordersAPI } from '../lib/api'
+import { billingAPI, tablesAPI, ordersAPI, printAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
@@ -862,17 +862,32 @@ export default function CheckoutPage() {
 
         {bill && (
           <div className="ml-auto flex items-center gap-3">
-            {/* JP 2026-06-03: stampa preconto dal conto. Apre l'endpoint
-                pubblico /api/public/preconto/:order_id in una nuova tab che
-                auto-lancia window.print(). Il tablet deve essere sulla
-                stessa LAN della stampante termica configurata di sistema. */}
+            {/* JP 2026-06-03: stampa preconto dal conto. Mette in coda sul
+                backend → l'agente locale (sul Mac/RPi della LAN) prende
+                il job entro ~2s e lo manda alla TP808 .24:9100. */}
             <button
-              onClick={() => window.open(`/api/public/preconto/${orderId}`, '_blank')}
+              onClick={async () => {
+                if (!orderId) return
+                try {
+                  await printAPI.enqueue('preconto', orderId)
+                  toast({
+                    type: 'success',
+                    title: '🖨 Preconto in stampa',
+                    message: 'Esce dalla .24 fra qualche secondo',
+                  })
+                } catch (e) {
+                  toast({
+                    type: 'error',
+                    title: 'Errore stampa',
+                    message: e?.response?.data?.error || 'Agente offline?',
+                  })
+                }
+              }}
               className="px-3 py-1.5 rounded-lg bg-[var(--color-gold)] text-[#13181C] font-extrabold text-sm uppercase tracking-wider flex items-center gap-1.5 hover:brightness-110 active:scale-[0.98] transition"
-              title="Stampa preconto sulla stampante termica"
+              title="Stampa preconto sulla TP808 .24"
             >
               <Printer size={16} />
-              Stampa
+              Preconto
             </button>
             <span className="serif text-[var(--color-gold)] font-bold text-xl tnum">
               {formatPrice(bill.total_amount)}

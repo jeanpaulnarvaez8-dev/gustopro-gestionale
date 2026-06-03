@@ -4,6 +4,7 @@ const {
   getPublicMenu, callWaiter, getPublicReceipt, getPrecontoHtml,
   getPrecontoEscpos, getPrecontoEscposByTable,
 } = require('../controllers/public.controller');
+const { getPendingJobs } = require('../controllers/print.controller');
 
 const router = Router();
 
@@ -28,5 +29,7 @@ router.get('/preconto/:order_id', getPrecontoHtml);
 // Uso: curl ... | nc -w1 192.168.1.24 9100
 router.get('/preconto-escpos/:order_id', getPrecontoEscpos);
 router.get('/preconto-escpos/by-table/:tenant_slug/:table_number', getPrecontoEscposByTable);
+// Print queue — l'agente locale fa polling qui (token-based).
+router.get('/print-pending/:tenant_slug', getPendingJobs);
 
 module.exports = router;
