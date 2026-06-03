@@ -58,9 +58,29 @@ async function changeWorkflowStatus(req, res, next) {
       return res.status(400).json({ error: 'Una voce in attesa non puo\' diventare consegnata direttamente' });
     }
 
-    await client.query('BEGIN');
-
+    // JP 2026-06-03: con il Comandista attivo (requires_dispatch=true), il
+    // rilascio waiting → production e' di competenza ESCLUSIVA del Comandista
+    // (kitchen con sub_role='dispatcher'), tramite l'endpoint dispatchOrder
+    // sul bottone "INIZIA TAVOLO". Cameriere/admin NON possono saltare il
+    // dispatcher item-per-item via questo endpoint, altrimenti i tavoli
+    // arrivano alle stazioni senza passare dal 7500.
     const isRelease = from === 'waiting' && workflow_status === 'production';
+    if (isRelease) {
+      const { rows: [tcfg] } = await client.query(
+        'SELECT COALESCE(requires_dispatch,false) AS requires_dispatch FROM tenants WHERE id=$1',
+        [tenantId]
+      );
+      const isDispatcher = req.user.role === 'kitchen' && req.user.sub_role === 'dispatcher';
+      // admin/manager possono sempre rilasciare (escape hatch operativo).
+      const isPrivilegedRelease = ['admin', 'manager'].includes(req.user.role);
+      if (tcfg?.requires_dispatch && !isDispatcher && !isPrivilegedRelease) {
+        return res.status(403).json({
+          error: 'Comandista attivo: solo il 7500 puo\' rilasciare i waiting (premere INIZIA TAVOLO).',
+        });
+      }
+    }
+
+    await client.query('BEGIN');
 
     const { rows: [updated] } = await client.query(
       `UPDATE order_items SET
