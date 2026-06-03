@@ -424,7 +424,10 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
     const map = new Map()
     for (const o of orders) {
       for (const it of o.items) {
-        if (it.status !== 'pending' && it.status !== 'cooking') continue
+        // JP 2026-06-03: solo status='pending' nei totali. Appena il cuoco
+        // preme START (chip o singolo) status → 'cooking' → il chip sparisce
+        // dalla barra TOTALI in cima (il piatto "lo sta gia' facendo").
+        if (it.status !== 'pending') continue
         const key = String(it.name || '').trim()
         if (!key) continue
         const q = Number(it.quantity) || 1
