@@ -53,7 +53,10 @@ async function getBarOrders(req, res, next) {
          AND oi.status NOT IN ('ready','served','cancelled')
          AND oi.workflow_status = 'production'
          AND oi.tenant_id = $1
-         AND c.is_beverage = true   -- ← unico delta vs KDS cucina
+         -- JP 2026-06-03: ASPORTO gestito dal bar → vede TUTTI gli items
+         -- (food + drink), non solo le bevande. Per dine-in restano solo
+         -- le bevande come prima.
+         AND (c.is_beverage = true OR o.order_type = 'takeaway')
        GROUP BY o.id, o.created_at, o.order_type, o.customer_name, o.pickup_time,
                 t.table_number, z.name,
                 oi.id, oi.quantity, oi.status, oi.display_status, oi.workflow_status, oi.notes, oi.sent_at,
@@ -127,7 +130,7 @@ async function getBarItemsForTable(req, res, next) {
        WHERE o.table_id = $1
          AND oi.tenant_id = $2
          AND o.status IN ('open','completed')
-         AND c.is_beverage = true
+         AND (c.is_beverage = true OR o.order_type = 'takeaway')
        ORDER BY oi.sent_at DESC`,
       [tableId, tenantId]
     );
@@ -171,7 +174,7 @@ async function getBarCount(req, res, next) {
          AND o.status = 'open'
          AND oi.status NOT IN ('served','cancelled')
          AND oi.workflow_status = 'production'
-         AND c.is_beverage = true`,
+         AND (c.is_beverage = true OR o.order_type = 'takeaway')`,
       [tenantId]
     );
     res.json(row);

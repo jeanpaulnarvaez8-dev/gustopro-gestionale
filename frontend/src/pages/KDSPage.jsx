@@ -924,6 +924,11 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                               // Flusso unico per tutti: Da fare → IN LAVORAZIONE → PRONTO.
                               let nextStatus = cfg.next
                               let nextLabel = cfg.nextLabel
+                              // JP 2026-06-03: asporto gestito dal bar, non dal cameriere.
+                              // Quando il piatto e' pronto, l'avviso va al bar.
+                              if (order.order_type === 'takeaway' && nextStatus === 'ready') {
+                                nextLabel = 'CHIAMA BAR'
+                              }
                               const btnColor = nextStatus === 'ready'
                                 ? 'bg-[var(--color-ok)] hover:brightness-110 text-white'
                                 : nextStatus === 'oven_done'
