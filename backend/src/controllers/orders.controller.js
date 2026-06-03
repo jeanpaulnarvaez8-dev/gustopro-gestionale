@@ -39,7 +39,11 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
     'SELECT COALESCE(requires_dispatch,false) AS requires_dispatch FROM tenants WHERE id=$1',
     [tenantId]
   );
-  if (tcfg?.requires_dispatch && !menuItem.is_beverage && workflow_status === 'production') {
+  // JP 2026-06-03: bypass Comandista anche per items auto_print (dessert/
+  // acque/vini/bollicine/spina): vanno in sala/bar direttamente, non
+  // servono al 7500. Solo i piatti cucina veri (antipasti/primi/secondi/
+  // pizza) restano forzati a waiting.
+  if (tcfg?.requires_dispatch && !menuItem.is_beverage && !menuItem.auto_print && workflow_status === 'production') {
     workflow_status = 'waiting';
   }
 
