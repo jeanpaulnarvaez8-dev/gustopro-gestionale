@@ -362,6 +362,25 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
     }
   }
 
+  // JP 2026-06-03: tap sul chip "×N DA FARE" in barra TOTALI → bulk START
+  // di tutti i piatti pending con quel nome, in produzione, attraverso i
+  // tavoli. Il cuoco non deve cliccare uno per uno.
+  const handleBulkStart = async (name) => {
+    const targets = []
+    for (const o of orders) {
+      for (const it of o.items) {
+        if (String(it.name || '').trim() === name &&
+            it.status === 'pending' &&
+            it.workflow_status === 'production') {
+          targets.push(it.id)
+        }
+      }
+    }
+    if (targets.length === 0) return
+    // Optimistic + parallel
+    await Promise.all(targets.map(id => handleAdvance(id, 'cooking')))
+  }
+
   const handleAdvance = async (itemId, nextStatus) => {
     if (!nextStatus) return
     setUpdating(prev => { const n = { ...prev, [itemId]: true }; updatingRef.current = n; return n })
@@ -591,10 +610,14 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                   {name}
                 </span>
                 {e.ready > 0 && (
-                  <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-gold)] text-black font-extrabold leading-none">
+                  <button
+                    onClick={() => handleBulkStart(name)}
+                    title={`START su tutti i ${name} (×${e.ready})`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-gold)] text-black font-extrabold leading-none hover:brightness-110 active:scale-[0.97] transition cursor-pointer"
+                  >
                     <span className="text-2xl tnum">×{e.ready}</span>
                     <span className="text-sm uppercase tracking-wider">DA FARE</span>
-                  </span>
+                  </button>
                 )}
                 {e.waiting > 0 && (
                   <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-warn)] text-black font-extrabold leading-none animate-pulse">
