@@ -713,9 +713,13 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
 
                     {/* JP 2026-06-03: bottone INIZIA TAVOLO inline nella
                         card del tavolo. Appare se almeno UN item e' in
-                        waiting → lo chef lo preme, tutti i waiting di
-                        quell'ordine partono verso le stazioni. */}
-                    {order.items.some(it => it.workflow_status === 'waiting') && (
+                        waiting NON ancora rilasciato (released_at NULL).
+                        Visibile solo a admin/manager/dispatcher: i cuochi
+                        di stazione (frittura/primi/...) NON devono poter
+                        dispacciare. */}
+                    {(['admin','manager'].includes(user?.role) ||
+                       (user?.role === 'kitchen' && user?.sub_role === 'dispatcher')) &&
+                     order.items.some(it => it.workflow_status === 'waiting' && !it.released_at) && (
                       <button
                         onClick={() => handleDispatchOrder(order.order_id, order.table_number)}
                         disabled={dispatching[order.order_id]}

@@ -1031,6 +1031,22 @@ async function dispatchOrder(req, res, next) {
         RETURNING id`,
       [order_id, tenantId]
     );
+    // JP 2026-06-03: i waiting con timer futuro restano in waiting, MA
+    // li marchiamo come "visti dal Comandista" settando released_at=NOW().
+    // Il KDS stazione (frittura/primi/...) usa released_at IS NOT NULL per
+    // mostrarli come PRE-ALLERTA col countdown ⏰ — il cuoco sa cosa sta
+    // per arrivare. Pre-dispatch (released_at NULL) restano invisibili
+    // alle stazioni e visibili solo al 7500.
+    const { rows: preallerta } = await pool.query(
+      `UPDATE order_items
+          SET released_at = NOW()
+        WHERE order_id = $1 AND tenant_id = $2
+          AND workflow_status = 'waiting'
+          AND fire_at IS NOT NULL AND fire_at > NOW()
+          AND released_at IS NULL
+        RETURNING id`,
+      [order_id, tenantId]
+    );
     // Quanti restano in attesa (timer ancora attivo)? Lo segnalo al chef.
     const { rows: [pending] } = await pool.query(
       `SELECT COUNT(*)::int AS n
@@ -1049,7 +1065,18 @@ async function dispatchOrder(req, res, next) {
         orderId: order_id, itemId: it.id, dispatched: true,
       });
     }
-    res.json({ dispatched: items.length, still_waiting: pending?.n || 0, order_id });
+    // Pre-allerta: notifico le stazioni del nuovo item visibile (waiting+released)
+    for (const it of preallerta) {
+      io?.emit('workflow-status-changed', {
+        orderId: order_id, itemId: it.id, workflow_status: 'waiting', preallerta: true,
+      });
+    }
+    res.json({
+      dispatched: items.length,
+      preallerta: preallerta.length,
+      still_waiting: pending?.n || 0,
+      order_id,
+    });
   } catch (err) { next(err); }
 }
 

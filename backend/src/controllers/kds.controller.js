@@ -49,13 +49,18 @@ async function getPendingOrders(req, res, next) {
       stationFilter = `${effectiveStation} = $2`;
       params = [TENANT(req), stationParam];
     }
-    // Workflow filter: comandista vede SOLO waiting; le stazioni reali solo
-    // production (post-dispatch). 'all' (admin/legacy) vede entrambi.
+    // Workflow filter:
+    //   - dispatcher (7500): SOLO i waiting non ancora "visti" (released_at NULL)
+    //   - stazione reale: production + waiting GIA' rilasciati dal Comandista
+    //     ma col timer attivo (released_at IS NOT NULL) → pre-allerta countdown
+    //   - all (admin): tutto
+    // JP 2026-06-03.
     const workflowFilter = stationParam === 'dispatcher'
-      ? `oi.workflow_status = 'waiting'`
+      ? `(oi.workflow_status = 'waiting' AND oi.released_at IS NULL)`
       : stationParam === 'all'
         ? `oi.workflow_status IN ('waiting','production')`
-        : `oi.workflow_status = 'production'`;
+        : `(oi.workflow_status = 'production'
+            OR (oi.workflow_status = 'waiting' AND oi.released_at IS NOT NULL))`;
 
     const { rows } = await pool.query(
       `SELECT
@@ -74,6 +79,7 @@ async function getPendingOrders(req, res, next) {
          -- (preview "in arrivo"), indipendentemente dal display_status reale.
          CASE WHEN oi.workflow_status = 'waiting' THEN 'waiting' ELSE oi.display_status END AS display_status,
          oi.fire_at,
+         oi.released_at,
          oi.workflow_status AS workflow_status,
          oi.notes          AS item_notes,
          oi.sent_at,
@@ -145,6 +151,7 @@ async function getPendingOrders(req, res, next) {
         display_status:   row.display_status,
         workflow_status:  row.workflow_status,
         fire_at:          row.fire_at, // timer auto-fire (per voci in attesa)
+        released_at:      row.released_at, // NULL = pre-dispatch (7500), set = visto dal Comandista
         course_type:      row.course_type,
         prep_station:     row.prep_station,
         required_kit:     row.required_kit,  // JSONB array di stringhe o null
