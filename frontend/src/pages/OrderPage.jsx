@@ -152,7 +152,7 @@ export default function OrderPage() {
   const navigate = useNavigate()
   const {
     items: cartItems, total, itemCount, setTable, addItem, addCombo,
-    removeItem, updateQuantity, setWorkflowStatus, setNotes, clearCart,
+    removeItem, updateQuantity, setWorkflowStatus, setNotes, setFireAtMinutes, clearCart,
   } = useCart()
   const { toast } = useToast()
   const { user: authUser } = useAuth()
@@ -367,6 +367,10 @@ export default function OrderPage() {
           modifiers: ci.modifiers.map(m => ({ modifier_id: m.id })),
           workflow_status: ci.workflow_status || 'production',
           ...(ci.weight_g ? { weight_g: ci.weight_g } : {}),
+          // JP 2026-06-03: timer auto-fire impostato dal cameriere nel carrello.
+          ...((ci.workflow_status === 'waiting' && Number(ci.fire_at_minutes) > 0)
+              ? { fire_at_minutes: Number(ci.fire_at_minutes) }
+              : {}),
         }))
 
       const comboItems = cartItems
@@ -1024,8 +1028,10 @@ export default function OrderPage() {
                       </button>
                     </div>
 
-                    {/* Workflow status A/P/C */}
-                    <div className="flex items-center gap-1 mt-1.5">
+                    {/* Workflow status A/P/C + timer minuti (JP 2026-06-03:
+                        Marco deve poter inserire i minuti direttamente nel
+                        carrello, senza passare per il pannello "Già al tavolo"). */}
+                    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                       {[
                         { key: 'production', label: 'P', icon: Zap,           tone: 'terracotta', title: 'Produzione' },
                         { key: 'waiting',    label: 'A', icon: Clock,         tone: 'warn',       title: 'Attesa' },
@@ -1048,6 +1054,26 @@ export default function OrderPage() {
                           </button>
                         )
                       })}
+                      {/* Input minuti per timer auto-fire — visibile solo se ATTESA. */}
+                      {(ci.workflow_status || 'production') === 'waiting' && (
+                        <div className="flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded border border-[var(--color-sea)]/50 bg-[var(--color-sea-soft)]/40">
+                          <Clock size={10} className="text-[var(--color-sea)]" />
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min="0"
+                            max="180"
+                            placeholder="min"
+                            value={ci.fire_at_minutes ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value.trim()
+                              setFireAtMinutes(ci._key, v === '' ? null : Math.max(0, parseInt(v, 10) || 0))
+                            }}
+                            className="w-12 bg-transparent text-[var(--color-sea)] text-[10px] font-bold text-center outline-none tnum"
+                          />
+                          <span className="text-[9px] text-[var(--color-sea)] font-semibold">min</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between mt-1.5">

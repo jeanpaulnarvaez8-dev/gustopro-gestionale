@@ -10,8 +10,12 @@ const TENANT = (req) => req.tenant.id;
 // ── Helpers ──────────────────────────────────────────────────
 
 async function insertRegularItem(client, order_id, item, userId, tenantId) {
-  const { menu_item_id, quantity = 1, notes: itemNotes, modifiers = [], weight_g } = item;
+  const { menu_item_id, quantity = 1, notes: itemNotes, modifiers = [], weight_g, fire_at_minutes } = item;
   let workflow_status = item.workflow_status || 'production';
+  // JP 2026-06-03: timer auto-fire in minuti dal carrello (es. Marco scrive
+  // "10" sulla riga ATTESA → fra 10 min il piatto parte da solo in cucina).
+  // Significativo solo se workflow_status='waiting'.
+  const fireAtMin = Math.max(0, parseInt(fire_at_minutes, 10) || 0);
 
   // menu_item must belong to the same tenant. JOIN su categories per sapere
   // se e' bevanda (bar bypassa il comandista).
@@ -59,14 +63,19 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
   const wfStatus = ['waiting', 'production', 'delivered'].includes(workflow_status) ? workflow_status : 'production';
   const itemStatus = wfStatus === 'delivered' ? 'served' : 'pending';
   const servedAt = wfStatus === 'delivered' ? new Date() : null;
+  // fire_at solo sui waiting con minuti > 0. Calcolato server-side per evitare
+  // drift orologio client vs DB. Per items production/delivered → NULL.
+  const fireAtIso = (wfStatus === 'waiting' && fireAtMin > 0)
+    ? new Date(Date.now() + fireAtMin * 60_000)
+    : null;
 
   const { rows: [orderItem] } = await client.query(
     `INSERT INTO order_items
        (tenant_id, order_id, menu_item_id, quantity, unit_price, modifier_total, subtotal, notes, weight_g,
-        workflow_status, status, inserted_by, served_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+        workflow_status, status, inserted_by, served_at, fire_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [tenantId, order_id, menu_item_id, quantity, unitPrice, modifierTotal, subtotal, itemNotes || null, weight_g || null,
-     wfStatus, itemStatus, userId, servedAt]
+     wfStatus, itemStatus, userId, servedAt, fireAtIso]
   );
 
   for (const mod of modifiers) {

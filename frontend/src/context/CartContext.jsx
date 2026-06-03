@@ -87,6 +87,14 @@ function cartReducer(state, action) {
         ),
       };
 
+    case 'SET_FIRE_AT_MINUTES':
+      return {
+        ...state,
+        items: state.items.map(i =>
+          i._key === action.key ? { ...i, fire_at_minutes: action.fire_at_minutes } : i
+        ),
+      };
+
     case 'CLEAR':
       return initialState;
 
@@ -126,6 +134,10 @@ export function CartProvider({ children }) {
     dispatch({ type: 'SET_NOTES', key, notes });
   }, []);
 
+  const setFireAtMinutes = useCallback((key, fire_at_minutes) => {
+    dispatch({ type: 'SET_FIRE_AT_MINUTES', key, fire_at_minutes });
+  }, []);
+
   const clearCart = useCallback(() => {
     dispatch({ type: 'CLEAR' });
   }, []);
@@ -148,7 +160,7 @@ export function CartProvider({ children }) {
   return (
     <CartContext.Provider value={{
       ...state, total, itemCount,
-      setTable, addItem, addCombo, removeItem, updateQuantity, setWorkflowStatus, setNotes, clearCart,
+      setTable, addItem, addCombo, removeItem, updateQuantity, setWorkflowStatus, setNotes, setFireAtMinutes, clearCart,
     }}>
       {children}
     </CartContext.Provider>
