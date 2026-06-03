@@ -861,9 +861,23 @@ export default function CheckoutPage() {
         </div>
 
         {bill && (
-          <span className="ml-auto serif text-[var(--color-gold)] font-bold text-xl tnum">
-            {formatPrice(bill.total_amount)}
-          </span>
+          <div className="ml-auto flex items-center gap-3">
+            {/* JP 2026-06-03: stampa preconto dal conto. Apre l'endpoint
+                pubblico /api/public/preconto/:order_id in una nuova tab che
+                auto-lancia window.print(). Il tablet deve essere sulla
+                stessa LAN della stampante termica configurata di sistema. */}
+            <button
+              onClick={() => window.open(`/api/public/preconto/${orderId}`, '_blank')}
+              className="px-3 py-1.5 rounded-lg bg-[var(--color-gold)] text-[#13181C] font-extrabold text-sm uppercase tracking-wider flex items-center gap-1.5 hover:brightness-110 active:scale-[0.98] transition"
+              title="Stampa preconto sulla stampante termica"
+            >
+              <Printer size={16} />
+              Stampa
+            </button>
+            <span className="serif text-[var(--color-gold)] font-bold text-xl tnum">
+              {formatPrice(bill.total_amount)}
+            </span>
+          </div>
         )}
       </header>
 
