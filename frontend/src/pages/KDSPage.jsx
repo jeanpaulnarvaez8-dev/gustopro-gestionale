@@ -181,6 +181,13 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
   const [updating, setUpdating] = useState({})
   // JP 2026-06-03: dispatch INIZIA TAVOLO inline nella card (no pagina separata)
   const [dispatching, setDispatching] = useState({})
+  // Tick periodico ogni 30s → il countdown dei timer in attesa nella barra
+  // TOTALI in alto scende anche senza nuove fetch.
+  const [, setMinuteTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setMinuteTick(t => t + 1), 30000)
+    return () => clearInterval(id)
+  }, [])
   const loadedRef = useRef(false)
   const updatingRef = useRef({})
   // Set degli orderId arrivati negli ultimi 8s → mostrare flash oro
@@ -403,9 +410,17 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
         if (!key) continue
         const q = Number(it.quantity) || 1
         const isWaiting = it.workflow_status === 'waiting'
-        const entry = map.get(key) || { ready: 0, waiting: 0 }
-        if (isWaiting) entry.waiting += q
-        else entry.ready += q
+        const entry = map.get(key) || { ready: 0, waiting: 0, nextFireAt: null }
+        if (isWaiting) {
+          entry.waiting += q
+          // Prendo il PROSSIMO timer a scadere fra i waiting di questo piatto
+          if (it.fire_at) {
+            const t = new Date(it.fire_at).getTime()
+            if (!entry.nextFireAt || t < entry.nextFireAt) entry.nextFireAt = t
+          }
+        } else {
+          entry.ready += q
+        }
         map.set(key, entry)
       }
     }
@@ -563,26 +578,39 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
           <span className="text-lg uppercase tracking-wider text-[var(--color-gold)] font-extrabold mr-2 shrink-0">
             TOTALI
           </span>
-          {dishTotals.map(([name, e]) => (
-            <div
-              key={name}
-              className="shrink-0 flex items-center gap-2.5 px-4 py-2 rounded-lg bg-[var(--color-surface)] border-2 border-[var(--color-gold)]/60"
-            >
-              {e.ready > 0 && (
-                <span className="text-[var(--color-gold)] font-extrabold text-3xl tnum leading-none">
-                  ×{e.ready}
+          {dishTotals.map(([name, e]) => {
+            const minsLeft = e.nextFireAt
+              ? Math.max(0, Math.ceil((e.nextFireAt - Date.now()) / 60000))
+              : null
+            return (
+              <div
+                key={name}
+                className="shrink-0 flex items-center gap-2.5 px-4 py-2 rounded-lg bg-[var(--color-surface)] border-2 border-[var(--color-gold)]/60"
+              >
+                {e.ready > 0 && (
+                  <span className="flex items-baseline gap-1 text-[var(--color-gold)] font-extrabold leading-none">
+                    <span className="text-3xl tnum">×{e.ready}</span>
+                    {e.waiting > 0 && (
+                      <span className="text-[10px] uppercase tracking-wider">DA FARE</span>
+                    )}
+                  </span>
+                )}
+                <span className="text-[var(--color-text)] text-lg font-extrabold uppercase whitespace-nowrap leading-tight">
+                  {name}
                 </span>
-              )}
-              <span className="text-[var(--color-text)] text-lg font-extrabold uppercase whitespace-nowrap leading-tight">
-                {name}
-              </span>
-              {e.waiting > 0 && (
-                <span className="ml-1 flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--color-warn)] text-black font-extrabold text-base tnum animate-pulse">
-                  ⏳ {e.waiting} ATTESA
-                </span>
-              )}
-            </div>
-          ))}
+                {e.waiting > 0 && (
+                  <span className="ml-1 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--color-warn)] text-black font-extrabold text-base tnum animate-pulse">
+                    ⏳ {e.waiting} ATTESA
+                    {minsLeft !== null && (
+                      <span className="px-1.5 py-0.5 rounded bg-black/35 text-white text-sm tnum">
+                        ⏰ {minsLeft === 0 ? 'ORA' : `${minsLeft}m`}
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
