@@ -71,11 +71,12 @@ async function changeWorkflowStatus(req, res, next) {
         [tenantId]
       );
       const isDispatcher = req.user.role === 'kitchen' && req.user.sub_role === 'dispatcher';
-      // JP 2026-06-03: rimosso escape hatch admin/manager — JP loggato
-      // come admin schiacciava "Manda in cucina" su OrderPage e bypassava
-      // il Comandista. Ora SOLO il dispatcher (PIN 7500) puo' rilasciare,
-      // tramite il bottone INIZIA TAVOLO sul KDS.
-      if (tcfg?.requires_dispatch && !isDispatcher) {
+      // JP 2026-06-03: Comandista attivo → solo il dispatcher (PIN 7500) puo'
+      // rilasciare i waiting GENERICI tramite INIZIA TAVOLO. ECCEZIONE:
+      // il CAMERIERE PROPRIETARIO del tavolo (isOwner) puo' anticipare un
+      // SUO piatto in attesa (es. cliente vuole il dessert prima del timer).
+      // Resta bloccato il cameriere su tavoli altrui.
+      if (tcfg?.requires_dispatch && !isDispatcher && !isOwner) {
         return res.status(403).json({
           error: 'Comandista attivo: solo il 7500 puo\' rilasciare i waiting (premere INIZIA TAVOLO).',
         });
