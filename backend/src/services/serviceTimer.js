@@ -216,6 +216,13 @@ async function maybeResendAlert(client, tenantId, io, row, alertType, elapsedMin
 
 // ─── Check mandatory alerts per un singolo tenant ────────────
 async function checkMandatoryAlertsForTenant(client, tenantId) {
+  // JP 2026-06-03: se il tenant ha il Comandista attivo (requires_dispatch),
+  // gli items waiting sono di sua competenza — niente alert al cameriere.
+  const { rows: [tcfg] } = await client.query(
+    'SELECT COALESCE(requires_dispatch,false) AS requires_dispatch FROM tenants WHERE id=$1',
+    [tenantId]
+  );
+  if (tcfg?.requires_dispatch) return;
   const { rows } = await client.query(`
     SELECT
       oi.id AS item_id, oi.order_id, oi.quantity, oi.inserted_at,
