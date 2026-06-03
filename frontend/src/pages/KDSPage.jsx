@@ -8,7 +8,7 @@ import {
 import { useSocket } from '../context/SocketContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
-import { kdsAPI, barAPI, workflowAPI, wineAPI } from '../lib/api'
+import { kdsAPI, barAPI, workflowAPI, wineAPI, ordersAPI } from '../lib/api'
 import { formatElapsed, elapsedMinutes } from '../lib/utils'
 import { Card, Badge } from '../components/v2'
 import { playNewOrderBeep, isSoundEnabled, toggleSound } from '../lib/kdsBeep'
@@ -179,6 +179,8 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
   const [waitingItems, setWaitingItems] = useState([]) // preview "in arrivo"
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState({})
+  // JP 2026-06-03: dispatch INIZIA TAVOLO inline nella card (no pagina separata)
+  const [dispatching, setDispatching] = useState({})
   const loadedRef = useRef(false)
   const updatingRef = useRef({})
   // Set degli orderId arrivati negli ultimi 8s → mostrare flash oro
@@ -327,6 +329,28 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
     }, 15000)
     return () => clearInterval(interval)
   }, [loadOrders])
+
+  // JP 2026-06-03: INIZIA TAVOLO inline sulla card. Quando ci sono items
+  // in waiting (sub_role dispatcher o requires_dispatch attivo), il bottone
+  // libera TUTTI i waiting di quell'ordine in produzione → arrivano alle
+  // stazioni.
+  const handleDispatchOrder = async (orderId, tableNumber) => {
+    if (dispatching[orderId]) return
+    setDispatching(p => ({ ...p, [orderId]: true }))
+    try {
+      const { data } = await ordersAPI.dispatch(orderId)
+      toast({
+        type: 'success',
+        title: `🚀 Tavolo ${tableNumber}: ${data.dispatched || ''} piatti partiti`,
+        message: 'Inviati alle stazioni',
+      })
+      loadOrders()
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore dispatch', message: e?.response?.data?.error || 'Riprova' })
+    } finally {
+      setDispatching(p => { const n = { ...p }; delete n[orderId]; return n })
+    }
+  }
 
   const handleAdvance = async (itemId, nextStatus) => {
     if (!nextStatus) return
@@ -683,6 +707,20 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                         <ElapsedTick sentAt={oldest} />
                       </div>
                     </div>
+
+                    {/* JP 2026-06-03: bottone INIZIA TAVOLO inline nella
+                        card del tavolo. Appare se almeno UN item e' in
+                        waiting → lo chef lo preme, tutti i waiting di
+                        quell'ordine partono verso le stazioni. */}
+                    {order.items.some(it => it.workflow_status === 'waiting') && (
+                      <button
+                        onClick={() => handleDispatchOrder(order.order_id, order.table_number)}
+                        disabled={dispatching[order.order_id]}
+                        className="w-full py-3 bg-[var(--color-ok)] hover:brightness-110 text-white font-extrabold text-lg uppercase tracking-wider active:scale-[0.99] transition disabled:opacity-50 flex items-center justify-center gap-2 border-y-2 border-[var(--color-ok)]/80"
+                      >
+                        {dispatching[order.order_id] ? '…' : '▶ INIZIA TAVOLO'}
+                      </button>
+                    )}
 
                     {/* Items: gerarchia visiva active > waiting > delivered */}
                     <div className="flex-1 p-3 flex flex-col gap-1.5">
