@@ -327,4 +327,154 @@ async function getPrecontoHtml(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { getPublicMenu, callWaiter, getPublicReceipt, getPrecontoHtml };
+// ---------------------------------------------------------------------------
+// PRECONTO ESC/POS raw (JP 2026-06-03).
+// La stampante .24 e' un print-server TP808 raw socket 9100 (no AirPrint,
+// no IPP, no ePOS-Print). L'unica via di stampa e' inviare i byte ESC/POS
+// direttamente alla porta 9100. Questo endpoint ritorna il buffer pronto:
+//
+//   curl -s https://gestione.gustopro.it/api/public/preconto-escpos/:id \
+//     | nc -w1 192.168.1.24 9100
+//
+// Larghezza assunta: 48 colonne (font A 12cpi su carta 80mm).
+// Charset ASCII-safe: accenti italiani translitterati per evitare problemi
+// con codepage del firmware TP808 (variabile).
+// ---------------------------------------------------------------------------
+const COLS = 48;
+const asciiSafe = (s) => String(s ?? '')
+  .replace(/[àÀ]/g, 'a').replace(/[èéÈÉ]/g, 'e').replace(/[ìÌ]/g, 'i')
+  .replace(/[òÒ]/g, 'o').replace(/[ùÙ]/g, 'u')
+  .replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-')
+  .replace(/€/g, 'EUR').replace(/[^\x20-\x7E\n]/g, '');
+// Layout helpers — ritornano stringhe ASCII con padding a COLS.
+const left = (s) => asciiSafe(s);
+const center = (s) => {
+  const t = asciiSafe(s);
+  if (t.length >= COLS) return t.slice(0, COLS);
+  const pad = Math.floor((COLS - t.length) / 2);
+  return ' '.repeat(pad) + t;
+};
+const lineSep = (ch = '-') => ch.repeat(COLS);
+// Riga "voce ............... prezzo": prezzo a destra in monospace.
+const row2 = (label, value) => {
+  const L = asciiSafe(label);
+  const V = asciiSafe(value);
+  const space = Math.max(1, COLS - L.length - V.length);
+  if (L.length + V.length + 1 > COLS) {
+    // wrap del label se troppo lungo: prima riga label troncato, seconda riga prezzo a destra
+    const labMax = COLS - V.length - 1;
+    return L.slice(0, labMax) + ' ' + V;
+  }
+  return L + ' '.repeat(space) + V;
+};
+// Bytes ESC/POS
+const ESC = 0x1B, GS = 0x1D, LF = 0x0A;
+const INIT       = Buffer.from([ESC, 0x40]);
+const ALIGN_L    = Buffer.from([ESC, 0x61, 0]);
+const ALIGN_C    = Buffer.from([ESC, 0x61, 1]);
+const BOLD_ON    = Buffer.from([ESC, 0x45, 1]);
+const BOLD_OFF   = Buffer.from([ESC, 0x45, 0]);
+const DBL_ON     = Buffer.from([GS, 0x21, 0x11]); // double w + double h
+const DBL_OFF    = Buffer.from([GS, 0x21, 0x00]);
+const CUT        = Buffer.from([GS, 0x56, 0x00]); // full cut
+const FEED5      = Buffer.from([ESC, 0x64, 5]);
+const txt = (s) => Buffer.from(asciiSafe(s) + '\n', 'ascii');
+
+async function getPrecontoEscpos(req, res, next) {
+  try {
+    const { order_id } = req.params;
+    if (!/^[0-9a-f-]{36}$/i.test(String(order_id || ''))) {
+      return res.status(404).type('text/plain').send('not found');
+    }
+    const { rows: [o] } = await pool.query(
+      `SELECT o.id, o.covers, o.notes, o.order_type, o.created_at,
+              COALESCE(tb.table_number::text, 'Asporto') AS table_number,
+              z.name AS zone_name,
+              t.name AS restaurant_name, t.fiscal_data,
+              COALESCE(t.coperto_price, 0)::numeric AS coperto_price
+         FROM orders o
+         JOIN tenants t ON t.id = o.tenant_id
+         LEFT JOIN tables tb ON tb.id = o.table_id
+         LEFT JOIN zones z ON z.id = tb.zone_id
+        WHERE o.id = $1`, [order_id]);
+    if (!o) return res.status(404).type('text/plain').send('not found');
+    const { rows: items } = await pool.query(
+      `SELECT mi.name, oi.quantity, oi.subtotal, oi.notes
+         FROM order_items oi
+         JOIN menu_items mi ON mi.id = oi.menu_item_id
+        WHERE oi.order_id = $1 AND oi.status <> 'cancelled'
+        ORDER BY mi.name`, [order_id]);
+    const fd = o.fiscal_data || {};
+    const dt = new Date(o.created_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+    const itemsSum = items.reduce((s, it) => s + Number(it.subtotal || 0), 0);
+    const copertoTot = Number(o.coperto_price || 0) * Number(o.covers || 0);
+    const grandTotal = itemsSum + copertoTot;
+    const money = (n) => Number(n || 0).toFixed(2).replace('.', ',');
+
+    const chunks = [];
+    chunks.push(INIT, ALIGN_C);
+    chunks.push(BOLD_ON, txt(o.restaurant_name || ''), BOLD_OFF);
+    if (fd.address || fd.city) chunks.push(txt([fd.address, fd.city].filter(Boolean).join(' ')));
+    if (fd.piva) chunks.push(txt('P.IVA ' + fd.piva));
+    if (fd.phone) chunks.push(txt(fd.phone));
+    chunks.push(txt(lineSep('=')));
+    chunks.push(BOLD_ON, txt('PRECONTO - NON FISCALE'), BOLD_OFF);
+    chunks.push(DBL_ON, txt('TAVOLO ' + o.table_number), DBL_OFF);
+    if (o.zone_name) chunks.push(txt(o.zone_name));
+    chunks.push(txt(dt + '  Coperti: ' + Number(o.covers || 0)));
+    chunks.push(txt(lineSep('=')));
+    chunks.push(ALIGN_L);
+    if (items.length === 0) {
+      chunks.push(txt('Nessuna voce'));
+    } else {
+      for (const it of items) {
+        const lab = `${Number(it.quantity)}x ${it.name}`;
+        chunks.push(txt(row2(lab, money(it.subtotal))));
+        if (it.notes) chunks.push(txt('   ' + it.notes));
+      }
+    }
+    chunks.push(txt(lineSep('-')));
+    chunks.push(txt(row2('Subtotale piatti', money(itemsSum))));
+    if (copertoTot > 0) {
+      chunks.push(txt(row2(`Coperto (${Number(o.covers || 0)} x ${money(o.coperto_price)})`, money(copertoTot))));
+    }
+    chunks.push(txt(lineSep('=')));
+    chunks.push(BOLD_ON, DBL_ON);
+    chunks.push(txt(row2('TOT', money(grandTotal))));
+    chunks.push(DBL_OFF, BOLD_OFF);
+    chunks.push(txt(lineSep('=')));
+    chunks.push(ALIGN_C, txt('Grazie e arrivederci'));
+    chunks.push(txt(String(o.id).slice(0, 8)));
+    chunks.push(FEED5, CUT);
+
+    const out = Buffer.concat(chunks);
+    res.set('Content-Type', 'application/octet-stream');
+    res.set('Content-Disposition', `inline; filename="preconto-${o.table_number}.bin"`);
+    res.set('Content-Length', String(out.length));
+    res.send(out);
+  } catch (err) { next(err); }
+}
+
+// Variante per comodita': risolve l'ordine open corrente dal numero tavolo.
+// Uso: curl /preconto-escpos/by-table/2 | nc 192.168.1.24 9100
+async function getPrecontoEscposByTable(req, res, next) {
+  try {
+    const { tenant_slug, table_number } = req.params;
+    const tenant = await resolveTenantBySlug(tenant_slug);
+    if (!tenant) return res.status(404).type('text/plain').send('tenant not found');
+    const { rows: [r] } = await pool.query(
+      `SELECT o.id FROM orders o
+         JOIN tables tb ON tb.id = o.table_id
+        WHERE o.tenant_id = $1 AND o.status = 'open' AND tb.table_number = $2
+        ORDER BY o.created_at DESC LIMIT 1`,
+      [tenant.id, String(table_number)]);
+    if (!r) return res.status(404).type('text/plain').send('no open order for table');
+    req.params.order_id = r.id;
+    return getPrecontoEscpos(req, res, next);
+  } catch (err) { next(err); }
+}
+
+module.exports = {
+  getPublicMenu, callWaiter, getPublicReceipt, getPrecontoHtml,
+  getPrecontoEscpos, getPrecontoEscposByTable,
+};
