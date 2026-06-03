@@ -519,7 +519,6 @@ export default function OrderPage() {
             <UserPlus2 size={13} /> 32
           </button>
         )}
-        )}
       </header>
 
       {/* ─── Banner acqua + pane (apertura tavolo) ─────────────── */}
@@ -1067,7 +1066,9 @@ export default function OrderPage() {
                             value={ci.fire_at_minutes ?? ''}
                             onChange={(e) => {
                               const v = e.target.value.trim()
-                              setFireAtMinutes(ci._key, v === '' ? null : Math.max(0, parseInt(v, 10) || 0))
+                              // Cap a 180 min (3 ore) — un timer piu' lungo
+                              // sopravviverebbe al day-close e creerebbe casino.
+                              setFireAtMinutes(ci._key, v === '' ? null : Math.min(180, Math.max(0, parseInt(v, 10) || 0)))
                             }}
                             className="w-12 bg-transparent text-[var(--color-sea)] text-[10px] font-bold text-center outline-none tnum"
                           />

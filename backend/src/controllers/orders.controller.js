@@ -15,7 +15,8 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
   // JP 2026-06-03: timer auto-fire in minuti dal carrello (es. Marco scrive
   // "10" sulla riga ATTESA → fra 10 min il piatto parte da solo in cucina).
   // Significativo solo se workflow_status='waiting'.
-  const fireAtMin = Math.max(0, parseInt(fire_at_minutes, 10) || 0);
+  // JP 2026-06-03: cap a 180 min per non far sopravvivere timer al day-close.
+  const fireAtMin = Math.min(180, Math.max(0, parseInt(fire_at_minutes, 10) || 0));
 
   // menu_item must belong to the same tenant. JOIN su categories per sapere
   // se e' bevanda (bar bypassa il comandista).
@@ -979,7 +980,7 @@ async function setItemFireAt(req, res, next) {
     // Verifica item: deve essere in waiting (i piatti gia' firati non si
     // ri-programmano), in ordine aperto, nello stesso tenant.
     const { rows: [item] } = await pool.query(
-      `SELECT oi.id, oi.workflow_status, o.status AS order_status
+      `SELECT oi.id, oi.workflow_status, o.status AS order_status, o.waiter_id
          FROM order_items oi JOIN orders o ON o.id = oi.order_id
         WHERE oi.id = $1 AND oi.order_id = $2 AND oi.tenant_id = $3`,
       [itemId, order_id, tenantId]
@@ -988,6 +989,18 @@ async function setItemFireAt(req, res, next) {
     if (item.order_status !== 'open') return res.status(400).json({ error: 'Ordine chiuso' });
     if (item.workflow_status !== 'waiting') {
       return res.status(400).json({ error: 'Il timer si imposta solo su voci IN ATTESA' });
+    }
+    // JP 2026-06-03: ownership — solo il cameriere che ha preso il tavolo
+    // o admin/manager/cashier possono cambiare il timer. Senza, qualunque
+    // cameriere puo' alterare i tavoli dei colleghi.
+    const isOwner = item.waiter_id && item.waiter_id === req.user?.id;
+    const isPrivilegedRole = ['admin', 'manager', 'cashier'].includes(req.user?.role);
+    if (!isOwner && !isPrivilegedRole) {
+      return res.status(403).json({ error: 'Solo il cameriere del tavolo puo\' cambiare il timer' });
+    }
+    // Cap a 180 min anche server-side.
+    if (mins > 180) {
+      return res.status(400).json({ error: 'Timer max 180 minuti' });
     }
     const fireAtSql = mins > 0 ? `NOW() + ($1::int || ' minutes')::interval` : `NULL`;
     const params = mins > 0 ? [Math.max(1, Math.round(mins)), itemId, tenantId] : [itemId, tenantId];
@@ -1014,16 +1027,35 @@ async function dispatchOrder(req, res, next) {
   try {
     const { id: order_id } = req.params;
     const tenantId = TENANT(req);
+    // JP 2026-06-03: solo dispatcher (7500) o admin/manager possono dispacciare.
+    // Cuochi di stazione (frittura/primi/...) NON devono poter saltare il
+    // Comandista premendo INIZIA TAVOLO.
+    const isDispatcher = req.user?.role === 'kitchen' && req.user?.sub_role === 'dispatcher';
+    const isPrivileged = ['admin', 'manager'].includes(req.user?.role);
+    if (!isDispatcher && !isPrivileged) {
+      return res.status(403).json({ error: 'Solo il Comandista (7500) puo\' iniziare il tavolo' });
+    }
+    // Tenant ownership + status check sull'ordine.
+    const { rows: [orderRow] } = await pool.query(
+      `SELECT id, status FROM orders WHERE id = $1 AND tenant_id = $2`,
+      [order_id, tenantId]
+    );
+    if (!orderRow) return res.status(404).json({ error: 'Ordine non trovato' });
+    if (orderRow.status !== 'open') {
+      return res.status(400).json({ error: 'Ordine gia\' chiuso' });
+    }
     // JP 2026-06-03: INIZIA TAVOLO rispetta il timer fire_at che il cameriere
     // ha messo su singoli piatti. Solo i waiting SENZA timer (fire_at IS NULL)
     // o con timer GIA' scaduto vengono rilasciati. Quelli con fire_at futuro
     // restano in attesa: serviceTimer.checkScheduledFiresForTenant li libera
-    // automaticamente quando arriva l'ora.
+    // automaticamente quando arriva l'ora. fire_at = NULL sui rilasciati per
+    // non sporcare i dati post-dispatch.
     const { rows: items } = await pool.query(
       `UPDATE order_items
           SET workflow_status = 'production',
               released_at     = NOW(),
-              status          = 'pending'
+              status          = 'pending',
+              fire_at         = NULL
         WHERE order_id = $1 AND tenant_id = $2
           AND workflow_status = 'waiting'
           AND COALESCE(is_surcharge, false) = false
