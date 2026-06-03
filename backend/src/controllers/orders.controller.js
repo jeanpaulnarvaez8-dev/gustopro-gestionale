@@ -1010,22 +1010,27 @@ async function setItemFireAt(req, res, next) {
     if (mins !== null && !Number.isFinite(mins)) {
       return res.status(400).json({ error: 'minutes non valido' });
     }
-    // Verifica item: deve essere in waiting (i piatti gia' firati non si
-    // ri-programmano), in ordine aperto, nello stesso tenant.
+    // Verifica item in ordine aperto, nello stesso tenant. JP 2026-06-03:
+    // ora accettato anche workflow_status='production' (cameriere puo'
+    // rimettere in attesa un piatto gia' mandato se ha sbagliato).
     const { rows: [item] } = await pool.query(
-      `SELECT oi.id, oi.workflow_status, o.status AS order_status, o.waiter_id
+      `SELECT oi.id, oi.workflow_status, oi.status AS item_status,
+              o.status AS order_status, o.waiter_id
          FROM order_items oi JOIN orders o ON o.id = oi.order_id
         WHERE oi.id = $1 AND oi.order_id = $2 AND oi.tenant_id = $3`,
       [itemId, order_id, tenantId]
     );
     if (!item) return res.status(404).json({ error: 'Voce non trovata' });
     if (item.order_status !== 'open') return res.status(400).json({ error: 'Ordine chiuso' });
-    if (item.workflow_status !== 'waiting') {
-      return res.status(400).json({ error: 'Il timer si imposta solo su voci IN ATTESA' });
+    // JP 2026-06-03: il cameriere puo' "rimettere in attesa" un piatto
+    // GIA' mandato in cucina (uso: se ha sbagliato, vuole metterlo in
+    // attesa col timer). Quindi accettiamo waiting E production, ma NON
+    // cooking/ready/served (il cuoco sta gia' lavorando).
+    if (item.status !== 'pending') {
+      return res.status(400).json({ error: 'Il timer si imposta solo su voci NON ancora in cottura' });
     }
     // JP 2026-06-03: ownership — solo il cameriere che ha preso il tavolo
-    // o admin/manager/cashier possono cambiare il timer. Senza, qualunque
-    // cameriere puo' alterare i tavoli dei colleghi.
+    // o admin/manager/cashier possono cambiare il timer.
     const isOwner = item.waiter_id && item.waiter_id === req.user?.id;
     const isPrivilegedRole = ['admin', 'manager', 'cashier'].includes(req.user?.role);
     if (!isOwner && !isPrivilegedRole) {
@@ -1035,16 +1040,35 @@ async function setItemFireAt(req, res, next) {
     if (mins > 180) {
       return res.status(400).json({ error: 'Timer max 180 minuti' });
     }
-    const fireAtSql = mins > 0 ? `NOW() + ($1::int || ' minutes')::interval` : `NULL`;
-    const params = mins > 0 ? [Math.max(1, Math.round(mins)), itemId, tenantId] : [itemId, tenantId];
-    const { rows: [updated] } = await pool.query(
-      `UPDATE order_items SET fire_at = ${fireAtSql}
-         WHERE id = ${mins > 0 ? '$2' : '$1'} AND tenant_id = ${mins > 0 ? '$3' : '$2'}
-         RETURNING id, fire_at, workflow_status`,
-      params
-    );
+    // JP 2026-06-03: se il cameriere imposta un timer su un piatto gia'
+    // in production (caso "ho sbagliato a mandarlo"), lo ri-porta in
+    // waiting con released_at=NULL (cosi' torna nelle code del 7500 e
+    // sparisce dalle stazioni). Se mins=0/null su un waiting, lo
+    // sblocca: workflow_status='production' senza fire_at → parte subito.
+    let sql, params;
+    if (mins > 0) {
+      sql = `UPDATE order_items SET
+               fire_at = NOW() + ($1::int || ' minutes')::interval,
+               workflow_status = 'waiting',
+               released_at = NULL
+             WHERE id = $2 AND tenant_id = $3
+             RETURNING id, fire_at, workflow_status`;
+      params = [Math.max(1, Math.round(mins)), itemId, tenantId];
+    } else {
+      sql = `UPDATE order_items SET
+               fire_at = NULL,
+               workflow_status = CASE WHEN workflow_status='waiting' THEN 'production' ELSE workflow_status END,
+               released_at = CASE WHEN workflow_status='waiting' THEN NOW() ELSE released_at END
+             WHERE id = $1 AND tenant_id = $2
+             RETURNING id, fire_at, workflow_status`;
+      params = [itemId, tenantId];
+    }
+    const { rows: [updated] } = await pool.query(sql, params);
     getIO()?.emit('item-fire-at-updated', {
       orderId: order_id, itemId, fireAt: updated.fire_at,
+    });
+    getIO()?.emit('workflow-status-changed', {
+      orderId: order_id, itemId, workflow_status: updated.workflow_status,
     });
     res.json(updated);
   } catch (err) { next(err); }

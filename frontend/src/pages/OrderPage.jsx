@@ -8,6 +8,7 @@ import {
 import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
+import { useSocket } from '../context/SocketContext'
 import { menuAPI, ordersAPI, tablesAPI, comboAPI, waitersAPI, workflowAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { AllergenBadges } from '../lib/allergens'
@@ -188,6 +189,18 @@ export default function OrderPage() {
   const QUICK_NOTES = ['Senza cipolla', 'Senza aglio', 'Senza glutine', 'Senza lattosio', 'No piccante', 'Ben cotto', 'Al sangue', 'Senza sale']
   // "Già al tavolo": cosa è stato già ordinato (se il tavolo ha un ordine aperto).
   const [existingItems, setExistingItems] = useState([])
+  // JP 2026-06-03: refresh dei piatti gia' nel tavolo quando arriva un evento
+  // di workflow change (es. il 7500 fa INIZIA TAVOLO). Senza questo, il
+  // cameriere continua a vedere il piatto come waiting e clicca "Manda"
+  // facendo 400 "stato gia' impostato".
+  const { socket } = useSocket()
+  const loadExisting = useCallback(async (orderId) => {
+    if (!orderId) return
+    try {
+      const r = await ordersAPI.get(orderId)
+      setExistingItems((r.data.items || []).filter(i => i.status !== 'cancelled'))
+    } catch { /* silent */ }
+  }, [])
   const [showExisting, setShowExisting] = useState(true)
   const canRemove = ['admin', 'manager', 'cashier'].includes(authUser?.role)
   const canFire = ['waiter', 'manager', 'admin'].includes(authUser?.role)
@@ -311,9 +324,7 @@ export default function OrderPage() {
         if (catsRes.data.length > 0) setActiveCategory(catsRes.data[0].id)
         // Tavolo con ordine aperto → mostra cosa è già stato ordinato.
         if (t.active_order_id) {
-          ordersAPI.get(t.active_order_id)
-            .then(r => setExistingItems((r.data.items || []).filter(i => i.status !== 'cancelled')))
-            .catch(() => {})
+          loadExisting(t.active_order_id)
         }
       } catch {
         toast({ type: 'error', title: 'Errore caricamento menu' })
@@ -323,6 +334,27 @@ export default function OrderPage() {
     }
     init()
   }, [tableId, setTable])
+
+  // JP 2026-06-03: ricarica existingItems su socket events. Quando il 7500
+  // fa INIZIA TAVOLO o un dispatcher rilascia un waiting, il cameriere
+  // deve vedere immediatamente che il piatto e' "production" → bottone
+  // "Manda" sparisce, niente piu' errore "stato gia' impostato".
+  useEffect(() => {
+    if (!socket || !table?.active_order_id) return
+    const refresh = (payload) => {
+      if (!payload || payload.orderId === table.active_order_id) {
+        loadExisting(table.active_order_id)
+      }
+    }
+    socket.on('workflow-status-changed', refresh)
+    socket.on('item-released-to-production', refresh)
+    socket.on('item-status-updated', refresh)
+    return () => {
+      socket.off('workflow-status-changed', refresh)
+      socket.off('item-released-to-production', refresh)
+      socket.off('item-status-updated', refresh)
+    }
+  }, [socket, table?.active_order_id, loadExisting])
 
   // Load items when category changes
   const loadItems = useCallback(async (catId) => {
@@ -628,12 +660,16 @@ export default function OrderPage() {
                     return
                   }
                   try {
-                    for (const x of group.items.filter(i => i.workflow_status === 'waiting')) {
+                    // JP 2026-06-03: il timer si puo' impostare anche su
+                    // piatti gia' mandati (workflow=production) finche'
+                    // sono ancora pending (il cuoco non li ha iniziati).
+                    // Il backend riporta in waiting + fire_at.
+                    for (const x of group.items.filter(i => i.status === 'pending')) {
                       await ordersAPI.setItemFireAt(table.active_order_id, x.id, mins)
                     }
                     setExistingItems(prev => prev.map(x =>
                       group.items.some(g => g.id === x.id)
-                        ? { ...x, fire_at: new Date(Date.now() + mins * 60000).toISOString() }
+                        ? { ...x, workflow_status: 'waiting', fire_at: new Date(Date.now() + mins * 60000).toISOString() }
                         : x
                     ))
                     toast({ type: 'success', title: `Partira' in cucina tra ${mins} min`, message: it.item_name })
@@ -643,13 +679,15 @@ export default function OrderPage() {
                 }
                 const cancelTimerForGroup = async () => {
                   try {
-                    for (const x of group.items.filter(i => i.workflow_status === 'waiting' && i.fire_at)) {
+                    for (const x of group.items.filter(i => i.status === 'pending' && i.fire_at)) {
                       await ordersAPI.setItemFireAt(table.active_order_id, x.id, null)
                     }
                     setExistingItems(prev => prev.map(x =>
-                      group.items.some(g => g.id === x.id) ? { ...x, fire_at: null } : x
+                      group.items.some(g => g.id === x.id)
+                        ? { ...x, fire_at: null, workflow_status: 'production' }
+                        : x
                     ))
-                    toast({ type: 'info', title: 'Timer annullato', message: it.item_name })
+                    toast({ type: 'info', title: 'Timer annullato — parte subito', message: it.item_name })
                   } catch (e) {
                     toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
                   }
@@ -679,36 +717,44 @@ export default function OrderPage() {
                       {it.notes && <span className="text-[var(--color-warn)] text-xs ml-1 italic">({it.notes})</span>}
                     </span>
                     <div className="flex items-center gap-2 shrink-0">
-                      {isWaiting ? (
-                        canFire ? (
-                          <div className="flex items-center gap-1">
-                            {minsToFire !== null ? (
-                              <button
-                                onClick={cancelTimerForGroup}
-                                className="px-2 py-1 rounded-md bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/50 text-[var(--color-sea)] text-[11px] font-bold flex items-center gap-1"
-                                title="Annulla timer"
-                              >
-                                ⏰ {minsToFire}m
-                              </button>
-                            ) : (
-                              <button
-                                onClick={setTimerForGroup}
-                                className="px-2 py-1 rounded-md bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/40 text-[var(--color-sea)] text-[11px] font-bold flex items-center gap-1"
-                                title="Programma quando mandare in cucina"
-                              >
-                                ⏰ tempo
-                              </button>
-                            )}
+                      {/* JP 2026-06-03: regole bottoni:
+                          - pending (waiting OR production): "⏰ tempo" / countdown
+                            sempre visibile (puo' rimettere in attesa col timer
+                            anche un piatto gia' mandato).
+                          - waiting + canFire: anche "Manda" per rilascio anticipato.
+                          - cooking/ready/served: solo etichetta status. */}
+                      {it.status === 'pending' ? (
+                        <div className="flex items-center gap-1">
+                          {minsToFire !== null ? (
+                            <button
+                              onClick={cancelTimerForGroup}
+                              className="px-2 py-1 rounded-md bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/50 text-[var(--color-sea)] text-[11px] font-bold flex items-center gap-1"
+                              title="Annulla timer (parte subito)"
+                            >
+                              ⏰ {minsToFire}m
+                            </button>
+                          ) : (
+                            <button
+                              onClick={setTimerForGroup}
+                              className="px-2 py-1 rounded-md bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/40 text-[var(--color-sea)] text-[11px] font-bold flex items-center gap-1"
+                              title="Programma quando mandare in cucina"
+                            >
+                              ⏰ tempo
+                            </button>
+                          )}
+                          {isWaiting && canFire && (
                             <button
                               onClick={() => fireGroup(group)}
                               className="px-2.5 py-1 rounded-md bg-[var(--color-warn)] text-black text-[11px] font-bold uppercase active:scale-95 transition flex items-center gap-1"
+                              title="Manda subito in cucina"
                             >
                               <Send size={11} /> Manda
                             </button>
-                          </div>
-                        ) : (
-                          <span className="text-[var(--color-warn)] text-[11px] font-bold whitespace-nowrap">IN ATTESA</span>
-                        )
+                          )}
+                          {isWaiting && !canFire && (
+                            <span className="text-[var(--color-warn)] text-[11px] font-bold whitespace-nowrap">IN ATTESA</span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-[var(--color-text-3)] text-[11px] whitespace-nowrap">{STAT[it.status] || it.status}</span>
                       )}
