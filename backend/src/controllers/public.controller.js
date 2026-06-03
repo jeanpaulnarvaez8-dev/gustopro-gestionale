@@ -474,7 +474,73 @@ async function getPrecontoEscposByTable(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// ---------------------------------------------------------------------------
+// AUTO-PRINT sala (.24) — JP 2026-06-03
+// Mini-ticket ESC/POS per le bevande/dessert appena ordinati. Pensato per
+// uscire automaticamente sulla stampante sala quando il cameriere manda
+// l'ordine: il banco vede subito che ha acque/vino/calici/dessert/birra
+// alla spina da portare al tavolo.
+//
+// URL: /api/public/auto-print-escpos/:order_id?items=id1,id2,...
+// ---------------------------------------------------------------------------
+async function getAutoPrintEscpos(req, res, next) {
+  try {
+    const { order_id } = req.params;
+    if (!/^[0-9a-f-]{36}$/i.test(String(order_id || ''))) {
+      return res.status(404).type('text/plain').send('not found');
+    }
+    const itemsParam = String(req.query.items || '').trim();
+    if (!itemsParam) return res.status(400).type('text/plain').send('items query required');
+    const itemIds = itemsParam.split(',').filter(s => /^[0-9a-f-]{36}$/i.test(s));
+    if (itemIds.length === 0) return res.status(400).type('text/plain').send('no valid item ids');
+
+    const { rows: [o] } = await pool.query(
+      `SELECT o.id, o.order_type,
+              COALESCE(tb.table_number::text, 'Asporto') AS table_number,
+              t.name AS restaurant_name
+         FROM orders o
+         JOIN tenants t ON t.id = o.tenant_id
+         LEFT JOIN tables tb ON tb.id = o.table_id
+        WHERE o.id = $1`, [order_id]);
+    if (!o) return res.status(404).type('text/plain').send('not found');
+
+    const { rows: items } = await pool.query(
+      `SELECT mi.name, oi.quantity, oi.notes
+         FROM order_items oi
+         JOIN menu_items mi ON mi.id = oi.menu_item_id
+        WHERE oi.order_id = $1 AND oi.id = ANY($2::uuid[])
+          AND oi.status <> 'cancelled'`,
+      [order_id, itemIds]);
+    if (items.length === 0) return res.status(404).type('text/plain').send('items not found');
+
+    const dt = new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+    const chunks = [];
+    chunks.push(INIT, ALIGN_C);
+    chunks.push(BOLD_ON, DBL_ON, txt('SALA'), DBL_OFF, BOLD_OFF);
+    chunks.push(txt(lineSep('=')));
+    chunks.push(DBL_ON, txt('TAVOLO ' + o.table_number), DBL_OFF);
+    chunks.push(txt(dt));
+    chunks.push(txt(lineSep('=')));
+    chunks.push(ALIGN_L);
+    for (const it of items) {
+      const lab = `${Number(it.quantity)}x ${it.name}`;
+      chunks.push(BOLD_ON, txt(lab), BOLD_OFF);
+      if (it.notes) chunks.push(txt('   ' + it.notes));
+    }
+    chunks.push(txt(lineSep('-')));
+    chunks.push(ALIGN_C, txt('Da preparare/portare in sala'));
+    chunks.push(FEED5, CUT);
+
+    const out = Buffer.concat(chunks);
+    res.set('Content-Type', 'application/octet-stream');
+    res.set('Content-Disposition', `inline; filename="auto-${o.table_number}.bin"`);
+    res.set('Content-Length', String(out.length));
+    res.send(out);
+  } catch (err) { next(err); }
+}
+
 module.exports = {
   getPublicMenu, callWaiter, getPublicReceipt, getPrecontoHtml,
   getPrecontoEscpos, getPrecontoEscposByTable,
+  getAutoPrintEscpos,
 };

@@ -2,7 +2,7 @@ const { Router } = require('express');
 const rateLimit = require('express-rate-limit');
 const {
   getPublicMenu, callWaiter, getPublicReceipt, getPrecontoHtml,
-  getPrecontoEscpos, getPrecontoEscposByTable,
+  getPrecontoEscpos, getPrecontoEscposByTable, getAutoPrintEscpos,
 } = require('../controllers/public.controller');
 const { getPendingJobs } = require('../controllers/print.controller');
 
@@ -31,5 +31,8 @@ router.get('/preconto-escpos/:order_id', getPrecontoEscpos);
 router.get('/preconto-escpos/by-table/:tenant_slug/:table_number', getPrecontoEscposByTable);
 // Print queue — l'agente locale fa polling qui (token-based).
 router.get('/print-pending/:tenant_slug', getPendingJobs);
+// Auto-print sala: mini-ticket per gli item id passati come query
+// (?items=id1,id2,...). Usato dall'agent locale per kind='auto'.
+router.get('/auto-print-escpos/:order_id', getAutoPrintEscpos);
 
 module.exports = router;

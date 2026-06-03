@@ -99,4 +99,19 @@ async function getQueueSize(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { enqueuePrintJob, getPendingJobs, getQueueSize };
+// JP 2026-06-03: helper esportato per usi server-to-server (auto-print
+// chiamato da createOrder/addItems dopo gli insert).
+function enqueueAutoPrintJob(tenantId, orderId, itemIds) {
+  if (!itemIds || itemIds.length === 0) return null;
+  const job = {
+    id: crypto.randomUUID(),
+    kind: 'auto',
+    order_id: orderId,
+    item_ids: itemIds,
+    created_at: new Date().toISOString(),
+  };
+  pushJob(tenantId, job);
+  return job;
+}
+
+module.exports = { enqueuePrintJob, getPendingJobs, getQueueSize, enqueueAutoPrintJob };

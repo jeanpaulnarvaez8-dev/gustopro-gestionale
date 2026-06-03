@@ -22,7 +22,8 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
   // se e' bevanda (bar bypassa il comandista).
   const { rows: [menuItem] } = await client.query(
     `SELECT mi.base_price, mi.pricing_type, mi.name,
-            COALESCE(c.is_beverage, false) AS is_beverage
+            COALESCE(c.is_beverage, false) AS is_beverage,
+            COALESCE(mi.auto_print, c.auto_print, false) AS auto_print
        FROM menu_items mi
        LEFT JOIN categories c ON c.id = mi.category_id
       WHERE mi.id=$1 AND mi.is_available=true AND mi.tenant_id=$2`,
@@ -91,6 +92,9 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
       );
     }
   }
+  // JP 2026-06-03: marker per auto-print sala (acque/vini/bollicine/dessert/
+  // birre alla spina). Letto da createOrder/addItems per emettere il job.
+  orderItem.__autoPrint = !!menuItem.auto_print;
   return orderItem;
 }
 
@@ -371,6 +375,19 @@ async function createOrder(req, res, next) {
       });
     }
 
+    // JP 2026-06-03: auto-print sala (.24). Acqua/vino/bollicine/dessert/
+    // birre alla spina vengono stampati subito sul ticket di sala col
+    // numero tavolo. Marker __autoPrint settato in insertRegularItem.
+    try {
+      const autoIds = orderItems.filter(it => it.__autoPrint).map(it => it.id);
+      if (autoIds.length > 0) {
+        const { enqueueAutoPrintJob } = require('./print.controller');
+        enqueueAutoPrintJob(tenantId, order.id, autoIds);
+      }
+    } catch (e) {
+      req.log?.warn?.({ err: e.message }, 'auto-print enqueue failed (non-blocking)');
+    }
+
     // Notifica bar: se l'ordine contiene bevande (is_beverage=true), push
     // native ai bartender (waiter con sub_role bar/bar-caffetteria) anche
     // se sono su un'altra pagina. Cosi' Desire' si accorge che ha cocktail
@@ -596,6 +613,18 @@ async function addItems(req, res, next) {
     }
 
     await client.query('COMMIT');
+
+    // JP 2026-06-03: auto-print sala anche su addItems (cliente ordina di
+    // nuovo bevande dopo l'apertura del tavolo).
+    try {
+      const autoIds = addedItems.filter(it => it.__autoPrint).map(it => it.id);
+      if (autoIds.length > 0) {
+        const { enqueueAutoPrintJob } = require('./print.controller');
+        enqueueAutoPrintJob(tenantId, order_id, autoIds);
+      }
+    } catch (e) {
+      req.log?.warn?.({ err: e.message }, 'auto-print enqueue failed (non-blocking)');
+    }
 
     const directDelivered = addedItems.filter(oi => oi.workflow_status === 'delivered');
     if (directDelivered.length > 0) {
