@@ -217,6 +217,9 @@ export const ordersAPI = {
   // Timer auto-fire su voce in attesa. minutes=0/null annulla. JP 2026-06-01.
   setItemFireAt: (id, itemId, minutes) =>
                   api.patch(`/orders/${id}/items/${itemId}/fire-at`, { minutes }),
+  // Comandista "INIZIA TAVOLO": libera tutti gli items waiting dell'ordine
+  // → vanno alle stazioni cucina (frittura/antipasti/primi/pizzeria).
+  dispatch: (id) => api.post(`/orders/${id}/dispatch`),
 };
 
 // KDS — cucina principale (default station=cucina; supporta anche

@@ -28,6 +28,7 @@ const MenuAdminPage          = lazy(() => import('./pages/MenuAdminPage'))
 const VenueAdminPage         = lazy(() => import('./pages/VenueAdminPage'))
 const TableQRCodesPage       = lazy(() => import('./pages/TableQRCodesPage'))
 const PublicMenuPage         = lazy(() => import('./pages/PublicMenuPage'))
+const KDSComandistaPage      = lazy(() => import('./pages/KDSComandistaPage'))
 const PublicReceiptPage      = lazy(() => import('./pages/PublicReceiptPage'))
 const MenuQRPage             = lazy(() => import('./pages/MenuQRPage'))
 const AuditReportPage        = lazy(() => import('./pages/AuditReportPage'))
@@ -134,6 +135,7 @@ function HomeRedirect() {
     // JP 2026-06-02: stazioni frittura/antipasti/primi via query param.
     if (user?.sub_role === 'pizzeria')    return <Navigate to="/kds/pizzeria" replace />
     if (user?.sub_role === 'pasticceria') return <Navigate to="/kds/pasticceria" replace />
+    if (user?.sub_role === 'dispatcher')  return <Navigate to="/kds/comandista" replace />
     if (user?.sub_role === 'frittura')    return <Navigate to="/kds?station=frittura" replace />
     if (user?.sub_role === 'antipasti')   return <Navigate to="/kds?station=antipasti" replace />
     if (user?.sub_role === 'primi')       return <Navigate to="/kds?station=primi" replace />
@@ -194,6 +196,11 @@ export default function App() {
             <Route path="/kds/pizzeria" element={
               <RoleRoute roles={['kitchen', 'admin', 'manager']}>
                 <KDSPizzeriaPage />
+              </RoleRoute>
+            } />
+            <Route path="/kds/comandista" element={
+              <RoleRoute roles={['kitchen', 'admin', 'manager']}>
+                <KDSComandistaPage />
               </RoleRoute>
             } />
             <Route path="/kds/crudi" element={

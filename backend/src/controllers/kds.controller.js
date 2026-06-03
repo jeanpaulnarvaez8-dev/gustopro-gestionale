@@ -15,7 +15,9 @@ async function getPendingOrders(req, res, next) {
     //           cucina (catch-all NULL), all (tutta la cucina non-bar).
     // Bevande sempre escluse (vanno in /bar).
     const stationParam = (req.query.station || 'all').toLowerCase();
-    const validStations = ['all','cucina','frittura','primi_secondi','antipasti','pizzeria','pasticceria','crudi'];
+    // JP 2026-06-03: 'dispatcher' = vista Comandista (vede SOLO waiting).
+    // 'primi' / 'secondi' aggiunti come stazioni separate da primi_secondi.
+    const validStations = ['all','cucina','frittura','primi','secondi','primi_secondi','antipasti','pizzeria','pasticceria','crudi','dispatcher'];
     if (!validStations.includes(stationParam)) {
       return res.status(400).json({ error: `station non valido. Valori: ${validStations.join(', ')}` });
     }
@@ -25,9 +27,10 @@ async function getPendingOrders(req, res, next) {
     //   3. altrimenti 'cucina' (catch-all)
     const effectiveStation = `COALESCE(mi.prep_station, c.prep_station, 'cucina')`;
     let stationFilter, params;
-    if (stationParam === 'all') {
-      // 'Tutte' = TUTTA la cucina, PIZZE INCLUSE (oltre alla stazione dedicata
-      // + push a Simone). Tutto arriva in cucina. (Bevande escluse sotto.)
+    if (stationParam === 'all' || stationParam === 'dispatcher') {
+      // 'Tutte' = TUTTA la cucina (pizze incluse). 'dispatcher' (Comandista)
+      // vede ANCHE tutte le stazioni, ma filtrate solo waiting (vedi
+      // workflowFilter sotto).
       stationFilter = 'TRUE';
       params = [TENANT(req)];
     } else if (stationParam === 'cucina') {
@@ -37,6 +40,13 @@ async function getPendingOrders(req, res, next) {
       stationFilter = `${effectiveStation} = $2`;
       params = [TENANT(req), stationParam];
     }
+    // Workflow filter: comandista vede SOLO waiting; le stazioni reali solo
+    // production (post-dispatch). 'all' (admin/legacy) vede entrambi.
+    const workflowFilter = stationParam === 'dispatcher'
+      ? `oi.workflow_status = 'waiting'`
+      : stationParam === 'all'
+        ? `oi.workflow_status IN ('waiting','production')`
+        : `oi.workflow_status = 'production'`;
 
     const { rows } = await pool.query(
       `SELECT
@@ -85,12 +95,9 @@ async function getPendingOrders(req, res, next) {
          -- quando vengono serviti. Esclude solo served/cancelled.
          -- Storico completo (incluso served/cancelled) in /kds/history.
          AND oi.status NOT IN ('served','cancelled')
-         -- JP 2026-06-01: la cucina deve vedere ANCHE i piatti in attesa
-         -- (workflow_status='waiting' = cameriere li ha messi nel carrello
-         -- ma non ha ancora fatto "manda comanda"). Cosi' lo chef sa cosa sta
-         -- per arrivare. La UI li mostra in piccolo/secondario via
-         -- display_status='waiting'.
-         AND oi.workflow_status IN ('waiting', 'production')
+         -- JP 2026-06-03: filtro dinamico per stazione (vedi workflowFilter).
+         -- dispatcher → waiting only · stazioni → production only · all → entrambi.
+         AND ${workflowFilter}
          AND oi.tenant_id = $1
          AND COALESCE(oi.is_surcharge, false) = false
          AND (c.is_beverage IS NULL OR c.is_beverage = false)

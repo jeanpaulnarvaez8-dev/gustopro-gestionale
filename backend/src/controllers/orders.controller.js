@@ -10,14 +10,32 @@ const TENANT = (req) => req.tenant.id;
 // ── Helpers ──────────────────────────────────────────────────
 
 async function insertRegularItem(client, order_id, item, userId, tenantId) {
-  const { menu_item_id, quantity = 1, notes: itemNotes, modifiers = [], weight_g, workflow_status = 'production' } = item;
+  const { menu_item_id, quantity = 1, notes: itemNotes, modifiers = [], weight_g } = item;
+  let workflow_status = item.workflow_status || 'production';
 
-  // menu_item must belong to the same tenant
+  // menu_item must belong to the same tenant. JOIN su categories per sapere
+  // se e' bevanda (bar bypassa il comandista).
   const { rows: [menuItem] } = await client.query(
-    'SELECT base_price, pricing_type, name FROM menu_items WHERE id=$1 AND is_available=true AND tenant_id=$2',
+    `SELECT mi.base_price, mi.pricing_type, mi.name,
+            COALESCE(c.is_beverage, false) AS is_beverage
+       FROM menu_items mi
+       LEFT JOIN categories c ON c.id = mi.category_id
+      WHERE mi.id=$1 AND mi.is_available=true AND mi.tenant_id=$2`,
     [menu_item_id, tenantId]
   );
   if (!menuItem) throw { status: 400, message: `Item ${menu_item_id} non disponibile` };
+
+  // JP 2026-06-03: se il tenant richiede dispatch (Comandista 7500),
+  // tutti gli items di cucina partono in 'waiting' → solo il comandista
+  // li vede finche' non preme "INIZIA TAVOLO". Le BEVANDE invece restano
+  // 'production' (il bar le riceve subito, no dispatcher).
+  const { rows: [tcfg] } = await client.query(
+    'SELECT COALESCE(requires_dispatch,false) AS requires_dispatch FROM tenants WHERE id=$1',
+    [tenantId]
+  );
+  if (tcfg?.requires_dispatch && !menuItem.is_beverage && workflow_status === 'production') {
+    workflow_status = 'waiting';
+  }
 
   let modifierTotal = 0;
   for (const mod of modifiers) {
@@ -977,4 +995,38 @@ async function setItemFireAt(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice, setItemFireAt };
+// ── dispatchOrder ────────────────────────────────────────────
+// JP 2026-06-03: il Comandista (sub_role='dispatcher', PIN 7500) preme
+// "INIZIA TAVOLO" su un ordine in attesa di dispatch. Tutti gli item
+// kitchen in 'waiting' di quell'ordine passano a 'production' →
+// raggiungono le rispettive stazioni (frittura, antipasti, primi,
+// pizzeria) in base al loro prep_station.
+async function dispatchOrder(req, res, next) {
+  try {
+    const { id: order_id } = req.params;
+    const tenantId = TENANT(req);
+    const { rows: items } = await pool.query(
+      `UPDATE order_items
+          SET workflow_status = 'production',
+              released_at     = NOW(),
+              status          = 'pending'
+        WHERE order_id = $1 AND tenant_id = $2
+          AND workflow_status = 'waiting'
+          AND COALESCE(is_surcharge, false) = false
+        RETURNING id`,
+      [order_id, tenantId]
+    );
+    const io = getIO();
+    for (const it of items) {
+      io?.emit('workflow-status-changed', {
+        orderId: order_id, itemId: it.id, workflow_status: 'production', dispatched: true,
+      });
+      io?.emit('item-released-to-production', {
+        orderId: order_id, itemId: it.id, dispatched: true,
+      });
+    }
+    res.json({ dispatched: items.length, order_id });
+  } catch (err) { next(err); }
+}
+
+module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice, setItemFireAt, dispatchOrder };
