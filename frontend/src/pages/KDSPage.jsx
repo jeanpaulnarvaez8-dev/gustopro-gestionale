@@ -794,7 +794,16 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
 
                     {/* Items: gerarchia visiva active > waiting > delivered */}
                     <div className="flex-1 p-3 flex flex-col gap-1.5">
-                      {order.items.map(item => {
+                      {/* JP 2026-06-03: le ATTESE per ultime — il cuoco
+                          vede prima cosa ha "DA FARE", poi i waiting col
+                          countdown a fondo card. Stable sort. */}
+                      {[...order.items]
+                        .sort((a, b) => {
+                          const aw = a.workflow_status === 'waiting' ? 1 : 0
+                          const bw = b.workflow_status === 'waiting' ? 1 : 0
+                          return aw - bw
+                        })
+                        .map(item => {
                         const cfg = ITEM_STATUS[item.status] ?? ITEM_STATUS.pending
                         const isUpdating = updating[item.id]
                         const ds = item.display_status || 'active'
