@@ -145,8 +145,8 @@ function HomeRedirect() {
     return <Navigate to="/kds" replace />
   }
   if (['admin', 'manager'].includes(user?.role)) return <Navigate to="/admin-home" replace />
-  // Waiter al bar: landing diretto sulla coda bar invece di /tables.
-  if (user?.role === 'waiter' && (user?.sub_role === 'bar' || user?.sub_role === 'bar/caffetteria')) {
+  // Waiter al bar / asporto: landing diretto sulla coda bar invece di /tables.
+  if (user?.role === 'waiter' && ['bar', 'bar/caffetteria', 'asporto'].includes(user?.sub_role)) {
     return <Navigate to="/bar" replace />
   }
   return <Navigate to="/tables" replace />

@@ -39,11 +39,18 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
     'SELECT COALESCE(requires_dispatch,false) AS requires_dispatch FROM tenants WHERE id=$1',
     [tenantId]
   );
+  // JP 2026-06-04: anche gli ASPORTI saltano il Comandista — vanno
+  // dritti alle stazioni perche' il bar (Alessandra PIN 3000) li
+  // gestisce in tempo reale, non c'e' un cliente al tavolo che
+  // aspetta sequenze.
+  const { rows: [orderInfo] } = await client.query(
+    `SELECT order_type FROM orders WHERE id=$1 AND tenant_id=$2`,
+    [order_id, tenantId]
+  );
+  const isTakeaway = orderInfo?.order_type === 'takeaway';
   // JP 2026-06-03: bypass Comandista anche per items auto_print (dessert/
-  // acque/vini/bollicine/spina): vanno in sala/bar direttamente, non
-  // servono al 7500. Solo i piatti cucina veri (antipasti/primi/secondi/
-  // pizza) restano forzati a waiting.
-  if (tcfg?.requires_dispatch && !menuItem.is_beverage && !menuItem.auto_print && workflow_status === 'production') {
+  // acque/vini/bollicine/spina) e per gli asporti.
+  if (tcfg?.requires_dispatch && !menuItem.is_beverage && !menuItem.auto_print && !isTakeaway && workflow_status === 'production') {
     workflow_status = 'waiting';
   }
 
