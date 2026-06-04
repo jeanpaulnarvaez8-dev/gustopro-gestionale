@@ -71,12 +71,16 @@ async function changeWorkflowStatus(req, res, next) {
         [tenantId]
       );
       const isDispatcher = req.user.role === 'kitchen' && req.user.sub_role === 'dispatcher';
-      // JP 2026-06-03: Comandista attivo → solo il dispatcher (PIN 7500) puo'
-      // rilasciare i waiting GENERICI tramite INIZIA TAVOLO. ECCEZIONE:
-      // il CAMERIERE PROPRIETARIO del tavolo (isOwner) puo' anticipare un
-      // SUO piatto in attesa (es. cliente vuole il dessert prima del timer).
-      // Resta bloccato il cameriere su tavoli altrui.
-      if (tcfg?.requires_dispatch && !isDispatcher && !isOwner) {
+      // JP 2026-06-04: dispatcher (7500) puo' sempre. ECCEZIONE: il
+      // cameriere proprietario puo' anticipare SOLO i SUOI waiting CON
+      // TIMER (fire_at IS NOT NULL) — quelli che lui stesso ha messo in
+      // attesa col countdown. Per i waiting GENERICI senza timer (forzati
+      // dal flusso Comandista quando manda la comanda) il cameriere NON
+      // puo' rilasciare → deve aspettare INIZIA TAVOLO dal 7500. Senza
+      // questa restrizione il cameriere bypassava il Comandista premendo
+      // "Manda" sui SUOI piatti.
+      const ownerCanRelease = isOwner && item.fire_at != null;
+      if (tcfg?.requires_dispatch && !isDispatcher && !ownerCanRelease) {
         return res.status(403).json({
           error: 'Comandista attivo: solo il 7500 puo\' rilasciare i waiting (premere INIZIA TAVOLO).',
         });
