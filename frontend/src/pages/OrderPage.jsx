@@ -742,25 +742,20 @@ export default function OrderPage() {
                               ⏰ tempo
                             </button>
                           )}
-                          {/* JP 2026-06-04: "Manda" visibile SOLO se il
-                              waiting ha un timer (fire_at) che il cameriere
-                              ha impostato. I waiting senza timer sono in
-                              coda al Comandista 7500 → cameriere NON puo'
-                              bypassare premendo Manda. Mostra "AL 7500" come
-                              info status invece. */}
-                          {isWaiting && canFire && fireAtAny && (
+                          {/* JP 2026-06-04: "Manda" su tutti i waiting
+                              del cameriere proprietario, come escape hatch
+                              se Fabio (7500) e' lento. Cameriere su tavoli
+                              altrui resta bloccato (canFire=false). */}
+                          {isWaiting && canFire && (
                             <button
                               onClick={() => fireGroup(group)}
                               className="px-2.5 py-1 rounded-md bg-[var(--color-warn)] text-black text-[11px] font-bold uppercase active:scale-95 transition flex items-center gap-1"
-                              title="Anticipa: manda subito in cucina senza aspettare il timer"
+                              title="Manda subito in cucina"
                             >
                               <Send size={11} /> Manda
                             </button>
                           )}
-                          {isWaiting && !fireAtAny && (
-                            <span className="text-[var(--color-warn)] text-[11px] font-bold whitespace-nowrap">AL 7500</span>
-                          )}
-                          {isWaiting && fireAtAny && !canFire && (
+                          {isWaiting && !canFire && (
                             <span className="text-[var(--color-warn)] text-[11px] font-bold whitespace-nowrap">IN ATTESA</span>
                           )}
                         </div>
