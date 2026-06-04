@@ -80,15 +80,16 @@ function RouteFallback() {
 function ProtectedRoute() {
   const { isAuthenticated, user } = useAuth()
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  // JP 2026-05-27: admin non vuole popup automatici. Usa una campanella
-  // unificata (AdminAlertBell) che mostra tutto solo su click esplicito.
-  // Altri ruoli operativi (waiter/manager/cashier/kitchen) continuano a
-  // ricevere ServiceAlertBanner + DirectDeliveredAlerts pop-up perche'
-  // sono alert d'azione: devono vederli on-screen senza dover cliccare.
-  const isAdmin = user?.role === 'admin'
+  // JP 2026-06-04: admin E cassa usano la campanella unificata —
+  // niente popup automatici che distraggono durante incassi e
+  // operazioni amministrative. Tutti gli alert (ciclo portate,
+  // delivered, ecc.) restano accessibili dal click sulla campanella.
+  // Waiter/kitchen/manager continuano a ricevere i banner on-screen
+  // perche' sono alert d'azione operativa.
+  const usesBell = ['admin', 'cashier'].includes(user?.role)
   return (
     <>
-      {isAdmin ? (
+      {usesBell ? (
         <AdminAlertBell />
       ) : (
         <>
