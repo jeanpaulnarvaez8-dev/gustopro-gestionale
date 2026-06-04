@@ -40,7 +40,12 @@ async function changeWorkflowStatus(req, res, next) {
 
     const isOwner = req.user.id === item.waiter_id;
     const isPrivileged = ['admin', 'manager'].includes(req.user.role);
-    if (!isOwner && !isPrivileged) {
+    const isWaiter = req.user.role === 'waiter';
+    const wantsRelease = item.workflow_status === 'waiting' && workflow_status === 'production';
+    // JP 2026-06-04: qualsiasi cameriere puo' rilasciare i waiting, anche
+    // su tavoli aperti da altri (es. l'admin apre il tav 6 e Marco lo
+    // gestisce). Per altre modifiche (es. annullamento) resta l'ownership.
+    if (!isOwner && !isPrivileged && !(isWaiter && wantsRelease)) {
       return res.status(403).json({ error: 'Non autorizzato a modificare questo item' });
     }
 
@@ -71,13 +76,12 @@ async function changeWorkflowStatus(req, res, next) {
         [tenantId]
       );
       const isDispatcher = req.user.role === 'kitchen' && req.user.sub_role === 'dispatcher';
-      // JP 2026-06-04: dispatcher (7500) puo' sempre, il cameriere
-      // proprietario del tavolo puo' rilasciare i SUOI waiting (con o
-      // senza timer) come escape hatch — utile se Fabio e' lento o
-      // occupato. Camerieri su tavoli altrui restano bloccati.
-      if (tcfg?.requires_dispatch && !isDispatcher && !isOwner) {
+      // JP 2026-06-04: dispatcher (7500), QUALSIASI cameriere e admin/
+      // manager possono rilasciare. Bloccati solo i cuochi di stazione
+      // (kitchen non-dispatcher) che non devono mai dispacciare.
+      if (tcfg?.requires_dispatch && !isDispatcher && !isWaiter && !isPrivileged) {
         return res.status(403).json({
-          error: 'Comandista attivo: solo il 7500 puo\' rilasciare i waiting (premere INIZIA TAVOLO).',
+          error: 'Comandista attivo: solo il 7500 o i camerieri possono rilasciare i waiting.',
         });
       }
     }
