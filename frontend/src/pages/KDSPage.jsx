@@ -744,19 +744,19 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                     }`}>
                       <div className="flex items-center gap-2 min-w-0">
                         {order.order_type === 'takeaway' ? (
-                          /* JP 2026-06-04: ASPORTO ben visibile in cucina —
-                             badge grande + nome cliente in grande. */
-                          <div className="flex flex-col min-w-0 gap-1">
-                            <span className="px-3 py-1 rounded-md bg-[var(--color-warn)] text-black font-extrabold text-base uppercase tracking-wider w-fit">
+                          /* JP 2026-06-04: ASPORTO ENORME — il cuoco lo vede
+                             a colpo d'occhio. Badge text-4xl tipo TAVOLO. */
+                          <div className="flex flex-col min-w-0 gap-1.5">
+                            <span className="px-4 py-2 rounded-lg bg-[var(--color-warn)] text-black font-extrabold text-4xl uppercase tracking-wider w-fit leading-none animate-pulse">
                               ASPORTO
                             </span>
                             {order.order_customer_name && (
-                              <span className="text-[var(--color-text)] font-extrabold text-2xl truncate leading-tight">
+                              <span className="text-[var(--color-text)] font-extrabold text-3xl truncate leading-tight">
                                 {order.order_customer_name}
                               </span>
                             )}
                             {order.pickup_time && (
-                              <span className="text-[var(--color-gold)] text-base font-bold tnum">
+                              <span className="text-[var(--color-gold)] text-lg font-bold tnum">
                                 ⏱ {order.pickup_time.slice(0, 5)}
                               </span>
                             )}
