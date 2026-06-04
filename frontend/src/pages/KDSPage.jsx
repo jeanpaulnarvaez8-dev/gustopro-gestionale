@@ -744,20 +744,25 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                     }`}>
                       <div className="flex items-center gap-2 min-w-0">
                         {order.order_type === 'takeaway' ? (
-                          /* JP 2026-06-04: ASPORTO ENORME — il cuoco lo vede
-                             a colpo d'occhio. Badge text-4xl tipo TAVOLO. */
+                          /* JP 2026-06-04: ASPORTO + NOME su UNA RIGA enorme.
+                             Banner giallo con dentro "ASPORTO — Nome". Cosi'
+                             il cuoco non distingue solo il badge ma legge
+                             tutta la cosa importante. */
                           <div className="flex flex-col min-w-0 gap-1.5">
-                            <span className="px-4 py-2 rounded-lg bg-[var(--color-warn)] text-black font-extrabold text-4xl uppercase tracking-wider w-fit leading-none animate-pulse">
-                              ASPORTO
-                            </span>
-                            {order.order_customer_name && (
-                              <span className="text-[var(--color-text)] font-extrabold text-3xl truncate leading-tight">
-                                {order.order_customer_name}
-                              </span>
-                            )}
+                            <div className="px-4 py-2 rounded-lg bg-[var(--color-warn)] text-black font-extrabold uppercase tracking-wide flex items-center gap-3 leading-none animate-pulse">
+                              <span className="text-3xl shrink-0">ASPORTO</span>
+                              {order.order_customer_name && (
+                                <>
+                                  <span className="text-3xl opacity-60 shrink-0">—</span>
+                                  <span className="text-3xl truncate normal-case">
+                                    {order.order_customer_name}
+                                  </span>
+                                </>
+                              )}
+                            </div>
                             {order.pickup_time && (
                               <span className="text-[var(--color-gold)] text-lg font-bold tnum">
-                                ⏱ {order.pickup_time.slice(0, 5)}
+                                ⏱ Ritiro: {order.pickup_time.slice(0, 5)}
                               </span>
                             )}
                           </div>
