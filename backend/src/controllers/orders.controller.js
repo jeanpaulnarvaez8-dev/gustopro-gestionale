@@ -820,6 +820,47 @@ async function cancelItem(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// JP 2026-06-04: completeAsporto — chiude un asporto consegnato senza
+// passare per il checkout (no covers, no coperto, no calcolo split).
+// Setta order.status='completed' e payment_status='paid'. Usato dal
+// bottone "LIBERA" nella pagina /asporto admin.
+async function completeAsporto(req, res, next) {
+  const client = await pool.connect();
+  const tenantId = TENANT(req);
+  try {
+    const { id } = req.params;
+    const { rows: [order] } = await client.query(
+      "SELECT id, order_type, status FROM orders WHERE id=$1 AND tenant_id=$2",
+      [id, tenantId]
+    );
+    if (!order) return res.status(404).json({ error: 'Ordine non trovato' });
+    if (order.order_type !== 'takeaway') {
+      return res.status(400).json({ error: 'Solo gli asporti possono essere liberati cosi' });
+    }
+    if (order.status !== 'open') {
+      return res.status(400).json({ error: 'Asporto gia\' chiuso' });
+    }
+    await client.query('BEGIN');
+    // Segna come serviti gli items non gia' chiusi (cuoco li ha completati).
+    await client.query(
+      "UPDATE order_items SET status='served', served_at=NOW() WHERE order_id=$1 AND tenant_id=$2 AND status NOT IN ('served','cancelled')",
+      [id, tenantId]
+    );
+    const { rows: [updated] } = await client.query(
+      "UPDATE orders SET status='completed', payment_status='paid' WHERE id=$1 AND tenant_id=$2 RETURNING *",
+      [id, tenantId]
+    );
+    await client.query('COMMIT');
+    getIO()?.emit('order-completed', { orderId: id });
+    res.json(updated);
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
 // ── cancelOrder ──────────────────────────────────────────────
 
 async function cancelOrder(req, res, next) {
@@ -1176,4 +1217,4 @@ async function dispatchOrder(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice, setItemFireAt, dispatchOrder };
+module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice, setItemFireAt, dispatchOrder, completeAsporto };

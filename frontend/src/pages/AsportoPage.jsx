@@ -5,7 +5,7 @@ import {
   ArrowLeft, ShoppingBag, Plus, Minus, Trash2, Send, ShoppingCart,
   RefreshCw, CheckCircle2, User, Phone, Clock,
 } from 'lucide-react'
-import { menuAPI, asportoAPI, adminAPI, printAPI } from '../lib/api'
+import { menuAPI, asportoAPI, adminAPI, printAPI, ordersAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
@@ -45,6 +45,21 @@ export default function AsportoPage() {
       toast({ type: 'error', title: 'Errore stampa', message: e?.response?.data?.error || 'Riprova' })
     } finally {
       setPrinting(p => { const n = { ...p }; delete n[orderId]; return n })
+    }
+  }
+  const [releasing, setReleasing] = useState({})
+  const handleReleaseAsporto = async (orderId, customer) => {
+    if (releasing[orderId]) return
+    if (!window.confirm(`Liberare l'asporto di ${customer || 'questo cliente'}?\nL'ordine verra' segnato come consegnato e pagato.`)) return
+    setReleasing(p => ({ ...p, [orderId]: true }))
+    try {
+      await ordersAPI.completeAsporto(orderId)
+      toast({ type: 'success', title: '✅ Asporto liberato', message: customer || 'Ordine chiuso' })
+      setOpenAsporti(prev => prev.filter(x => x.id !== orderId))
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    } finally {
+      setReleasing(p => { const n = { ...p }; delete n[orderId]; return n })
     }
   }
 
@@ -223,6 +238,15 @@ export default function AsportoPage() {
                 >
                   <Printer size={13} />
                   {printing[o.id] ? '…' : 'Stampa preconto'}
+                </button>
+                <button
+                  onClick={() => handleReleaseAsporto(o.id, o.customer_name)}
+                  disabled={releasing[o.id]}
+                  className="w-full py-2 rounded-md bg-[var(--color-ok)] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 hover:brightness-110 active:scale-[0.98] transition disabled:opacity-50"
+                  title="Segna l'asporto come consegnato + pagato"
+                >
+                  <CheckCircle2 size={13} />
+                  {releasing[o.id] ? '…' : 'Libera'}
                 </button>
               </div>
             ))}

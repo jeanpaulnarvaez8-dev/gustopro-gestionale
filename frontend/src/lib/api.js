@@ -220,6 +220,7 @@ export const ordersAPI = {
   // Comandista "INIZIA TAVOLO": libera tutti gli items waiting dell'ordine
   // → vanno alle stazioni cucina (frittura/antipasti/primi/pizzeria).
   dispatch: (id) => api.post(`/orders/${id}/dispatch`),
+  completeAsporto: (id) => api.post(`/orders/${id}/complete-asporto`),
 };
 
 // KDS — cucina principale (default station=cucina; supporta anche

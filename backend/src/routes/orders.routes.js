@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { requireRole } = require('../middleware/requireRole');
-const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice, setItemFireAt, dispatchOrder } = require('../controllers/orders.controller');
+const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice, setItemFireAt, dispatchOrder, completeAsporto } = require('../controllers/orders.controller');
 
 const router = Router();
 
@@ -19,6 +19,8 @@ router.patch('/:id/items/:itemId/price', requireRole('cashier','manager','admin'
 router.patch('/:id/items/:itemId/fire-at', requireRole('waiter','manager','admin','cashier'), setItemFireAt);
 // JP 2026-06-03: Comandista "INIZIA TAVOLO" → libera tutti i waiting alle stazioni.
 router.post('/:id/dispatch', requireRole('kitchen','manager','admin'), dispatchOrder);
+// JP 2026-06-04: chiusura asporto senza checkout (bottone "LIBERA" admin).
+router.post('/:id/complete-asporto', requireRole('admin','manager','cashier','waiter'), completeAsporto);
 router.delete('/:id',               requireRole('manager','admin'),          cancelOrder);
 
 module.exports = router;
