@@ -6,7 +6,7 @@ import {
   CheckCircle2, Users, SplitSquareVertical, Pencil, Plus, Minus, X, Zap, Trash2,
   Printer, Share2,
 } from 'lucide-react'
-import { billingAPI, tablesAPI, ordersAPI, printAPI } from '../lib/api'
+import { billingAPI, tablesAPI, ordersAPI, printAPI, fiscalAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
@@ -599,6 +599,28 @@ export default function CheckoutPage() {
     }
   }
 
+  // JP 2026-06-04: emette scontrino fiscale Custom Q3X-F per pagamenti
+  // 'card' / 'digital' / 'ticket'. Per 'cash' fa solo il preconto come
+  // prima. Chiamato da handlePay quando completa il pagamento.
+  const tryEmitFiscal = async (amount, payMethod) => {
+    if (payMethod === 'cash') return // contanti → no fiscale, solo preconto
+    try {
+      await fiscalAPI.emit(orderId, payMethod, amount)
+      toast({
+        type: 'success',
+        title: '💳 Scontrino fiscale in stampa',
+        message: 'Esce dalla Custom Q3X-F fra qualche secondo',
+      })
+    } catch (e) {
+      // Non bloccare il pagamento — segnalo errore e proseguo.
+      toast({
+        type: 'error',
+        title: 'Errore emissione fiscale',
+        message: e?.response?.data?.error || 'Riprova manualmente dalla cassa',
+      })
+    }
+  }
+
   const handlePay = async (amount, isSplit = false, splitIndex = 1, splitTotal = 1, payMethod = method) => {
     if (!payMethod) return
     setPaying(true)
@@ -617,6 +639,10 @@ export default function CheckoutPage() {
         split_total: splitTotal,
         register,
       }).then(r => r.data)
+
+      // JP 2026-06-04: pagamenti non-cash → emetti scontrino fiscale dalla
+      // Custom Q3X-F. Non blocca il pagamento se l'agent fiscale fallisce.
+      await tryEmitFiscal(amount, payMethod)
 
       const updatedBill = accumulateBill(await billingAPI.preConto(orderId).then(r => r.data))
       setBill(updatedBill)

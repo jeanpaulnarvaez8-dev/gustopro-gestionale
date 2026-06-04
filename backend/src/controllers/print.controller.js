@@ -99,6 +99,21 @@ async function getQueueSize(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// JP 2026-06-04: enqueue job FISCALE (Custom Q3X-F). Payload completo
+// strutturato (items + IVA + metodo pagamento). L'agent locale lo
+// traduce in protocollo Custom Q3X e dialoga con la RT via TCP.
+function enqueueFiscalJob(tenantId, orderId, payload) {
+  const job = {
+    id: crypto.randomUUID(),
+    kind: 'fiscal',
+    order_id: orderId,
+    payload,
+    created_at: new Date().toISOString(),
+  };
+  pushJob(tenantId, job);
+  return job;
+}
+
 // JP 2026-06-03: helper esportato per usi server-to-server (auto-print
 // chiamato da createOrder/addItems dopo gli insert).
 function enqueueAutoPrintJob(tenantId, orderId, itemIds) {
@@ -114,4 +129,4 @@ function enqueueAutoPrintJob(tenantId, orderId, itemIds) {
   return job;
 }
 
-module.exports = { enqueuePrintJob, getPendingJobs, getQueueSize, enqueueAutoPrintJob };
+module.exports = { enqueuePrintJob, getPendingJobs, getQueueSize, enqueueAutoPrintJob, enqueueFiscalJob };

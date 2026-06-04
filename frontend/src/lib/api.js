@@ -276,6 +276,12 @@ export const printAPI = {
   queueSize: ()               => api.get('/print/queue-size'),
 };
 
+// JP 2026-06-04: emissione scontrino fiscale RT (Custom Q3X-F al Riva).
+export const fiscalAPI = {
+  emit: (order_id, payment_method, amount) =>
+    api.post('/fiscal/emit', { order_id, payment_method, amount }),
+};
+
 // Admin
 export const adminAPI = {
   stats:     ()            => api.get('/admin/stats'),
