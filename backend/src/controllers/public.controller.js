@@ -375,9 +375,11 @@ const ALIGN_C    = Buffer.from([ESC, 0x61, 1]);
 const BOLD_ON    = Buffer.from([ESC, 0x45, 1]);
 const BOLD_OFF   = Buffer.from([ESC, 0x45, 0]);
 const DBL_ON     = Buffer.from([GS, 0x21, 0x11]); // double w + double h
+const DBL_H_ON   = Buffer.from([GS, 0x21, 0x01]); // solo altezza doppia (non wrappa righe lunghe)
 const DBL_OFF    = Buffer.from([GS, 0x21, 0x00]);
 const CUT        = Buffer.from([GS, 0x56, 0x00]); // full cut
 const FEED5      = Buffer.from([ESC, 0x64, 5]);
+const FEED3      = Buffer.from([ESC, 0x64, 3]);
 const txt = (s) => Buffer.from(asciiSafe(s) + '\n', 'ascii');
 
 async function getPrecontoEscpos(req, res, next) {
@@ -411,41 +413,47 @@ async function getPrecontoEscpos(req, res, next) {
     const grandTotal = itemsSum + copertoTot;
     const money = (n) => Number(n || 0).toFixed(2).replace('.', ',');
 
-    const chunks = [];
-    chunks.push(INIT, ALIGN_C);
-    chunks.push(BOLD_ON, txt(o.restaurant_name || ''), BOLD_OFF);
-    if (fd.address || fd.city) chunks.push(txt([fd.address, fd.city].filter(Boolean).join(' ')));
-    if (fd.piva) chunks.push(txt('P.IVA ' + fd.piva));
-    if (fd.phone) chunks.push(txt(fd.phone));
-    chunks.push(txt(lineSep('=')));
-    chunks.push(BOLD_ON, txt('PRECONTO - NON FISCALE'), BOLD_OFF);
-    chunks.push(DBL_ON, txt('TAVOLO ' + o.table_number), DBL_OFF);
-    if (o.zone_name) chunks.push(txt(o.zone_name));
-    chunks.push(txt(dt + '  Coperti: ' + Number(o.covers || 0)));
-    chunks.push(txt(lineSep('=')));
-    chunks.push(ALIGN_L);
-    if (items.length === 0) {
-      chunks.push(txt('Nessuna voce'));
-    } else {
-      for (const it of items) {
-        const lab = `${Number(it.quantity)}x ${it.name}`;
-        chunks.push(txt(row2(lab, money(it.subtotal))));
-        if (it.notes) chunks.push(txt('   ' + it.notes));
+    // JP 2026-06-04: 2 copie del preconto (una al cliente, una al banco).
+    const buildOneCopy = (copyLabel) => {
+      const c = [];
+      c.push(INIT, ALIGN_C);
+      c.push(BOLD_ON, txt(o.restaurant_name || ''), BOLD_OFF);
+      if (fd.address || fd.city) c.push(txt([fd.address, fd.city].filter(Boolean).join(' ')));
+      if (fd.piva) c.push(txt('P.IVA ' + fd.piva));
+      if (fd.phone) c.push(txt(fd.phone));
+      c.push(txt(lineSep('=')));
+      c.push(BOLD_ON, txt('PRECONTO - NON FISCALE'), BOLD_OFF);
+      if (copyLabel) c.push(txt(copyLabel));
+      c.push(DBL_ON, txt('TAVOLO ' + o.table_number), DBL_OFF);
+      if (o.zone_name) c.push(txt(o.zone_name));
+      c.push(txt(dt + '  Coperti: ' + Number(o.covers || 0)));
+      c.push(txt(lineSep('=')));
+      c.push(ALIGN_L);
+      if (items.length === 0) {
+        c.push(txt('Nessuna voce'));
+      } else {
+        for (const it of items) {
+          const lab = `${Number(it.quantity)}x ${it.name}`;
+          c.push(txt(row2(lab, money(it.subtotal))));
+          if (it.notes) c.push(txt('   ' + it.notes));
+        }
       }
-    }
-    chunks.push(txt(lineSep('-')));
-    chunks.push(txt(row2('Subtotale piatti', money(itemsSum))));
-    if (copertoTot > 0) {
-      chunks.push(txt(row2(`Coperto (${Number(o.covers || 0)} x ${money(o.coperto_price)})`, money(copertoTot))));
-    }
-    chunks.push(txt(lineSep('=')));
-    chunks.push(BOLD_ON, DBL_ON);
-    chunks.push(txt(row2('TOT', money(grandTotal))));
-    chunks.push(DBL_OFF, BOLD_OFF);
-    chunks.push(txt(lineSep('=')));
-    chunks.push(ALIGN_C, txt('Grazie e arrivederci'));
-    chunks.push(txt(String(o.id).slice(0, 8)));
-    chunks.push(FEED5, CUT);
+      c.push(txt(lineSep('-')));
+      c.push(txt(row2('Subtotale piatti', money(itemsSum))));
+      if (copertoTot > 0) {
+        c.push(txt(row2(`Coperto (${Number(o.covers || 0)} x ${money(o.coperto_price)})`, money(copertoTot))));
+      }
+      c.push(txt(lineSep('=')));
+      c.push(BOLD_ON, DBL_ON);
+      c.push(txt(row2('TOT', money(grandTotal))));
+      c.push(DBL_OFF, BOLD_OFF);
+      c.push(txt(lineSep('=')));
+      c.push(ALIGN_C, txt('Grazie e arrivederci'));
+      c.push(txt(String(o.id).slice(0, 8)));
+      c.push(FEED5, CUT);
+      return c;
+    };
+    const chunks = [...buildOneCopy('— COPIA CLIENTE —'), ...buildOneCopy('— COPIA BANCO —')];
 
     const out = Buffer.concat(chunks);
     res.set('Content-Type', 'application/octet-stream');
@@ -514,22 +522,26 @@ async function getAutoPrintEscpos(req, res, next) {
     if (items.length === 0) return res.status(404).type('text/plain').send('items not found');
 
     const dt = new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+    // JP 2026-06-04: ticket sala con scritte piu' grandi. I nomi piatto
+    // in altezza doppia (DBL_H_ON) per non wrappare; il TAVOLO X in
+    // altezza+larghezza doppia perche' e' la cosa piu' importante.
     const chunks = [];
     chunks.push(INIT, ALIGN_C);
     chunks.push(BOLD_ON, DBL_ON, txt('SALA'), DBL_OFF, BOLD_OFF);
     chunks.push(txt(lineSep('=')));
-    chunks.push(DBL_ON, txt('TAVOLO ' + o.table_number), DBL_OFF);
+    chunks.push(BOLD_ON, DBL_ON, txt('TAVOLO ' + o.table_number), DBL_OFF, BOLD_OFF);
     chunks.push(txt(dt));
     chunks.push(txt(lineSep('=')));
     chunks.push(ALIGN_L);
     for (const it of items) {
       const lab = `${Number(it.quantity)}x ${it.name}`;
-      chunks.push(BOLD_ON, txt(lab), BOLD_OFF);
-      if (it.notes) chunks.push(txt('   ' + it.notes));
+      // Bold + altezza doppia: leggibile da lontano, non wrappa righe lunghe
+      chunks.push(BOLD_ON, DBL_H_ON, txt(lab), DBL_OFF, BOLD_OFF);
+      if (it.notes) chunks.push(BOLD_ON, txt('   ' + it.notes), BOLD_OFF);
     }
     chunks.push(txt(lineSep('-')));
-    chunks.push(ALIGN_C, txt('Da preparare/portare in sala'));
-    chunks.push(FEED5, CUT);
+    chunks.push(ALIGN_C, BOLD_ON, txt('Da preparare/portare in sala'), BOLD_OFF);
+    chunks.push(FEED3, CUT);
 
     const out = Buffer.concat(chunks);
     res.set('Content-Type', 'application/octet-stream');
