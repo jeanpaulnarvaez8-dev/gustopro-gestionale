@@ -435,7 +435,7 @@ async function getTakeawayList(req, res, next) {
                 WHERE oi.order_id = o.id AND oi.status <> 'cancelled') AS items
          FROM orders o
         WHERE o.tenant_id = $1 AND o.order_type = 'takeaway'
-          AND o.status IN ('open', 'completed')
+          AND o.status = 'open'
           AND o.created_at >= CURRENT_DATE
         ORDER BY o.created_at DESC`,
       [tenantId]
