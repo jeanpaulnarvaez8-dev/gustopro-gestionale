@@ -377,7 +377,9 @@ const BOLD_OFF   = Buffer.from([ESC, 0x45, 0]);
 const DBL_ON     = Buffer.from([GS, 0x21, 0x11]); // double w + double h
 const DBL_H_ON   = Buffer.from([GS, 0x21, 0x01]); // solo altezza doppia (non wrappa righe lunghe)
 const DBL_OFF    = Buffer.from([GS, 0x21, 0x00]);
-const CUT        = Buffer.from([GS, 0x56, 0x00]); // full cut
+// JP 2026-06-04: taglio PARZIALE (GS V 1) — lascia un pezzettino al centro
+// cosi' gli scontrini restano attaccati al rotolo e non cadono per terra.
+const CUT        = Buffer.from([GS, 0x56, 0x01]); // partial cut
 const FEED5      = Buffer.from([ESC, 0x64, 5]);
 const FEED3      = Buffer.from([ESC, 0x64, 3]);
 const txt = (s) => Buffer.from(asciiSafe(s) + '\n', 'ascii');
