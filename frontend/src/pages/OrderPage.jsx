@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Plus, Minus, Trash2, Send, ShoppingCart, RefreshCw,
-  CheckCircle2, BookOpen, ChevronRight, Building, Clock, Zap, PackageCheck, UserPlus2, Receipt, Pencil,
+  CheckCircle2, BookOpen, ChevronRight, Building, Clock, Zap, PackageCheck, UserPlus2, Receipt, Pencil, Search, X,
 } from 'lucide-react'
 import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
@@ -172,6 +172,28 @@ export default function OrderPage() {
   const [table, setTableData]         = useState(null)
   const [categories, setCategories]   = useState([])
   const [menuItems, setMenuItems]     = useState([])
+  // JP 2026-06-04: ricerca piatti su tutto il menu. Lazy: carica al
+  // primo focus/keystroke. searchResults != null → render grid filtrata
+  // invece della categoria attiva.
+  const [searchQuery, setSearchQuery] = useState('')
+  const [allMenuItems, setAllMenuItems] = useState([])
+  const [allItemsLoaded, setAllItemsLoaded] = useState(false)
+  const loadAllItemsLazy = useCallback(async () => {
+    if (allItemsLoaded) return
+    try {
+      const r = await menuAPI.allItems()
+      setAllMenuItems(Array.isArray(r.data) ? r.data : [])
+      setAllItemsLoaded(true)
+    } catch { /* silent */ }
+  }, [allItemsLoaded])
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return null
+    return allMenuItems.filter(it =>
+      it.is_available !== false &&
+      ((it.name || '').toLowerCase().includes(q) || (it.description || '').toLowerCase().includes(q))
+    )
+  }, [searchQuery, allMenuItems])
   const [combos, setCombos]           = useState([])
   const [activeCategory, setActiveCategory] = useState(null)
   const [loadingMenu, setLoadingMenu] = useState(true)
@@ -799,6 +821,36 @@ export default function OrderPage() {
         {/* ─── Menu pane ──────────────────────────────────────── */}
         <div className="flex-1 flex flex-col overflow-hidden">
 
+          {/* JP 2026-06-04: barra ricerca piatti — su tutto il menu, sempre
+              in alto sopra le tab categorie. Filtra per nome o descrizione. */}
+          <div className="bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-3 py-2 shrink-0">
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-3)] pointer-events-none" />
+              <input
+                type="search"
+                placeholder="Cerca piatto…"
+                value={searchQuery}
+                onFocus={loadAllItemsLazy}
+                onChange={(e) => { loadAllItemsLazy(); setSearchQuery(e.target.value) }}
+                className="w-full bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg pl-8 pr-9 py-2 text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-3)] outline-none transition"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-3)] hover:text-[var(--color-text)] p-0.5"
+                  aria-label="Cancella ricerca"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            {searchQuery && searchResults && (
+              <p className="text-[10px] text-[var(--color-text-3)] mt-1 px-1">
+                {searchResults.length} {searchResults.length === 1 ? 'risultato' : 'risultati'}
+              </p>
+            )}
+          </div>
+
           {/* DESKTOP: tab categorie */}
           <div className="hidden md:block bg-[var(--color-surface)] border-b border-[var(--color-border-soft)] px-4 overflow-x-auto shrink-0 scrollbar-none">
             <div className="flex gap-0 min-w-max">
@@ -944,6 +996,44 @@ export default function OrderPage() {
                 <RefreshCw size={18} className="animate-spin text-[var(--color-gold)]" />
                 <span className="text-sm">Caricamento…</span>
               </div>
+            ) : searchResults ? (
+              /* JP 2026-06-04: ricerca attiva → griglia su tutti i piatti
+                 che matchano, ignora categoria. */
+              searchResults.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-2 text-[var(--color-text-3)]">
+                  <Search size={32} className="opacity-40" />
+                  <p className="text-sm">Nessun piatto trovato per &quot;{searchQuery}&quot;</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                  {searchResults.map(item => (
+                    <motion.button
+                      key={item.id}
+                      onClick={() => {
+                        if (item.pricing_type === 'per_kg') {
+                          setWeightSheet(item)
+                          setWeightInput(item.min_weight_g ? String(item.min_weight_g) : '')
+                        } else {
+                          addItem(item, 1, [], null)
+                          toast({ type: 'success', title: 'Aggiunto', message: item.name })
+                        }
+                      }}
+                      whileTap={{ scale: 0.96 }}
+                      className="bg-[var(--color-surface)] border border-[var(--color-border-strong)] hover:border-[var(--color-gold-ring)] rounded-xl p-4 text-left transition flex flex-col gap-2"
+                    >
+                      <span className="text-[var(--color-text)] text-sm font-bold">{item.name}</span>
+                      {item.category_name && (
+                        <span className="text-[10px] text-[var(--color-text-3)] uppercase tracking-wide">{item.category_name}</span>
+                      )}
+                      <div className="flex items-center justify-between mt-auto pt-1">
+                        <span className="text-[var(--color-gold)] font-bold text-sm tnum">
+                          {formatPrice(item.base_price)}{item.pricing_type === 'per_kg' ? '/kg' : ''}
+                        </span>
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              )
             ) : activeCategory === COMBO_TAB_ID ? (
               <div className="grid grid-cols-2 gap-3">
                 {combos.map(combo => (
