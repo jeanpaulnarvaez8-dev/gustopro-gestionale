@@ -5,14 +5,48 @@ import {
   ArrowLeft, ShoppingBag, Plus, Minus, Trash2, Send, ShoppingCart,
   RefreshCw, CheckCircle2, User, Phone, Clock,
 } from 'lucide-react'
-import { menuAPI, asportoAPI } from '../lib/api'
+import { menuAPI, asportoAPI, adminAPI, printAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
+import { useAuth } from '../context/AuthContext'
 import { Card, Badge, Button } from '../components/v2'
+import { Printer, Package } from 'lucide-react'
 
 export default function AsportoPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { user } = useAuth()
+  const canManageList = ['admin', 'manager'].includes(user?.role)
+
+  // JP 2026-06-04: lista asporti di oggi (solo admin/manager) — top panel
+  // sopra il form di creazione. Include stampa preconto per ciascuno.
+  const [openAsporti, setOpenAsporti] = useState([])
+  const [printing, setPrinting] = useState({})
+  const loadAsporti = useCallback(async () => {
+    if (!canManageList) return
+    try {
+      const { data } = await adminAPI.takeawayList()
+      setOpenAsporti(Array.isArray(data) ? data : [])
+    } catch { /* silent */ }
+  }, [canManageList])
+  useEffect(() => { loadAsporti() }, [loadAsporti])
+  useEffect(() => {
+    if (!canManageList) return
+    const id = setInterval(loadAsporti, 15000)
+    return () => clearInterval(id)
+  }, [canManageList, loadAsporti])
+  const handlePrintAsporto = async (orderId, customer) => {
+    if (printing[orderId]) return
+    setPrinting(p => ({ ...p, [orderId]: true }))
+    try {
+      await printAPI.enqueue('preconto', orderId)
+      toast({ type: 'success', title: '🖨 Preconto in stampa', message: `${customer || 'Asporto'} — esce dalla .24` })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore stampa', message: e?.response?.data?.error || 'Riprova' })
+    } finally {
+      setPrinting(p => { const n = { ...p }; delete n[orderId]; return n })
+    }
+  }
 
   // Customer info
   const [customerName, setCustomerName] = useState('')
@@ -133,6 +167,11 @@ export default function AsportoPage() {
         </button>
         <ShoppingBag size={18} className="text-[var(--color-gold)]" />
         <h1 className="serif text-[var(--color-text)] font-bold tracking-tight text-lg">Asporto</h1>
+        {canManageList && openAsporti.length > 0 && (
+          <span className="ml-2 px-2 py-0.5 rounded bg-[var(--color-warn)] text-black text-xs font-bold uppercase">
+            {openAsporti.length} oggi
+          </span>
+        )}
         {itemCount > 0 && (
           <div className="ml-auto flex items-center gap-1.5 text-[var(--color-gold)] font-semibold tnum text-sm">
             <ShoppingCart size={16} />
@@ -140,6 +179,56 @@ export default function AsportoPage() {
           </div>
         )}
       </header>
+
+      {/* JP 2026-06-04: pannello "Asporti di oggi" SOLO admin/manager.
+          Visibile sopra il form di nuovo asporto, scrollabile orizzontalmente.
+          Per ognuno: nome, totale, items, bottone stampa preconto. */}
+      {canManageList && openAsporti.length > 0 && (
+        <div className="bg-[var(--color-warn-soft)]/30 border-b-2 border-[var(--color-warn)]/40 px-3 py-3 shrink-0">
+          <div className="flex items-center gap-2 mb-2">
+            <Package size={14} className="text-[var(--color-warn)]" />
+            <span className="text-[var(--color-warn)] text-xs font-bold uppercase tracking-wider">
+              Asporti di oggi · {openAsporti.length} · Totale {formatPrice(openAsporti.reduce((s, o) => s + Number(o.total_amount || 0), 0))}
+            </span>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {openAsporti.map(o => (
+              <div
+                key={o.id}
+                className="shrink-0 w-[260px] bg-[var(--color-surface)] border-2 border-[var(--color-warn)]/40 rounded-lg p-3 flex flex-col gap-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[var(--color-text)] font-extrabold text-base truncate">
+                      {o.customer_name || '—'}
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-[var(--color-text-3)]">
+                      {o.pickup_time && <span>⏱ {String(o.pickup_time).slice(0, 5)}</span>}
+                      {o.takeaway_number && <span>#{o.takeaway_number}</span>}
+                    </div>
+                  </div>
+                  <span className="serif text-[var(--color-gold)] font-bold text-base tnum shrink-0">
+                    {formatPrice(o.total_amount)}
+                  </span>
+                </div>
+                {Array.isArray(o.items) && (
+                  <div className="text-[11px] text-[var(--color-text-2)] line-clamp-2 leading-snug">
+                    {o.items.map(it => `${it.quantity}× ${it.name}`).join(' · ')}
+                  </div>
+                )}
+                <button
+                  onClick={() => handlePrintAsporto(o.id, o.customer_name)}
+                  disabled={printing[o.id]}
+                  className="w-full py-2 rounded-md bg-[var(--color-gold)] text-[#13181C] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 hover:brightness-110 active:scale-[0.98] transition disabled:opacity-50"
+                >
+                  <Printer size={13} />
+                  {printing[o.id] ? '…' : 'Stampa preconto'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
 
