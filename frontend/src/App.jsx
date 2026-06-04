@@ -23,6 +23,7 @@ const UsersPage              = lazy(() => import('./pages/UsersPage'))
 const CustomersPage          = lazy(() => import('./pages/CustomersPage'))
 const ReservationsPage       = lazy(() => import('./pages/ReservationsPage'))
 const AsportoPage            = lazy(() => import('./pages/AsportoPage'))
+const TakeawayAdminPage      = lazy(() => import('./pages/TakeawayAdminPage'))
 const ComboAdminPage         = lazy(() => import('./pages/ComboAdminPage'))
 const MenuAdminPage          = lazy(() => import('./pages/MenuAdminPage'))
 const VenueAdminPage         = lazy(() => import('./pages/VenueAdminPage'))
@@ -251,6 +252,11 @@ export default function App() {
             } />
             <Route path="/reservations" element={<ReservationsPage />} />
             <Route path="/asporto" element={<AsportoPage />} />
+            <Route path="/asporti" element={
+              <RoleRoute roles={['admin', 'manager']}>
+                <TakeawayAdminPage />
+              </RoleRoute>
+            } />
             <Route path="/combos" element={
               <RoleRoute roles={['admin', 'manager']}>
                 <ComboAdminPage />

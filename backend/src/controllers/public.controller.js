@@ -392,6 +392,7 @@ async function getPrecontoEscpos(req, res, next) {
     }
     const { rows: [o] } = await pool.query(
       `SELECT o.id, o.covers, o.notes, o.order_type, o.created_at,
+              o.customer_name, o.pickup_time,
               COALESCE(tb.table_number::text, 'Asporto') AS table_number,
               z.name AS zone_name,
               t.name AS restaurant_name, t.fiscal_data,
@@ -411,7 +412,9 @@ async function getPrecontoEscpos(req, res, next) {
     const fd = o.fiscal_data || {};
     const dt = new Date(o.created_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
     const itemsSum = items.reduce((s, it) => s + Number(it.subtotal || 0), 0);
-    const copertoTot = Number(o.coperto_price || 0) * Number(o.covers || 0);
+    // JP 2026-06-04: asporto = niente coperto. Per dine-in calcolato come prima.
+    const isTakeaway = o.order_type === 'takeaway';
+    const copertoTot = isTakeaway ? 0 : Number(o.coperto_price || 0) * Number(o.covers || 0);
     const grandTotal = itemsSum + copertoTot;
     const money = (n) => Number(n || 0).toFixed(2).replace('.', ',');
 
@@ -426,9 +429,15 @@ async function getPrecontoEscpos(req, res, next) {
       c.push(txt(lineSep('=')));
       c.push(BOLD_ON, txt('PRECONTO - NON FISCALE'), BOLD_OFF);
       if (copyLabel) c.push(txt(copyLabel));
-      c.push(DBL_ON, txt('TAVOLO ' + o.table_number), DBL_OFF);
-      if (o.zone_name) c.push(txt(o.zone_name));
-      c.push(txt(dt + '  Coperti: ' + Number(o.covers || 0)));
+      if (isTakeaway) {
+        c.push(DBL_ON, txt('ASPORTO'), DBL_OFF);
+        if (o.customer_name) c.push(BOLD_ON, txt(o.customer_name), BOLD_OFF);
+        if (o.pickup_time) c.push(txt('Ritiro: ' + String(o.pickup_time).slice(0, 5)));
+      } else {
+        c.push(DBL_ON, txt('TAVOLO ' + o.table_number), DBL_OFF);
+        if (o.zone_name) c.push(txt(o.zone_name));
+      }
+      c.push(txt(dt + (isTakeaway ? '' : '  Coperti: ' + Number(o.covers || 0))));
       c.push(txt(lineSep('=')));
       c.push(ALIGN_L);
       if (items.length === 0) {

@@ -221,6 +221,7 @@ export default function AdminHomePage() {
             <QuickButton icon={Wine}            label="Bar"          onClick={() => navigate('/bar')} tone="gold" />
             <QuickButton icon={MapPin}          label="Zone"         onClick={() => navigate('/assignments')} tone="sea" />
             <QuickButton icon={Trophy}          label="Performance"  onClick={() => navigate('/performance')}  tone="park" />
+            <QuickButton icon={Package}         label="Asporti"      onClick={() => navigate('/asporti')} tone="warn" />
             <QuickButton icon={CalendarDays}    label="Prenotazioni" onClick={() => navigate('/reservations')} tone="sea" />
             <QuickButton icon={Package}         label="Inventario"   onClick={() => navigate('/inventory')} />
             <QuickButton icon={BarChart3}       label="Analisi"      onClick={() => navigate('/analytics')}    tone="park" />

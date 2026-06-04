@@ -285,6 +285,7 @@ export const adminAPI = {
   stockReconciliation: (from, to) => api.get('/admin/stock-reconciliation', { params: { from, to } }),
   staffPerformance:    (period)   => api.get('/admin/staff-performance', { params: { period } }),
   auditReport:         (from, to) => api.get('/admin/audit-report', { params: { from, to } }),
+  takeawayList:        ()          => api.get('/admin/takeaway'),
 }
 
 // Chiusura cassa fine giornata (Z report non fiscale) + apertura

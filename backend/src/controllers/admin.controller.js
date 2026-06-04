@@ -416,7 +416,36 @@ async function getAuditReport(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// JP 2026-06-04: lista asporti del giorno per admin con totali e items
+// (per dashboard + bottone "stampa preconto"). Solo non-cancelled,
+// dal mezzanotte di oggi in poi.
+async function getTakeawayList(req, res, next) {
+  try {
+    const tenantId = TENANT(req);
+    const { rows } = await pool.query(
+      `SELECT o.id, o.customer_name, o.customer_phone, o.pickup_time,
+              o.total_amount, o.created_at, o.status, o.takeaway_number,
+              (SELECT json_agg(json_build_object(
+                 'name', mi.name,
+                 'quantity', oi.quantity,
+                 'subtotal', oi.subtotal
+               ) ORDER BY mi.name)
+                 FROM order_items oi
+                 JOIN menu_items mi ON mi.id = oi.menu_item_id
+                WHERE oi.order_id = o.id AND oi.status <> 'cancelled') AS items
+         FROM orders o
+        WHERE o.tenant_id = $1 AND o.order_type = 'takeaway'
+          AND o.status IN ('open', 'completed')
+          AND o.created_at >= CURRENT_DATE
+        ORDER BY o.created_at DESC`,
+      [tenantId]
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+}
+
 module.exports = {
   getDashboardStats, getHourlyRevenue, getTopItems, getByWeekday,
   getTaxReport, getStockReconciliation, getStaffPerformance, getAuditReport,
+  getTakeawayList,
 };
