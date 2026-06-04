@@ -9,7 +9,13 @@ const SocketContext = createContext(null);
 
 export function SocketProvider({ children }) {
   const { user } = useAuth();
-  const { toast } = useToast();
+  const { toast: rawToast } = useToast();
+  // JP 2026-06-04: admin/cassa non vogliono popup pop-up dei socket
+  // events (CICLO PORTATE, item-ready, escalation, ecc.). Hanno la
+  // campanella unificata che mostra tutto solo su click. Wrapper
+  // globale: silenzia ogni toast socket-driven per quei ruoli.
+  const isSilentRole = ['admin', 'cashier'].includes(user?.role);
+  const toast = (opts) => { if (!isSilentRole) rawToast(opts); };
   const [socketInstance, setSocketInstance] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [serviceAlerts, setServiceAlerts] = useState([]);
