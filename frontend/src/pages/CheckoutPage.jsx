@@ -246,6 +246,16 @@ function SplitByItem({ bill, onPay, paying }) {
     return parseFloat((fromDishes + surchargePerPerson).toFixed(2))
   })
 
+  // JP 2026-06-04: dopo che una persona ha pagato, i SUOI piatti devono
+  // sparire dalla lista (non confondere il cameriere). visibleDishItems
+  // esclude i piatti assegnati a persone gia' pagate.
+  const visibleDishItems = dishItems.filter(it => {
+    const pi = assignments[it.id]
+    return pi === undefined || !paid.has(pi)
+  })
+  const totalPaid = Array.from(paid).reduce((s, pi) => s + (personTotals[pi] || 0), 0)
+  const remainingTotal = Math.max(0, parseFloat((parseFloat(bill.total_amount) - totalPaid).toFixed(2)))
+
   const unassignedTotal = dishItems.reduce((sum, item) => {
     if (assignments[item.id] === undefined) return sum + parseFloat(item.subtotal)
     return sum
@@ -284,6 +294,19 @@ function SplitByItem({ bill, onPay, paying }) {
         Tocca un piatto per assegnarlo a una persona
       </p>
 
+      {/* JP 2026-06-04: rimanente da incassare — il cameriere vede
+          subito quanto resta dopo i pagamenti gia' fatti. */}
+      {totalPaid > 0 && (
+        <div className="px-3 py-2 rounded-lg bg-[var(--color-ok-soft)] border border-[var(--color-ok)]/40 text-xs flex items-center justify-between gap-2">
+          <span className="text-[var(--color-ok)] font-semibold">
+            ✓ Incassati {formatPrice(totalPaid)}
+          </span>
+          <span className="text-[var(--color-text)] font-extrabold tnum">
+            Rimasto {formatPrice(remainingTotal)}
+          </span>
+        </div>
+      )}
+
       {/* JP 2026-06-04: banner coperto pro-rata — riassicura il cameriere
           che la quota e' inclusa in ogni persona, senza dover assegnarlo. */}
       {surchargeTotal > 0 && (
@@ -297,9 +320,14 @@ function SplitByItem({ bill, onPay, paying }) {
         </div>
       )}
 
-      {/* Items assignment — solo piatti (coperto suddiviso a parte) */}
+      {/* Items assignment — solo piatti non ancora pagati */}
       <Card padding="none" className="overflow-hidden">
-        {dishItems.map((item, i) => {
+        {visibleDishItems.length === 0 && totalPaid > 0 && (
+          <div className="px-3 py-6 text-center text-[var(--color-text-3)] text-xs">
+            Tutti i piatti sono stati incassati.
+          </div>
+        )}
+        {visibleDishItems.map((item, i) => {
           const pi = assignments[item.id]
           const color = pi !== undefined ? PERSON_COLORS[pi % PERSON_COLORS.length] : 'rgba(232,219,180,0.16)'
           return (
@@ -307,7 +335,7 @@ function SplitByItem({ bill, onPay, paying }) {
               key={item.id}
               onClick={() => toggleAssign(item.id)}
               className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition
-                ${i < dishItems.length - 1 ? 'border-b border-[var(--color-border-soft)]' : ''}
+                ${i < visibleDishItems.length - 1 ? 'border-b border-[var(--color-border-soft)]' : ''}
                 ${pi !== undefined ? 'bg-[var(--color-surface-2)]' : 'hover:bg-[rgba(255,255,255,0.02)]'}`}
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
