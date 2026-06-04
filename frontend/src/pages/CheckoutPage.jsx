@@ -214,6 +214,19 @@ function SplitByItem({ bill, onPay, paying }) {
   const [methods, setMethods] = useState({})
   const [paid, setPaid] = useState(new Set())
 
+  // JP 2026-06-04: il coperto/surcharge NON si assegna tap-per-tap; viene
+  // ripartito in parti uguali tra le persone dello split. Cosi' personTotals
+  // somma sempre al bill.total_amount anche se il cameriere splitta solo
+  // i piatti normali.
+  const isCopertoLike = (it) =>
+    !!it?.is_surcharge ||
+    /coperto/i.test(it?.item_name || '') ||
+    /coperto/i.test(it?.custom_name || '')
+  const dishItems = bill.items.filter(it => !isCopertoLike(it))
+  const surchargeItems = bill.items.filter(isCopertoLike)
+  const surchargeTotal = surchargeItems.reduce((s, it) => s + parseFloat(it.subtotal || 0), 0)
+  const surchargePerPerson = personCount > 0 ? surchargeTotal / personCount : 0
+
   const toggleAssign = (itemId) => {
     setAssignments(p => {
       const cur = p[itemId]
@@ -226,14 +239,14 @@ function SplitByItem({ bill, onPay, paying }) {
   }
 
   const personTotals = Array.from({ length: personCount }, (_, pi) => {
-    const total = bill.items.reduce((sum, item) => {
+    const fromDishes = dishItems.reduce((sum, item) => {
       if (assignments[item.id] === pi) return sum + parseFloat(item.subtotal)
       return sum
     }, 0)
-    return parseFloat(total.toFixed(2))
+    return parseFloat((fromDishes + surchargePerPerson).toFixed(2))
   })
 
-  const unassignedTotal = bill.items.reduce((sum, item) => {
+  const unassignedTotal = dishItems.reduce((sum, item) => {
     if (assignments[item.id] === undefined) return sum + parseFloat(item.subtotal)
     return sum
   }, 0)
@@ -271,9 +284,22 @@ function SplitByItem({ bill, onPay, paying }) {
         Tocca un piatto per assegnarlo a una persona
       </p>
 
-      {/* Items assignment */}
+      {/* JP 2026-06-04: banner coperto pro-rata — riassicura il cameriere
+          che la quota e' inclusa in ogni persona, senza dover assegnarlo. */}
+      {surchargeTotal > 0 && (
+        <div className="px-3 py-2 rounded-lg bg-[var(--color-gold-soft)] border border-[var(--color-gold-ring)] text-[11px] flex items-center justify-between gap-2">
+          <span className="text-[var(--color-gold)] font-semibold">
+            Coperto {formatPrice(surchargeTotal)} ÷ {personCount} persone
+          </span>
+          <span className="text-[var(--color-text-2)] tnum">
+            +{formatPrice(surchargePerPerson)}/persona
+          </span>
+        </div>
+      )}
+
+      {/* Items assignment — solo piatti (coperto suddiviso a parte) */}
       <Card padding="none" className="overflow-hidden">
-        {bill.items.map((item, i) => {
+        {dishItems.map((item, i) => {
           const pi = assignments[item.id]
           const color = pi !== undefined ? PERSON_COLORS[pi % PERSON_COLORS.length] : 'rgba(232,219,180,0.16)'
           return (
@@ -281,7 +307,7 @@ function SplitByItem({ bill, onPay, paying }) {
               key={item.id}
               onClick={() => toggleAssign(item.id)}
               className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition
-                ${i < bill.items.length - 1 ? 'border-b border-[var(--color-border-soft)]' : ''}
+                ${i < dishItems.length - 1 ? 'border-b border-[var(--color-border-soft)]' : ''}
                 ${pi !== undefined ? 'bg-[var(--color-surface-2)]' : 'hover:bg-[rgba(255,255,255,0.02)]'}`}
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
