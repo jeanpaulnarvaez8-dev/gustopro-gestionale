@@ -1132,13 +1132,13 @@ async function dispatchOrder(req, res, next) {
   try {
     const { id: order_id } = req.params;
     const tenantId = TENANT(req);
-    // JP 2026-06-03: solo dispatcher (7500) o admin/manager possono dispacciare.
-    // Cuochi di stazione (frittura/primi/...) NON devono poter saltare il
-    // Comandista premendo INIZIA TAVOLO.
-    const isDispatcher = req.user?.role === 'kitchen' && req.user?.sub_role === 'dispatcher';
-    const isPrivileged = ['admin', 'manager'].includes(req.user?.role);
-    if (!isDispatcher && !isPrivileged) {
-      return res.status(403).json({ error: 'Solo il Comandista (7500) puo\' iniziare il tavolo' });
+    // JP 2026-06-04: chiunque loggato (kitchen qualsiasi sub_role,
+    // admin, manager, cashier, waiter) puo' premere INIZIA TAVOLO dal KDS.
+    // Non e' una azione di security, e' operativa: serve liberare il
+    // tavolo verso le stazioni il prima possibile.
+    const allowed = ['kitchen', 'admin', 'manager', 'cashier', 'waiter'];
+    if (!allowed.includes(req.user?.role)) {
+      return res.status(403).json({ error: 'Ruolo non autorizzato' });
     }
     // Tenant ownership + status check sull'ordine.
     const { rows: [orderRow] } = await pool.query(

@@ -18,9 +18,27 @@ import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
 import { NetworkFirst } from 'workbox-strategies'
 
+// JP 2026-06-04: SW_VERSION bumped per invalidare tutte le cache stale
+// sui tablet vecchi. Cambiare questo string forza il browser a vedere
+// un SW diverso e a re-installare/attivare → precache nuova.
+const SW_VERSION = '2026-06-04-21h35-kdsfix'
+console.log('[SW] version', SW_VERSION)
+
 // Precache hash-fingerprinted assets generati da Vite
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
+
+// JP 2026-06-04: alla nuova attivazione, svuoto TUTTE le cache runtime
+// vecchie (Workbox precache si auto-pulisce, ma quelle nominate sotto
+// sopravvivono). Cosi' tablet con bundle stale si refreshano davvero.
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const names = await caches.keys()
+    await Promise.all(names
+      .filter(n => n.startsWith('gustopro-') || n.startsWith('workbox-'))
+      .map(n => caches.delete(n)))
+  })())
+})
 
 // SPA fallback: ogni navigazione (es. /tables, /order/123) usa index.html
 // dalla cache invece di hit-the-network. Cosi' app standalone funziona

@@ -788,19 +788,14 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                       </div>
                     </div>
 
-                    {/* JP 2026-06-03: bottone INIZIA TAVOLO inline nella
-                        card del tavolo. Appare se almeno UN item e' in
-                        waiting NON ancora rilasciato (released_at NULL).
-                        Visibile solo a admin/manager/dispatcher: i cuochi
-                        di stazione (frittura/primi/...) NON devono poter
-                        dispacciare. */}
-                    {(['admin','manager'].includes(user?.role) ||
-                       (user?.role === 'kitchen' && user?.sub_role === 'dispatcher')) &&
-                     order.items.some(it => it.workflow_status === 'waiting' && !it.released_at) && (
+                    {/* JP 2026-06-04: SEMPRE visibile se c'e' almeno un
+                        waiting. Niente piu' check release_at o role —
+                        guard di sicurezza solo lato backend. */}
+                    {order.items.some(it => it.workflow_status === 'waiting') && (
                       <button
                         onClick={() => handleDispatchOrder(order.order_id, order.table_number)}
                         disabled={dispatching[order.order_id]}
-                        className="w-full py-3 bg-[var(--color-ok)] hover:brightness-110 text-white font-extrabold text-lg uppercase tracking-wider active:scale-[0.99] transition disabled:opacity-50 flex items-center justify-center gap-2 border-y-2 border-[var(--color-ok)]/80"
+                        className="w-full py-4 bg-[var(--color-ok)] hover:brightness-110 text-white font-extrabold text-2xl uppercase tracking-wider active:scale-[0.99] transition disabled:opacity-50 flex items-center justify-center gap-2 border-y-2 border-[var(--color-ok)] animate-pulse"
                       >
                         {dispatching[order.order_id] ? '…' : '▶ INIZIA TAVOLO'}
                       </button>
