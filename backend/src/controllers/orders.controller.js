@@ -1022,19 +1022,19 @@ async function setItemFireAt(req, res, next) {
     );
     if (!item) return res.status(404).json({ error: 'Voce non trovata' });
     if (item.order_status !== 'open') return res.status(400).json({ error: 'Ordine chiuso' });
-    // JP 2026-06-03: il cameriere puo' "rimettere in attesa" un piatto
-    // GIA' mandato in cucina (uso: se ha sbagliato, vuole metterlo in
-    // attesa col timer). Quindi accettiamo waiting E production, ma NON
-    // cooking/ready/served (il cuoco sta gia' lavorando).
-    if (item.status !== 'pending') {
-      return res.status(400).json({ error: 'Il timer si imposta solo su voci NON ancora in cottura' });
+    // JP 2026-06-04: il cameriere puo' rimettere in attesa anche piatti
+    // pending O in cottura (cuoco lo sta facendo ma il cliente vuole
+    // aspettare). Solo i ready/served/cancelled restano intoccabili.
+    if (!['pending', 'cooking'].includes(item.status)) {
+      return res.status(400).json({ error: 'Il timer si imposta solo su voci non ancora pronte' });
     }
-    // JP 2026-06-03: ownership — solo il cameriere che ha preso il tavolo
-    // o admin/manager/cashier possono cambiare il timer.
-    const isOwner = item.waiter_id && item.waiter_id === req.user?.id;
+    // JP 2026-06-04: qualsiasi cameriere puo' cambiare il timer (anche su
+    // tavoli aperti da altri o dall'admin). Bloccati solo cuochi/dispatcher
+    // che non devono fare gestione sala.
+    const isWaiter = req.user?.role === 'waiter';
     const isPrivilegedRole = ['admin', 'manager', 'cashier'].includes(req.user?.role);
-    if (!isOwner && !isPrivilegedRole) {
-      return res.status(403).json({ error: 'Solo il cameriere del tavolo puo\' cambiare il timer' });
+    if (!isWaiter && !isPrivilegedRole) {
+      return res.status(403).json({ error: 'Solo cameriere/cassa/admin possono cambiare il timer' });
     }
     // Cap a 180 min anche server-side.
     if (mins > 180) {
