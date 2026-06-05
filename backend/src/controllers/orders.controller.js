@@ -12,6 +12,9 @@ const TENANT = (req) => req.tenant.id;
 async function insertRegularItem(client, order_id, item, userId, tenantId) {
   const { menu_item_id, quantity = 1, notes: itemNotes, modifiers = [], weight_g, fire_at_minutes } = item;
   let workflow_status = item.workflow_status || 'production';
+  // JP 2026-06-05: il client ha esplicitamente settato 'waiting'?
+  // Distingue dal waiting "tecnico" forzato dopo da requires_dispatch.
+  const clientExplicitlyHeld = workflow_status === 'waiting';
   // JP 2026-06-03: timer auto-fire in minuti dal carrello (es. Marco scrive
   // "10" sulla riga ATTESA → fra 10 min il piatto parte da solo in cucina).
   // Significativo solo se workflow_status='waiting'.
@@ -83,13 +86,20 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
     ? new Date(Date.now() + fireAtMin * 60_000)
     : null;
 
+  // JP 2026-06-05: manual hold = cameriere ha esplicitamente settato 'waiting'
+  // E non ha messo timer. INIZIA TAVOLO e auto-fire non lo toccano: solo il
+  // cameriere/Manda in cucina lo puo' sbloccare. Per i waiting "tecnici"
+  // (forzati da requires_dispatch su un client che inviava 'production'),
+  // is_manual_hold=false → comportamento INIZIA TAVOLO invariato.
+  const isManualHold = clientExplicitlyHeld && wfStatus === 'waiting' && !fireAtIso;
+
   const { rows: [orderItem] } = await client.query(
     `INSERT INTO order_items
        (tenant_id, order_id, menu_item_id, quantity, unit_price, modifier_total, subtotal, notes, weight_g,
-        workflow_status, status, inserted_by, served_at, fire_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+        workflow_status, status, inserted_by, served_at, fire_at, is_manual_hold)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
     [tenantId, order_id, menu_item_id, quantity, unitPrice, modifierTotal, subtotal, itemNotes || null, weight_g || null,
-     wfStatus, itemStatus, userId, servedAt, fireAtIso]
+     wfStatus, itemStatus, userId, servedAt, fireAtIso, isManualHold]
   );
 
   for (const mod of modifiers) {
@@ -1181,17 +1191,21 @@ async function setItemFireAt(req, res, next) {
     // accorgersene.
     let sql, params;
     if (mins > 0) {
+      // Timer impostato → NON e' piu' manual hold (auto-fire prende controllo).
       sql = `UPDATE order_items SET
                fire_at = NOW() + ($1::int || ' minutes')::interval,
                workflow_status = 'waiting',
-               released_at = NULL
+               released_at = NULL,
+               is_manual_hold = false
              WHERE id = $2 AND tenant_id = $3
              RETURNING id, fire_at, workflow_status`;
       params = [Math.max(1, Math.round(mins)), itemId, tenantId];
     } else {
-      // Rimuove SOLO il timer, lascia il piatto dove sta (waiting o production).
+      // Rimuove SOLO il timer. Il piatto resta in attesa, e se era waiting
+      // diventa manual hold (solo cameriere/Manda lo sblocca).
       sql = `UPDATE order_items SET
-               fire_at = NULL
+               fire_at = NULL,
+               is_manual_hold = CASE WHEN workflow_status='waiting' THEN true ELSE is_manual_hold END
              WHERE id = $1 AND tenant_id = $2
              RETURNING id, fire_at, workflow_status`;
       params = [itemId, tenantId];
@@ -1240,6 +1254,11 @@ async function dispatchOrder(req, res, next) {
     // restano in attesa: serviceTimer.checkScheduledFiresForTenant li libera
     // automaticamente quando arriva l'ora. fire_at = NULL sui rilasciati per
     // non sporcare i dati post-dispatch.
+    //
+    // JP 2026-06-05: i waiting con is_manual_hold=true (cameriere ha
+    // esplicitamente tenuto il piatto in attesa senza timer) NON vengono
+    // rilasciati da INIZIA TAVOLO. Solo il cameriere/Manda in cucina li
+    // puo' sbloccare. Prima sparivano dall'attesa = problema operativo.
     const { rows: items } = await pool.query(
       `UPDATE order_items
           SET workflow_status = 'production',
@@ -1248,6 +1267,7 @@ async function dispatchOrder(req, res, next) {
         WHERE order_id = $1 AND tenant_id = $2
           AND workflow_status = 'waiting'
           AND COALESCE(is_surcharge, false) = false
+          AND COALESCE(is_manual_hold, false) = false
           AND (fire_at IS NULL OR fire_at <= NOW())
         RETURNING id`,
       [order_id, tenantId]

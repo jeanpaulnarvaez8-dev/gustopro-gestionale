@@ -92,7 +92,9 @@ async function changeWorkflowStatus(req, res, next) {
       `UPDATE order_items SET
          workflow_status = $1,
          released_at = CASE WHEN $3 THEN NOW() ELSE released_at END,
-         status = CASE WHEN $3 THEN 'pending' ELSE status END
+         status = CASE WHEN $3 THEN 'pending' ELSE status END,
+         -- JP 2026-06-05: sblocco esplicito del cameriere → cancella manual hold.
+         is_manual_hold = CASE WHEN $3 THEN false ELSE is_manual_hold END
        WHERE id = $2 AND tenant_id = $4 RETURNING *`,
       [workflow_status, itemId, isRelease, tenantId]
     );

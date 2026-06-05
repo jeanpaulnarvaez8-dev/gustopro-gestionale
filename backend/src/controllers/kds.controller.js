@@ -80,6 +80,7 @@ async function getPendingOrders(req, res, next) {
          CASE WHEN oi.workflow_status = 'waiting' THEN 'waiting' ELSE oi.display_status END AS display_status,
          oi.fire_at,
          oi.released_at,
+         oi.is_manual_hold,
          oi.workflow_status AS workflow_status,
          oi.notes          AS item_notes,
          oi.sent_at,
@@ -152,6 +153,7 @@ async function getPendingOrders(req, res, next) {
         workflow_status:  row.workflow_status,
         fire_at:          row.fire_at, // timer auto-fire (per voci in attesa)
         released_at:      row.released_at, // NULL = pre-dispatch (7500), set = visto dal Comandista
+        is_manual_hold:   row.is_manual_hold, // JP 2026-06-05: cameriere lo tiene esplicitamente, INIZIA TAVOLO non lo tocca
         course_type:      row.course_type,
         prep_station:     row.prep_station,
         required_kit:     row.required_kit,  // JSONB array di stringhe o null
