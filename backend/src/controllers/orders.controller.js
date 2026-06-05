@@ -129,6 +129,9 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
 
 async function insertComboItem(client, order_id, item, userId, tenantId) {
   const { combo_menu_id, quantity = 1, selections = [], notes: itemNotes, workflow_status = 'production' } = item;
+  // JP 2026-06-05: anche sui combo, se cameriere setta 'waiting' senza
+  // timer → manual hold (INIZIA TAVOLO non lo tocca).
+  const clientExplicitlyHeld = workflow_status === 'waiting';
 
   const { rows: [combo] } = await client.query(
     'SELECT id, name, price FROM combo_menus WHERE id=$1 AND is_active=true AND tenant_id=$2',
@@ -142,16 +145,17 @@ async function insertComboItem(client, order_id, item, userId, tenantId) {
   const wfStatus = ['waiting', 'production', 'delivered'].includes(workflow_status) ? workflow_status : 'production';
   const itemStatus = wfStatus === 'delivered' ? 'served' : 'pending';
   const servedAt = wfStatus === 'delivered' ? new Date() : null;
+  const isManualHold = clientExplicitlyHeld && wfStatus === 'waiting';
 
   const { rows: [orderItem] } = await client.query(
     `INSERT INTO order_items
        (tenant_id, order_id, menu_item_id, combo_menu_id, combo_menu_name, combo_selections,
         quantity, unit_price, modifier_total, subtotal, notes,
-        workflow_status, status, inserted_by, served_at)
-     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,0,$8,$9,$10,$11,$12,$13) RETURNING *`,
+        workflow_status, status, inserted_by, served_at, is_manual_hold)
+     VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,0,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [tenantId, order_id, combo.id, combo.name, JSON.stringify(selections),
      quantity, unitPrice, subtotal, itemNotes || null,
-     wfStatus, itemStatus, userId, servedAt]
+     wfStatus, itemStatus, userId, servedAt, isManualHold]
   );
   return orderItem;
 }
