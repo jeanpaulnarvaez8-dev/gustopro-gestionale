@@ -265,8 +265,10 @@ async function updateItemStatus(req, res, next) {
     // JP 2026-06-05: auto-stampa ticket cucina su START (status='cooking').
     // Appena il chef preme START → esce mini ticket TAV X + nome piatto in
     // cucina (.23). Il chef lo attacca al piatto, niente confusione tra
-    // tavoli. Stampata UNA VOLTA SOLA al primo passaggio a 'cooking'.
-    if (status === 'cooking' && item.status !== 'cooking') {
+    // tavoli. (item.status e' gia' il nuovo dopo UPDATE RETURNING *, quindi
+    // niente guard "!= cooking" — accettiamo doppia stampa se il chef tappa
+    // due volte: meglio una in piu' che una in meno.)
+    if (status === 'cooking') {
       try {
         const { rows: [info] } = await pool.query(
           `SELECT COALESCE(t.table_number, 'ASPORTO') AS table_number,
@@ -611,6 +613,34 @@ async function batchUpdateStatus(req, res, next) {
        RETURNING id, order_id, status`,
       [status, item_ids, tenantId]
     );
+
+    // JP 2026-06-05: stampa ticket cucina su START batch (es. chip TOTALI
+    // "DA FARE ×4" cliccato dal chef). Un ticket per ogni item del batch.
+    if (status === 'cooking' && rows.length > 0) {
+      try {
+        const { rows: infos } = await pool.query(
+          `SELECT oi.id, oi.order_id, oi.quantity,
+                  COALESCE(t.table_number, 'ASPORTO') AS table_number,
+                  COALESCE(mi.name, oi.combo_menu_name, 'Piatto') AS item_name
+             FROM order_items oi
+             JOIN orders o ON o.id = oi.order_id
+             LEFT JOIN tables t ON t.id = o.table_id
+             LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+            WHERE oi.id = ANY($1::uuid[]) AND oi.tenant_id = $2`,
+          [rows.map(r => r.id), tenantId]
+        );
+        const { enqueueKitchenPassJob } = require('./print.controller');
+        for (const it of infos) {
+          enqueueKitchenPassJob(tenantId, it.order_id, it.id, {
+            table_number: String(it.table_number),
+            item_name: String(it.item_name),
+            quantity: Number(it.quantity || 1),
+          });
+        }
+      } catch (e) {
+        req.log?.warn?.({ err: e.message }, 'kitchen-pass batch enqueue failed');
+      }
+    }
 
     // Socket: emette UN evento batch per i clients
     getIO()?.emit('items-batch-updated', {
