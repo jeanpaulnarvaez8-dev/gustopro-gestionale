@@ -270,27 +270,10 @@ async function updateItemStatus(req, res, next) {
     // due volte: meglio una in piu' che una in meno.)
     if (status === 'cooking') {
       try {
-        const { rows: [info] } = await pool.query(
-          `SELECT COALESCE(t.table_number, 'ASPORTO') AS table_number,
-                  COALESCE(mi.name, oi.combo_menu_name, 'Piatto') AS item_name,
-                  oi.quantity
-             FROM order_items oi
-             JOIN orders o ON o.id = oi.order_id
-             LEFT JOIN tables t ON t.id = o.table_id
-             LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
-            WHERE oi.id = $1 AND oi.tenant_id = $2`,
-          [id, tenantId]
-        );
-        if (info) {
-          const { enqueueKitchenPassJob } = require('./print.controller');
-          enqueueKitchenPassJob(tenantId, item.order_id, id, {
-            table_number: String(info.table_number),
-            item_name: String(info.item_name),
-            quantity: Number(info.quantity || 1),
-          });
-        }
+        const { scheduleKitchenTicket } = require('./print.controller');
+        scheduleKitchenTicket(tenantId, item.order_id, id);
       } catch (e) {
-        req.log?.warn?.({ err: e.message }, 'kitchen-pass enqueue failed (non-blocking)');
+        req.log?.warn?.({ err: e.message }, 'kitchen-pass schedule failed (non-blocking)');
       }
     }
 
@@ -614,31 +597,17 @@ async function batchUpdateStatus(req, res, next) {
       [status, item_ids, tenantId]
     );
 
-    // JP 2026-06-05: stampa ticket cucina su START batch (es. chip TOTALI
-    // "DA FARE ×4" cliccato dal chef). Un ticket per ogni item del batch.
+    // JP 2026-06-05: stampa ticket cucina su START batch (chip TOTALI "×4
+    // DA FARE" cliccato). Debounce per orderId → un solo ticket per tavolo
+    // con la lista di tutti i piatti partiti nel batch.
     if (status === 'cooking' && rows.length > 0) {
       try {
-        const { rows: infos } = await pool.query(
-          `SELECT oi.id, oi.order_id, oi.quantity,
-                  COALESCE(t.table_number, 'ASPORTO') AS table_number,
-                  COALESCE(mi.name, oi.combo_menu_name, 'Piatto') AS item_name
-             FROM order_items oi
-             JOIN orders o ON o.id = oi.order_id
-             LEFT JOIN tables t ON t.id = o.table_id
-             LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
-            WHERE oi.id = ANY($1::uuid[]) AND oi.tenant_id = $2`,
-          [rows.map(r => r.id), tenantId]
-        );
-        const { enqueueKitchenPassJob } = require('./print.controller');
-        for (const it of infos) {
-          enqueueKitchenPassJob(tenantId, it.order_id, it.id, {
-            table_number: String(it.table_number),
-            item_name: String(it.item_name),
-            quantity: Number(it.quantity || 1),
-          });
+        const { scheduleKitchenTicket } = require('./print.controller');
+        for (const r of rows) {
+          scheduleKitchenTicket(tenantId, r.order_id, r.id);
         }
       } catch (e) {
-        req.log?.warn?.({ err: e.message }, 'kitchen-pass batch enqueue failed');
+        req.log?.warn?.({ err: e.message }, 'kitchen-pass batch schedule failed');
       }
     }
 
