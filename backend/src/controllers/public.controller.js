@@ -241,7 +241,7 @@ async function getPrecontoHtml(req, res, next) {
     const itemsSum = items.reduce((s, it) => s + Number(it.subtotal || 0), 0);
     // JP 2026-06-05 FIX: skip coperto auto se cassa lo ha gia' aggiunto
     // come voce libera (era doppio addebito).
-    const hasManualCoperto = items.some(it => /coperto/i.test(String(it.name || '')));
+    const hasManualCoperto = items.some(it => /copert/i.test(String(it.name || '')));
     const copertoTot = hasManualCoperto ? 0 : Number(o.coperto_price || 0) * Number(o.covers || 0);
     const grandTotal = itemsSum + copertoTot;
 
@@ -427,7 +427,7 @@ async function getPrecontoEscpos(req, res, next) {
     const isTakeaway = o.order_type === 'takeaway';
     // JP 2026-06-05 FIX: se cassa ha gia' aggiunto "Coperto" come voce
     // libera, NON aggiungere anche quello auto (era doppio addebito).
-    const hasManualCoperto = items.some(it => /coperto/i.test(String(it.name || '')));
+    const hasManualCoperto = items.some(it => /copert/i.test(String(it.name || '')));
     const copertoTot = (isTakeaway || hasManualCoperto) ? 0 : Number(o.coperto_price || 0) * Number(o.covers || 0);
     const grandTotal = itemsSum + copertoTot;
     const money = (n) => Number(n || 0).toFixed(2).replace('.', ',');
