@@ -35,6 +35,12 @@ function drain(tenant_id) {
   return arr;
 }
 
+// JP 2026-06-05: dedup per evitare 20 stampe del tavolo 3. Se il cassa
+// clicca "Stampa preconto" piu' volte di fila, ignora i click ravvicinati.
+// Map<`${tenant_id}:${order_id}`, last_ms>. TTL 5s, pulizia opportunista.
+const _lastPrecontoEmit = new Map();
+const PRECONTO_DEDUP_MS = 5000;
+
 // POST /api/print/enqueue  — autenticato (admin/manager/cassa/waiter)
 // body: { kind: 'preconto', order_id }
 async function enqueuePrintJob(req, res, next) {
@@ -54,6 +60,23 @@ async function enqueuePrintJob(req, res, next) {
     );
     if (!o || o.tenant_id !== tenant_id) {
       return res.status(404).json({ error: 'ordine non trovato' });
+    }
+    // Dedup: stesso ordine, stessa cassa, in meno di 5s → respond 200 ma
+    // senza enqueueare. Risponde "deduplicated" cosi' il frontend non
+    // pensa che sia fallito.
+    const dedupKey = `${tenant_id}:${order_id}`;
+    const now = Date.now();
+    const lastEmit = _lastPrecontoEmit.get(dedupKey) || 0;
+    if (now - lastEmit < PRECONTO_DEDUP_MS) {
+      return res.json({ enqueued: false, deduplicated: true, retry_in_ms: PRECONTO_DEDUP_MS - (now - lastEmit) });
+    }
+    _lastPrecontoEmit.set(dedupKey, now);
+    // Pulizia opportunista entries vecchie (>30s) per non lasciar crescere
+    // la map all'infinito durante la vita del processo.
+    if (_lastPrecontoEmit.size > 200) {
+      for (const [k, t] of _lastPrecontoEmit.entries()) {
+        if (now - t > 30_000) _lastPrecontoEmit.delete(k);
+      }
     }
     const job = {
       id: crypto.randomUUID(),
