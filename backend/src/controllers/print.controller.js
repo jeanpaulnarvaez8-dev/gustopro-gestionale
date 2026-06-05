@@ -159,7 +159,10 @@ function enqueueKitchenPassJob(tenantId, orderId, itemId, payload) {
 // non solo quelli che il chef ha avviato in questa sessione — cosi' il
 // chef ha sempre il quadro completo del tavolo davanti.
 const _kitchenDebounce = new Map();
-const KITCHEN_DEBOUNCE_MS = 2500;
+// JP 2026-06-05: aumentato a 4s per assorbire INIZIA TAVOLO + chef START
+// immediatamente successivi in UN SOLO ticket. Prima 2.5s lasciava uscire
+// 2 stampe quando il chef premeva START subito dopo l'INIZIA TAVOLO.
+const KITCHEN_DEBOUNCE_MS = 4000;
 
 function scheduleKitchenTicket(tenantId, orderId /* itemId ignorato */) {
   let entry = _kitchenDebounce.get(orderId);

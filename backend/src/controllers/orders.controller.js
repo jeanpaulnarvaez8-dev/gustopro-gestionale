@@ -1312,6 +1312,17 @@ async function dispatchOrder(req, res, next) {
         orderId: order_id, itemId: it.id, workflow_status: 'waiting', preallerta: true,
       });
     }
+    // JP 2026-06-05: stampa cucina UNA volta quando il Comandista preme
+    // INIZIA TAVOLO. Debounce 4s aggrega anche i START successivi del chef
+    // nello stesso ticket → niente piu' stampe multiple per lo stesso tavolo.
+    if (items.length > 0) {
+      try {
+        const { scheduleKitchenTicket } = require('./print.controller');
+        scheduleKitchenTicket(tenantId, order_id);
+      } catch (e) {
+        req.log?.warn?.({ err: e.message }, 'kitchen-pass schedule failed (dispatch, non-blocking)');
+      }
+    }
     res.json({
       dispatched: items.length,
       preallerta: preallerta.length,
