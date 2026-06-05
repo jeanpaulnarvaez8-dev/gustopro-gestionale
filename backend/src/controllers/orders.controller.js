@@ -23,7 +23,8 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
   const { rows: [menuItem] } = await client.query(
     `SELECT mi.base_price, mi.pricing_type, mi.name,
             COALESCE(c.is_beverage, false) AS is_beverage,
-            COALESCE(mi.auto_print, c.auto_print, false) AS auto_print
+            COALESCE(mi.auto_print, c.auto_print, false) AS auto_print,
+            COALESCE(mi.goes_to_bar, c.goes_to_bar, false) AS goes_to_bar
        FROM menu_items mi
        LEFT JOIN categories c ON c.id = mi.category_id
       WHERE mi.id=$1 AND mi.is_available=true AND mi.tenant_id=$2`,
@@ -106,6 +107,9 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
   // JP 2026-06-03: marker per auto-print sala (acque/vini/bollicine/dessert/
   // birre alla spina). Letto da createOrder/addItems per emettere il job.
   orderItem.__autoPrint = !!menuItem.auto_print;
+  // JP 2026-06-05: marker per bar (.21). Cocktail/birre/vini/caffe' →
+  // stampa al banco bar appena il cameriere conferma l'ordine.
+  orderItem.__goesToBar = !!menuItem.goes_to_bar;
   return orderItem;
 }
 
@@ -386,9 +390,9 @@ async function createOrder(req, res, next) {
       });
     }
 
-    // JP 2026-06-03: auto-print sala (.24). Acqua/vino/bollicine/dessert/
-    // birre alla spina vengono stampati subito sul ticket di sala col
-    // numero tavolo. Marker __autoPrint settato in insertRegularItem.
+    // JP 2026-06-03: auto-print sala (.24). Acqua/dessert vengono
+    // stampati subito sul ticket di sala col numero tavolo. Marker
+    // __autoPrint settato in insertRegularItem.
     try {
       const autoIds = orderItems.filter(it => it.__autoPrint).map(it => it.id);
       if (autoIds.length > 0) {
@@ -397,6 +401,18 @@ async function createOrder(req, res, next) {
       }
     } catch (e) {
       req.log?.warn?.({ err: e.message }, 'auto-print enqueue failed (non-blocking)');
+    }
+
+    // JP 2026-06-05: bar pass (.21). Cocktail/birre/vini/bollicine/caffe'/
+    // digestivi → ticket aggregato sulla stampante bar con TAV X.
+    try {
+      const barIds = orderItems.filter(it => it.__goesToBar).map(it => it.id);
+      if (barIds.length > 0) {
+        const { scheduleBarTicket } = require('./print.controller');
+        scheduleBarTicket(tenantId, order.id, barIds);
+      }
+    } catch (e) {
+      req.log?.warn?.({ err: e.message }, 'bar-pass schedule failed (non-blocking)');
     }
 
     // Notifica bar: se l'ordine contiene bevande (is_beverage=true), push
@@ -635,6 +651,18 @@ async function addItems(req, res, next) {
       }
     } catch (e) {
       req.log?.warn?.({ err: e.message }, 'auto-print enqueue failed (non-blocking)');
+    }
+
+    // JP 2026-06-05: bar pass anche su addItems (cliente ordina altri
+    // cocktail/caffe' dopo l'apertura del tavolo).
+    try {
+      const barIds = addedItems.filter(it => it.__goesToBar).map(it => it.id);
+      if (barIds.length > 0) {
+        const { scheduleBarTicket } = require('./print.controller');
+        scheduleBarTicket(tenantId, order_id, barIds);
+      }
+    } catch (e) {
+      req.log?.warn?.({ err: e.message }, 'bar-pass schedule failed (non-blocking)');
     }
 
     const directDelivered = addedItems.filter(oi => oi.workflow_status === 'delivered');

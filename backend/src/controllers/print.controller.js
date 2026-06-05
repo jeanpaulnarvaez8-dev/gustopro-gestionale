@@ -197,4 +197,79 @@ function enqueueAutoPrintJob(tenantId, orderId, itemIds) {
   return job;
 }
 
-module.exports = { enqueuePrintJob, getPendingJobs, getQueueSize, enqueueAutoPrintJob, enqueueFiscalJob, enqueueKitchenPassJob, scheduleKitchenTicket };
+// JP 2026-06-05: BAR @ 192.168.1.21. Quando il cameriere manda un ordine
+// con cocktail/birra/vino/caffe' eccetera, deve uscire UNA stampa al bar
+// con tutto quello che il bar deve preparare (TAV X + lista bevande).
+// L'acqua resta sulla preconto sala (.24) com'era. Sorbetto al limone va
+// al bar (override su menu_items.goes_to_bar=true).
+function enqueueBarPassJob(tenantId, orderId, payload) {
+  const job = {
+    id: crypto.randomUUID(),
+    kind: 'bar-pass',
+    order_id: orderId,
+    payload,
+    created_at: new Date().toISOString(),
+  };
+  pushJob(tenantId, job);
+  return job;
+}
+
+// Debounce breve (800ms) per aggregare item bar di UN SINGOLO INVIO
+// cameriere. Se il cameriere manda Spritz + Negroni + Acqua + Pasta in una
+// botta, il bar deve vedere [Spritz, Negroni] in un ticket. Niente
+// accumulo cross-invio (se 30min dopo manda un altro caffe', e' un
+// secondo ticket separato).
+const _barDebounce = new Map();
+const BAR_DEBOUNCE_MS = 800;
+// itemIds inviati in questa "finestra" — al fire del timer, query DB per
+// risolvere nomi/quantita e produrre il payload aggregato.
+function scheduleBarTicket(tenantId, orderId, newItemIds) {
+  let entry = _barDebounce.get(orderId);
+  if (entry) clearTimeout(entry.timeoutId);
+  else entry = { tenantId, itemIds: new Set(), timeoutId: null };
+  for (const id of newItemIds || []) entry.itemIds.add(id);
+  entry.timeoutId = setTimeout(async () => {
+    _barDebounce.delete(orderId);
+    try {
+      const ids = Array.from(entry.itemIds);
+      if (ids.length === 0) return;
+      const { rows: [hdr] } = await pool.query(
+        `SELECT COALESCE(t.table_number, 'ASPORTO') AS table_number
+           FROM orders o LEFT JOIN tables t ON t.id = o.table_id
+          WHERE o.id = $1 AND o.tenant_id = $2`,
+        [orderId, entry.tenantId]
+      );
+      // Solo gli item appena inseriti, no aggregazione retroattiva.
+      // Filtra ulteriormente su goes_to_bar effettivo (override item ||
+      // category) per essere a prova di bug client-side.
+      const { rows: items } = await pool.query(
+        `SELECT COALESCE(mi.name, oi.combo_menu_name, 'Bevanda') AS name,
+                oi.quantity
+           FROM order_items oi
+           LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+           LEFT JOIN categories c ON c.id = mi.category_id
+          WHERE oi.id = ANY($1::uuid[])
+            AND oi.tenant_id = $2
+            AND oi.status NOT IN ('cancelled')
+            AND COALESCE(oi.is_surcharge, false) = false
+            AND COALESCE(mi.goes_to_bar, c.goes_to_bar, false) = true
+          ORDER BY name`,
+        [ids, entry.tenantId]
+      );
+      if (hdr && items.length > 0) {
+        enqueueBarPassJob(entry.tenantId, orderId, {
+          table_number: String(hdr.table_number),
+          items: items.map(it => ({
+            name: String(it.name),
+            quantity: Number(it.quantity || 1),
+          })),
+        });
+      }
+    } catch (e) {
+      console.error('[scheduleBarTicket] failed:', e.message);
+    }
+  }, BAR_DEBOUNCE_MS);
+  _barDebounce.set(orderId, entry);
+}
+
+module.exports = { enqueuePrintJob, getPendingJobs, getQueueSize, enqueueAutoPrintJob, enqueueFiscalJob, enqueueKitchenPassJob, scheduleKitchenTicket, enqueueBarPassJob, scheduleBarTicket };
