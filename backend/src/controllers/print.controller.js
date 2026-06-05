@@ -114,6 +114,23 @@ function enqueueFiscalJob(tenantId, orderId, payload) {
   return job;
 }
 
+// JP 2026-06-05: ticket "pronto al pass" stampato in cucina sulla
+// Q3X-F (modalita' non-fiscale). Triggered quando chef preme
+// CHIAMA CAMERIERE (status -> 'ready'). Un ticket per piatto cosi'
+// il cameriere prende e porta — niente confusione tra tavoli.
+function enqueueKitchenPassJob(tenantId, orderId, itemId, payload) {
+  const job = {
+    id: crypto.randomUUID(),
+    kind: 'kitchen-pass',
+    order_id: orderId,
+    item_id: itemId,
+    payload,
+    created_at: new Date().toISOString(),
+  };
+  pushJob(tenantId, job);
+  return job;
+}
+
 // JP 2026-06-03: helper esportato per usi server-to-server (auto-print
 // chiamato da createOrder/addItems dopo gli insert).
 function enqueueAutoPrintJob(tenantId, orderId, itemIds) {
@@ -129,4 +146,4 @@ function enqueueAutoPrintJob(tenantId, orderId, itemIds) {
   return job;
 }
 
-module.exports = { enqueuePrintJob, getPendingJobs, getQueueSize, enqueueAutoPrintJob, enqueueFiscalJob };
+module.exports = { enqueuePrintJob, getPendingJobs, getQueueSize, enqueueAutoPrintJob, enqueueFiscalJob, enqueueKitchenPassJob };

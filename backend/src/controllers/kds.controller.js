@@ -276,6 +276,20 @@ async function updateItemStatus(req, res, next) {
         [id, tenantId]
       );
       if (info) {
+        // JP 2026-06-05: auto-stampa ticket cucina sulla Q3X-F (.23 modalita'
+        // non-fiscale). Un ticket per ogni piatto pronto col TAVOLO X +
+        // NOME PIATTO + quantita'. Il cameriere prende il ticket e sa cosa
+        // portare e dove. NON blocca la notifica socket — log e basta.
+        try {
+          const { enqueueKitchenPassJob } = require('./print.controller');
+          enqueueKitchenPassJob(tenantId, item.order_id, id, {
+            table_number: String(info.table_number),
+            item_name: String(info.item_name),
+            quantity: Number(info.quantity || 1),
+          });
+        } catch (e) {
+          req.log?.warn?.({ err: e.message }, 'kitchen-pass enqueue failed (non-blocking)');
+        }
         // JP 2026-06-02: l'evento "piatto pronto" ora va a TUTTI i camerieri
         // + admin/manager (non solo al cameriere assegnato all'ordine). Cosi'
         // Marco vede sempre i piatti pronti anche se l'ordine non e' suo.
