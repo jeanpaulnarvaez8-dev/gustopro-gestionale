@@ -1172,8 +1172,13 @@ async function setItemFireAt(req, res, next) {
     // JP 2026-06-03: se il cameriere imposta un timer su un piatto gia'
     // in production (caso "ho sbagliato a mandarlo"), lo ri-porta in
     // waiting con released_at=NULL (cosi' torna nelle code del 7500 e
-    // sparisce dalle stazioni). Se mins=0/null su un waiting, lo
-    // sblocca: workflow_status='production' senza fire_at → parte subito.
+    // sparisce dalle stazioni).
+    //
+    // JP 2026-06-05 FIX: se mins=0/null, RIMUOVE SOLO il timer ma il piatto
+    // RESTA in attesa (workflow_status invariato). Per sbloccare in produzione
+    // il cameriere usa l'endpoint workflow/changeStatus (bottone "Manda in
+    // cucina"). Prima il piatto partiva subito → JP perdeva attese senza
+    // accorgersene.
     let sql, params;
     if (mins > 0) {
       sql = `UPDATE order_items SET
@@ -1184,10 +1189,9 @@ async function setItemFireAt(req, res, next) {
              RETURNING id, fire_at, workflow_status`;
       params = [Math.max(1, Math.round(mins)), itemId, tenantId];
     } else {
+      // Rimuove SOLO il timer, lascia il piatto dove sta (waiting o production).
       sql = `UPDATE order_items SET
-               fire_at = NULL,
-               workflow_status = CASE WHEN workflow_status='waiting' THEN 'production' ELSE workflow_status END,
-               released_at = CASE WHEN workflow_status='waiting' THEN NOW() ELSE released_at END
+               fire_at = NULL
              WHERE id = $1 AND tenant_id = $2
              RETURNING id, fire_at, workflow_status`;
       params = [itemId, tenantId];

@@ -704,12 +704,15 @@ export default function OrderPage() {
                     for (const x of group.items.filter(i => i.status === 'pending' && i.fire_at)) {
                       await ordersAPI.setItemFireAt(table.active_order_id, x.id, null)
                     }
+                    // JP 2026-06-05 FIX: rimuovere il timer NON manda piu' in
+                    // cucina automaticamente. Il piatto resta in attesa finche'
+                    // il cameriere non preme "Manda in cucina" o INIZIA TAVOLO.
                     setExistingItems(prev => prev.map(x =>
                       group.items.some(g => g.id === x.id)
-                        ? { ...x, fire_at: null, workflow_status: 'production' }
+                        ? { ...x, fire_at: null }
                         : x
                     ))
-                    toast({ type: 'info', title: 'Timer annullato — parte subito', message: it.item_name })
+                    toast({ type: 'info', title: 'Timer tolto — resta in attesa', message: it.item_name })
                   } catch (e) {
                     toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
                   }
