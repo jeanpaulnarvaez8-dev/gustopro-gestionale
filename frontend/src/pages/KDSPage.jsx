@@ -431,7 +431,11 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
         const key = String(it.name || '').trim()
         if (!key) continue
         const q = Number(it.quantity) || 1
-        const isWaiting = it.workflow_status === 'waiting'
+        // JP 2026-06-05: nel chip giallo IN ATTESA contiamo SOLO i waiting
+        // che il cameriere ha messo lui col timer (fire_at impostato).
+        // I waiting "tecnici" (forzati da requires_dispatch) li mettiamo
+        // nel chip oro DA FARE: il chef non li percepisce come attese.
+        const isWaiting = it.workflow_status === 'waiting' && !!it.fire_at
         const entry = map.get(key) || { ready: 0, waiting: 0, nextFireAt: null }
         if (isWaiting) {
           entry.waiting += q
@@ -854,10 +858,16 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                           )
                         }
 
-                        // ── WAITING (ATTESA) — JP 2026-06-02: BEN EVIDENZIATO.
-                        // Lo chef deve vederla a colpo d'occhio: bordo spesso
-                        // giallo + sfondo tinto + ring pulsante + nome grande.
-                        if (ds === 'waiting') {
+                        // ── WAITING CON TIMER — JP 2026-06-05.
+                        // Mostriamo il badge ATTESA + countdown SOLO sui
+                        // waiting che il cameriere ha messo lui col timer
+                        // (fire_at impostato). I waiting "tecnici" (forzati
+                        // dal flusso Comandista quando manda la comanda)
+                        // saltano questo ramo e cadono nel rendering
+                        // normale DA FARE col bottone START — il chef NON
+                        // vede ATTESA su tutto, solo dove serve davvero.
+                        // INIZIA TAVOLO continua a propagare ai 2001/2002/2003.
+                        if (ds === 'waiting' && item.fire_at) {
                           const minsToFire = item.fire_at
                             ? Math.max(0, Math.round((new Date(item.fire_at).getTime() - Date.now()) / 60000))
                             : null

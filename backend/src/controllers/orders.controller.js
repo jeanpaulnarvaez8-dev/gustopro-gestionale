@@ -1159,7 +1159,6 @@ async function dispatchOrder(req, res, next) {
       `UPDATE order_items
           SET workflow_status = 'production',
               released_at     = NOW(),
-              status          = 'pending',
               fire_at         = NULL
         WHERE order_id = $1 AND tenant_id = $2
           AND workflow_status = 'waiting'
