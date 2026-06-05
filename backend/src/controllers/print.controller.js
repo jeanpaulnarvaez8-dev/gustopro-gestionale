@@ -129,27 +129,21 @@ function enqueueKitchenPassJob(tenantId, orderId, itemId, payload) {
   return job;
 }
 
-// JP 2026-06-05: debounce per ordine — quando il chef preme START su piu'
-// piatti dello stesso tavolo in rapida sequenza, aggrego in UN SOLO ticket.
-// Mappa orderId → { tenantId, itemIds: Set, timeoutId }. Allo scadere del
-// timer (2.5s di silenzio), SELECT degli items accumulati e enqueue del job
-// con payload aggregato. Container restart → Map svuotata, ticket pendente
-// perso (rischio basso: finestra di pochi secondi).
+// JP 2026-06-05: debounce per ordine. Il chef preme START su un piatto →
+// timer 2.5s. Se preme START su altri piatti dello stesso tavolo entro
+// il timer, lo prolunga. Allo scadere, il ticket include TUTTI i piatti
+// del tavolo gia' rilasciati alle stazioni (workflow_status='production'),
+// non solo quelli che il chef ha avviato in questa sessione — cosi' il
+// chef ha sempre il quadro completo del tavolo davanti.
 const _kitchenDebounce = new Map();
 const KITCHEN_DEBOUNCE_MS = 2500;
 
-function scheduleKitchenTicket(tenantId, orderId, itemId) {
+function scheduleKitchenTicket(tenantId, orderId /* itemId ignorato */) {
   let entry = _kitchenDebounce.get(orderId);
-  if (entry) {
-    entry.itemIds.add(itemId);
-    clearTimeout(entry.timeoutId);
-  } else {
-    entry = { tenantId, itemIds: new Set([itemId]), timeoutId: null };
-    _kitchenDebounce.set(orderId, entry);
-  }
+  if (entry) clearTimeout(entry.timeoutId);
+  else entry = { tenantId, timeoutId: null };
   entry.timeoutId = setTimeout(async () => {
     _kitchenDebounce.delete(orderId);
-    const ids = Array.from(entry.itemIds);
     try {
       const { rows: [hdr] } = await pool.query(
         `SELECT COALESCE(t.table_number, 'ASPORTO') AS table_number
@@ -157,14 +151,20 @@ function scheduleKitchenTicket(tenantId, orderId, itemId) {
           WHERE o.id = $1 AND o.tenant_id = $2`,
         [orderId, entry.tenantId]
       );
+      // Tutti i piatti dell'ordine attualmente "in cucina" (production,
+      // non ancora serviti/cancellati). Include sia i pending sia i
+      // cooking sia i ready: il chef vuole vedere TUTTO il tavolo.
       const { rows: items } = await pool.query(
         `SELECT COALESCE(mi.name, oi.combo_menu_name, 'Piatto') AS name,
                 oi.quantity
            FROM order_items oi
            LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
-          WHERE oi.id = ANY($1::uuid[]) AND oi.tenant_id = $2
+          WHERE oi.order_id = $1 AND oi.tenant_id = $2
+            AND oi.workflow_status = 'production'
+            AND oi.status NOT IN ('served', 'cancelled')
+            AND COALESCE(oi.is_surcharge, false) = false
           ORDER BY name`,
-        [ids, entry.tenantId]
+        [orderId, entry.tenantId]
       );
       if (hdr && items.length > 0) {
         enqueueKitchenPassJob(entry.tenantId, orderId, null, {
@@ -179,6 +179,7 @@ function scheduleKitchenTicket(tenantId, orderId, itemId) {
       console.error('[scheduleKitchenTicket] failed:', e.message);
     }
   }, KITCHEN_DEBOUNCE_MS);
+  _kitchenDebounce.set(orderId, entry);
 }
 
 // JP 2026-06-03: helper esportato per usi server-to-server (auto-print
