@@ -3,8 +3,11 @@ import { io } from 'socket.io-client';
 let socket = null;
 
 function getSocketUrl() {
+  // JP 2026-06-05 FIX: fallback aggiornato a prod attuale Hetzner (era
+  // localhost:3001 → in caso di build senza VITE_API_URL, il client
+  // tentava socket su localhost = nessuna connessione in produzione).
   // Strip /api suffix from API URL to get the base server URL
-  return (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/api$/, '');
+  return (import.meta.env.VITE_API_URL || 'https://gestione.gustopro.it/api').replace(/\/api$/, '');
 }
 
 export function connectSocket(token) {

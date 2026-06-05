@@ -89,12 +89,15 @@ async function sendToUser(userId, payload) {
           [sub.id]
         );
       } catch (err) {
-        // 410 Gone / 404 NotFound = subscription scaduta → cancella record
+        // 410 Gone / 404 NotFound / 403 Forbidden = subscription invalida.
+        // JP 2026-06-05: aggiunto 403 — FCM/web-push lo ritorna su VAPID
+        // key mismatch o subscription revocata. Senza cleanup, ogni push
+        // sprecava 4 round-trip FCM per sub morte (Admin aveva 4 morte).
         const status = err?.statusCode || err?.status;
-        if (status === 410 || status === 404) {
+        if (status === 410 || status === 404 || status === 403) {
           await pool.query('DELETE FROM push_subscriptions WHERE id = $1', [sub.id])
             .catch(() => {});
-          logger.info({ userId, status }, 'push subscription expired, removed');
+          logger.info({ userId, status }, 'push subscription expired/invalid, removed');
         } else {
           logger.warn({ err: err?.message, status, userId }, 'push send failed');
         }

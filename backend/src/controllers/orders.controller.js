@@ -822,16 +822,32 @@ async function cancelItem(req, res, next) {
       overrideReason = override.reason || null;
     }
 
+    // JP 2026-06-05: AND status NOT IN ('cancelled') per idempotenza, +
+    // reset ready_at/served_at se l'item era gia' servito (refund post-pass)
+    // → cosi' le metriche avg_prep_min nei report non vengono contaminate.
     const { rows: [item] } = await pool.query(
-      `UPDATE order_items SET status='cancelled' WHERE id=$1 AND order_id=$2 AND tenant_id=$3 RETURNING *`,
+      `UPDATE order_items
+          SET status='cancelled',
+              ready_at = CASE WHEN status IN ('served','ready') THEN NULL ELSE ready_at END,
+              served_at = CASE WHEN status='served' THEN NULL ELSE served_at END
+        WHERE id=$1 AND order_id=$2 AND tenant_id=$3 AND status <> 'cancelled'
+        RETURNING *`,
       [itemId, order_id, tenantId]
     );
-    if (!item) return res.status(404).json({ error: 'Item non trovato' });
+    if (!item) return res.status(404).json({ error: 'Item non trovato o gia\' cancellato' });
 
     const itemNameQ = await pool.query(
       "SELECT COALESCE(mi.name, oi.combo_menu_name, 'Item') AS name FROM order_items oi LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id WHERE oi.id = $1 AND oi.tenant_id = $2",
       [itemId, tenantId]
     );
+
+    // JP 2026-06-05: cleanup service_alerts pendenti (direct_delivered).
+    // Senza, la campanella admin suona per item gia' cancellato.
+    await pool.query(
+      'DELETE FROM service_alerts WHERE order_item_id=$1 AND tenant_id=$2',
+      [itemId, tenantId]
+    ).catch(() => {});
+
     // Audit: user_id/user_name = chi ha autorizzato (manager se override usato,
     // altrimenti chi chiama). Metadata include override info per ricostruzione.
     await pool.query(
@@ -847,6 +863,17 @@ async function cancelItem(req, res, next) {
          override_reason: overrideReason,
        })]
     );
+
+    // JP 2026-06-05: emit socket event per aggiornare KDS in tempo reale.
+    // Senza, la cucina continua a vedere/cucinare l'item per max 15s
+    // (polling window). Spreco materia prima.
+    try {
+      getIO()?.emit('item-cancelled', {
+        orderId: order_id,
+        itemId,
+        prevStatus: item.status,
+      });
+    } catch (_) {}
 
     res.json(item);
   } catch (err) { next(err); }
@@ -878,10 +905,17 @@ async function completeAsporto(req, res, next) {
       "UPDATE order_items SET status='served', served_at=NOW() WHERE order_id=$1 AND tenant_id=$2 AND status NOT IN ('served','cancelled')",
       [id, tenantId]
     );
+    // JP 2026-06-05: UPDATE ATOMICO con WHERE status='open' per evitare
+    // race condition. Se due click LIBERA arrivano simultaneamente
+    // (multi-device), solo uno passa qui (RETURNING vuoto → 409).
     const { rows: [updated] } = await client.query(
-      "UPDATE orders SET status='completed', payment_status='paid' WHERE id=$1 AND tenant_id=$2 RETURNING *",
+      "UPDATE orders SET status='completed', payment_status='paid' WHERE id=$1 AND tenant_id=$2 AND status='open' RETURNING *",
       [id, tenantId]
     );
+    if (!updated) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Asporto gia\' chiuso (race)' });
+    }
     await client.query('COMMIT');
     getIO()?.emit('order-completed', { orderId: id });
     res.json(updated);
@@ -931,6 +965,18 @@ async function cancelOrder(req, res, next) {
         active_order_id: null,
       });
     }
+
+    // JP 2026-06-05: emit order-cancelled per il KDS (cucina/pizzeria/bar).
+    // Senza, la cucina continua a vedere/cucinare items dell'ordine
+    // annullato per max 15s (polling). Anche asporto: nessun evento
+    // socket veniva emesso (no table_id).
+    try {
+      getIO()?.emit('order-cancelled', {
+        orderId: id,
+        tableId: order.table_id || null,
+        orderType: order.order_type,
+      });
+    } catch (_) {}
 
     res.json(updated);
   } catch (err) {
@@ -1105,7 +1151,10 @@ async function setItemFireAt(req, res, next) {
     // JP 2026-06-04: il cameriere puo' rimettere in attesa anche piatti
     // pending O in cottura (cuoco lo sta facendo ma il cliente vuole
     // aspettare). Solo i ready/served/cancelled restano intoccabili.
-    if (!['pending', 'cooking'].includes(item.status)) {
+    // JP 2026-06-05 FIX: l'alias e' `item_status` non `item.status` →
+    // endpoint ritornava SEMPRE 400. Il cameriere non poteva programmare
+    // il fire time. Bug presente dal commit di setItemFireAt.
+    if (!['pending', 'cooking'].includes(item.item_status)) {
       return res.status(400).json({ error: 'Il timer si imposta solo su voci non ancora pronte' });
     }
     // JP 2026-06-04: qualsiasi cameriere puo' cambiare il timer (anche su

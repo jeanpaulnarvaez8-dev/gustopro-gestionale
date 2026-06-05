@@ -58,6 +58,22 @@ const updateSW = registerSW({
 // Espone updateSW al banner React. Argomento true = skipWaiting + reload.
 window.__SW_APPLY_UPDATE = () => updateSW(true)
 
+// JP 2026-06-05 FIX: ChunkLoadError handler. Quando il WiFi spiaggia e'
+// lento (>5s timeout NetworkFirst del SW), il chunk dynamic import puo'
+// non scaricare → ErrorBoundary mostra schermata + 'Ricarica' manuale.
+// Con vite:preloadError facciamo reload automatico, l'utente non se ne
+// accorge.
+window.addEventListener('vite:preloadError', (event) => {
+  console.warn('[PWA] preloadError → reload', event?.payload)
+  // Tag per evitare loop reload se il chunk e' cached fallito.
+  const last = Number(sessionStorage.getItem('__last_preload_reload') || 0)
+  const now = Date.now()
+  if (now - last > 5000) {
+    sessionStorage.setItem('__last_preload_reload', String(now))
+    window.location.reload()
+  }
+})
+
 // Background sync della queue offline (mini-step D)
 import { startBackgroundSync } from './lib/offlineSync'
 startBackgroundSync()

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { connectSocket, disconnectSocket } from '../lib/socket';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -10,12 +10,18 @@ const SocketContext = createContext(null);
 export function SocketProvider({ children }) {
   const { user } = useAuth();
   const { toast: rawToast } = useToast();
-  // JP 2026-06-04: admin/cassa non vogliono popup pop-up dei socket
-  // events (CICLO PORTATE, item-ready, escalation, ecc.). Hanno la
-  // campanella unificata che mostra tutto solo su click. Wrapper
-  // globale: silenzia ogni toast socket-driven per quei ruoli.
-  const isSilentRole = ['admin', 'cashier'].includes(user?.role);
-  const toast = (opts) => { if (!isSilentRole) rawToast(opts); };
+  // JP 2026-06-05 FIX: toast era una NUOVA funzione a ogni render →
+  // useEffect re-runs → 9 listener accumulati senza off() corrispondente →
+  // ad ogni evento 50-100 beep/toast duplicati durante servizio 8-10h.
+  // Fix: ref stabile a rawToast + ruolo, wrapper memoizzato.
+  const rawToastRef = useRef(rawToast);
+  rawToastRef.current = rawToast;
+  const userRole = user?.role;
+  const toast = useCallback((opts) => {
+    if (!['admin', 'cashier'].includes(userRole)) {
+      rawToastRef.current(opts);
+    }
+  }, [userRole]);
   const [socketInstance, setSocketInstance] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [serviceAlerts, setServiceAlerts] = useState([]);
@@ -317,8 +323,23 @@ export function SocketProvider({ children }) {
       socket.off('course-send-alert');
       socket.off('course-delay-alert');
       socket.off('customer-call');
+      // JP 2026-06-05 FIX: cleanup mancante per 9 listener → accumulo
+      // duplicati ad ogni re-render del SocketProvider (ToastProvider
+      // parent re-render). Risultato: 50-100 beep/toast per evento.
+      socket.off('course-ready-pass');
+      socket.off('wine-call');
+      socket.off('service-delegate-alert');
+      socket.off('pass-call');
+      socket.off('crudi-preallerta');
+      socket.off('seating-comanda-alert');
+      socket.off('course-cycle-alert');
+      socket.off('check-emission-alert');
+      socket.off('table-cleanup-alert');
     };
-  }, [user, toast]);
+  // JP 2026-06-05 FIX: tolto `toast` dalle deps. Il wrapper e' useCallback
+  // memoizzato su userRole (l'unica cosa che davvero cambia). Il socket
+  // deve restare montato per tutta la sessione utente.
+  }, [user]);
 
   return (
     <SocketContext.Provider value={{ socket: socketInstance, isConnected, serviceAlerts, setServiceAlerts }}>

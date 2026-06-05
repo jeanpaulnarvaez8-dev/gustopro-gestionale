@@ -12,8 +12,14 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (pin) => {
     const { data } = await authAPI.login(pin);
-    storage.set('gustopro_token', data.token);
-    storage.setJSON('gustopro_user', data.user);
+    // JP 2026-06-05 FIX: storage.set ritorna false su Safari Private /
+    // localStorage disabilitato → JWT non persistito → 401 → loop login.
+    // Hard-fail con messaggio chiaro.
+    const tokOk = storage.set('gustopro_token', data.token);
+    const usrOk = storage.setJSON('gustopro_user', data.user);
+    if (!tokOk || !usrOk) {
+      throw new Error('Browser bloccato: disabilita modalita\' privata o autorizza i cookie');
+    }
     setUser(data.user);
     connectSocket(data.token);
     return data.user;

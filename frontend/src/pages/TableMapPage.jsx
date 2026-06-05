@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
+import { useToast } from '../context/ToastContext'
 import { tablesAPI, zonesAPI, assignmentsAPI } from '../lib/api'
 import FloorPlanInteractive from '../components/FloorPlanInteractive'
 import MobileTableList from '../components/MobileTableList'
@@ -47,6 +48,7 @@ function NavButton({ icon: Icon, label, onClick }) {
 export default function TableMapPage() {
   const { user, logout } = useAuth()
   const { socket, isConnected, serviceAlerts, setServiceAlerts } = useSocket()
+  const { toast } = useToast()
   const navigate = useNavigate()
   const [bellOpen, setBellOpen] = useState(false)
 

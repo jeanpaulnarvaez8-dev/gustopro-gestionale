@@ -3,7 +3,7 @@ import { enqueueAction, uuidv4 } from './offlineDB';
 import { storage } from './storage';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://loyal-eagerness-production.up.railway.app/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://gestione.gustopro.it/api',
   withCredentials: false,
 });
 export { api }
@@ -431,7 +431,7 @@ export const workflowAPI = {
 // Auth via X-Superadmin-Key header. La chiave vive in sessionStorage:
 // scompare alla chiusura della tab ed e' separata da JWT del normale login.
 const superadminApi = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://loyal-eagerness-production.up.railway.app/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://gestione.gustopro.it/api',
 });
 superadminApi.interceptors.request.use((config) => {
   const sak = sessionStorage.getItem('gustopro_sak');
@@ -452,7 +452,7 @@ export const superadminAPI = {
 // Menu cliente via QR + chiamata cameriere. Istanza axios separata: niente
 // JWT, niente redirect 401 (il cliente non e' loggato).
 const publicApi = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://loyal-eagerness-production.up.railway.app/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://gestione.gustopro.it/api',
 });
 export const publicAPI = {
   menu:       (slug, lang)         => publicApi.get(`/public/menu/${slug}`, { params: lang ? { lang } : {} }),

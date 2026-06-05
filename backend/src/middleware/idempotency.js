@@ -69,9 +69,12 @@ async function idempotencyMiddleware(req, res, next) {
     pool.query(
       `INSERT INTO idempotency_keys
          (tenant_id, key, method, path, response_status, response_body, user_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
          ON CONFLICT (tenant_id, key) DO NOTHING`,
-      [tenantId, key, method, req.originalUrl || req.path, status, body, req.user?.id ?? null]
+      // JP 2026-06-05 FIX: stringify esplicito → node-pg non serializza
+      // Array JS come array Postgres (rompeva il cast JSONB su addItems
+      // che ritorna array). $6::jsonb forza il parser JSON di Postgres.
+      [tenantId, key, method, req.originalUrl || req.path, status, JSON.stringify(body), req.user?.id ?? null]
     ).catch((err) => {
       (req.log || logger).error({ err, key, method, path: req.originalUrl }, '[idempotency] save failed');
     });

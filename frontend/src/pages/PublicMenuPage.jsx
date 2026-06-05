@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { BellRing, CheckCircle2 } from 'lucide-react'
 import { publicAPI } from '../lib/api'
@@ -77,6 +77,14 @@ export default function PublicMenuPage() {
     try { localStorage.setItem('rb_menu_lang', code) } catch {}
   }
 
+  // JP 2026-06-05 FIX: ref per tracciare il timeout cosi' lo cancello
+  // su unmount (cliente chiude tab) e su seconda chiamata. Senza, timer
+  // orfano vivo 30min con warning 'state update on unmounted component'.
+  const calledTimeoutRef = useRef(null)
+  useEffect(() => () => {
+    if (calledTimeoutRef.current) clearTimeout(calledTimeoutRef.current)
+  }, [])
+
   const callWaiter = async () => {
     if (calling || called) return
     setCalling(true)
@@ -84,7 +92,8 @@ export default function PublicMenuPage() {
       await publicAPI.callWaiter(slug, table)
       setCalled(true)
       // Si puo' richiamare dopo 30 minuti (anti-spam).
-      setTimeout(() => setCalled(false), 30 * 60 * 1000)
+      if (calledTimeoutRef.current) clearTimeout(calledTimeoutRef.current)
+      calledTimeoutRef.current = setTimeout(() => setCalled(false), 30 * 60 * 1000)
     } catch {
       alert('Riprova tra poco')
     } finally {
