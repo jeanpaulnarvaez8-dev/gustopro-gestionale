@@ -224,7 +224,6 @@ const BAR_DEBOUNCE_MS = 800;
 // itemIds inviati in questa "finestra" — al fire del timer, query DB per
 // risolvere nomi/quantita e produrre il payload aggregato.
 function scheduleBarTicket(tenantId, orderId, newItemIds) {
-  console.log(`[BAR-DEBUG schedule] order=${String(orderId).slice(0,8)} +${(newItemIds||[]).length} items`);
   let entry = _barDebounce.get(orderId);
   if (entry) clearTimeout(entry.timeoutId);
   else entry = { tenantId, itemIds: new Set(), timeoutId: null };
@@ -233,7 +232,6 @@ function scheduleBarTicket(tenantId, orderId, newItemIds) {
     _barDebounce.delete(orderId);
     try {
       const ids = Array.from(entry.itemIds);
-      console.log(`[BAR-DEBUG fire] order=${String(orderId).slice(0,8)} ids=${ids.length}`);
       if (ids.length === 0) return;
       const { rows: [hdr] } = await pool.query(
         `SELECT COALESCE(t.table_number, 'ASPORTO') AS table_number
@@ -258,19 +256,17 @@ function scheduleBarTicket(tenantId, orderId, newItemIds) {
           ORDER BY name`,
         [ids, entry.tenantId]
       );
-      console.log(`[BAR-DEBUG fire] hdr=${hdr?.table_number} db_items=${items.length}`);
       if (hdr && items.length > 0) {
-        const job = enqueueBarPassJob(entry.tenantId, orderId, {
+        enqueueBarPassJob(entry.tenantId, orderId, {
           table_number: String(hdr.table_number),
           items: items.map(it => ({
             name: String(it.name),
             quantity: Number(it.quantity || 1),
           })),
         });
-        console.log(`[BAR-DEBUG fire] ENQUEUED job=${job.id.slice(0,8)} tav=${hdr.table_number} bevande=${items.length}`);
       }
     } catch (e) {
-      console.error('[BAR-DEBUG fire] failed:', e.message, e.stack);
+      console.error('[scheduleBarTicket] failed:', e.message);
     }
   }, BAR_DEBOUNCE_MS);
   _barDebounce.set(orderId, entry);

@@ -219,13 +219,17 @@ async function getPrecontoHtml(req, res, next) {
     );
     if (!o) return res.status(404).type('html').send('<h1>Ordine non trovato</h1>');
 
+    // JP 2026-06-05 FIX CRITICO: LEFT JOIN + COALESCE per includere voci
+    // libere (menu_item_id=NULL, hanno custom_name). Prima erano saltate
+    // dal preconto → JP perdeva soldi.
     const { rows: items } = await pool.query(
-      `SELECT mi.name, oi.quantity, oi.unit_price, oi.modifier_total,
+      `SELECT COALESCE(mi.name, oi.custom_name, oi.combo_menu_name, 'Voce') AS name,
+              oi.quantity, oi.unit_price, oi.modifier_total,
               oi.subtotal, oi.notes, oi.status, oi.workflow_status
          FROM order_items oi
-         JOIN menu_items mi ON mi.id = oi.menu_item_id
+         LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
         WHERE oi.order_id = $1 AND oi.status <> 'cancelled'
-        ORDER BY mi.name`,
+        ORDER BY name`,
       [order_id]
     );
 
@@ -403,12 +407,16 @@ async function getPrecontoEscpos(req, res, next) {
          LEFT JOIN zones z ON z.id = tb.zone_id
         WHERE o.id = $1`, [order_id]);
     if (!o) return res.status(404).type('text/plain').send('not found');
+    // JP 2026-06-05 FIX CRITICO: LEFT JOIN + COALESCE per includere voci
+    // libere (menu_item_id=NULL, hanno custom_name). Prima erano saltate
+    // dal preconto → totale stampato sottostimato → JP perdeva soldi.
     const { rows: items } = await pool.query(
-      `SELECT mi.name, oi.quantity, oi.subtotal, oi.notes
+      `SELECT COALESCE(mi.name, oi.custom_name, oi.combo_menu_name, 'Voce') AS name,
+              oi.quantity, oi.subtotal, oi.notes
          FROM order_items oi
-         JOIN menu_items mi ON mi.id = oi.menu_item_id
+         LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
         WHERE oi.order_id = $1 AND oi.status <> 'cancelled'
-        ORDER BY mi.name`, [order_id]);
+        ORDER BY name`, [order_id]);
     const fd = o.fiscal_data || {};
     const dt = new Date(o.created_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
     const itemsSum = items.reduce((s, it) => s + Number(it.subtotal || 0), 0);
@@ -524,9 +532,10 @@ async function getAutoPrintEscpos(req, res, next) {
     if (!o) return res.status(404).type('text/plain').send('not found');
 
     const { rows: items } = await pool.query(
-      `SELECT mi.name, oi.quantity, oi.notes
+      `SELECT COALESCE(mi.name, oi.custom_name, oi.combo_menu_name, 'Voce') AS name,
+              oi.quantity, oi.notes
          FROM order_items oi
-         JOIN menu_items mi ON mi.id = oi.menu_item_id
+         LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
         WHERE oi.order_id = $1 AND oi.id = ANY($2::uuid[])
           AND oi.status <> 'cancelled'`,
       [order_id, itemIds]);

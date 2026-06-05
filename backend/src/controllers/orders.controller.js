@@ -104,12 +104,16 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
       );
     }
   }
-  // JP 2026-06-03: marker per auto-print sala (acque/vini/bollicine/dessert/
-  // birre alla spina). Letto da createOrder/addItems per emettere il job.
-  orderItem.__autoPrint = !!menuItem.auto_print;
-  // JP 2026-06-05: marker per bar (.21). Cocktail/birre/vini/caffe' →
-  // stampa al banco bar appena il cameriere conferma l'ordine.
-  orderItem.__goesToBar = !!menuItem.goes_to_bar;
+  // JP 2026-06-03/05: marker per auto-print sala (.24) e bar (.21).
+  // Non-enumerable: cosi' non finiscono nella serializzazione JSON che
+  // poi rompe il salvataggio idempotency (errore "invalid input syntax
+  // for type json" su Express response cache).
+  Object.defineProperty(orderItem, '__autoPrint', {
+    value: !!menuItem.auto_print, enumerable: false, configurable: true, writable: true,
+  });
+  Object.defineProperty(orderItem, '__goesToBar', {
+    value: !!menuItem.goes_to_bar, enumerable: false, configurable: true, writable: true,
+  });
   return orderItem;
 }
 
@@ -406,17 +410,12 @@ async function createOrder(req, res, next) {
     // JP 2026-06-05: bar pass (.21). Cocktail/birre/vini/bollicine/caffe'/
     // digestivi → ticket aggregato sulla stampante bar con TAV X.
     try {
-      const flags = orderItems.map(it => `${it.id?.slice(0,8)}:goesBar=${it.__goesToBar}`).join(',');
-      console.log(`[BAR-DEBUG createOrder] order=${order.id?.slice(0,8)} items=${orderItems.length} [${flags}]`);
       const barIds = orderItems.filter(it => it.__goesToBar).map(it => it.id);
-      console.log(`[BAR-DEBUG createOrder] barIds=${barIds.length}`);
       if (barIds.length > 0) {
         const { scheduleBarTicket } = require('./print.controller');
         scheduleBarTicket(tenantId, order.id, barIds);
-        console.log(`[BAR-DEBUG createOrder] scheduleBarTicket called for ${barIds.length} items`);
       }
     } catch (e) {
-      console.error(`[BAR-DEBUG createOrder] ERROR: ${e.message}`);
       req.log?.warn?.({ err: e.message }, 'bar-pass schedule failed (non-blocking)');
     }
 
@@ -661,17 +660,12 @@ async function addItems(req, res, next) {
     // JP 2026-06-05: bar pass anche su addItems (cliente ordina altri
     // cocktail/caffe' dopo l'apertura del tavolo).
     try {
-      const flags = addedItems.map(it => `${it.id?.slice(0,8)}:goesBar=${it.__goesToBar}`).join(',');
-      console.log(`[BAR-DEBUG addItems] order=${order_id?.slice(0,8)} items=${addedItems.length} [${flags}]`);
       const barIds = addedItems.filter(it => it.__goesToBar).map(it => it.id);
-      console.log(`[BAR-DEBUG addItems] barIds=${barIds.length}`);
       if (barIds.length > 0) {
         const { scheduleBarTicket } = require('./print.controller');
         scheduleBarTicket(tenantId, order_id, barIds);
-        console.log(`[BAR-DEBUG addItems] scheduleBarTicket called for ${barIds.length} items`);
       }
     } catch (e) {
-      console.error(`[BAR-DEBUG addItems] ERROR: ${e.message}`);
       req.log?.warn?.({ err: e.message }, 'bar-pass schedule failed (non-blocking)');
     }
 
