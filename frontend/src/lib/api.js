@@ -220,6 +220,9 @@ export const ordersAPI = {
   // Comandista "INIZIA TAVOLO": libera tutti gli items waiting dell'ordine
   // → vanno alle stazioni cucina (frittura/antipasti/primi/pizzeria).
   dispatch: (id) => api.post(`/orders/${id}/dispatch`),
+  // JP 2026-06-06: sposta ordine intero su altro tavolo (cliente cambia
+  // posizione). Cameriere + admin/manager.
+  moveTable: (id, toTableId) => api.post(`/orders/${id}/move-table`, { to_table_id: toTableId }),
   // JP 2026-06-06: split flow asporto (rimpiazza completeAsporto).
   asportoRitirato: (id, payload) => api.post(`/orders/${id}/asporto/ritirato`, payload),
   asportoNoShow:   (id, payload) => api.post(`/orders/${id}/asporto/no-show`, payload),

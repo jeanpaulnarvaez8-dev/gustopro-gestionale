@@ -1589,4 +1589,96 @@ async function dispatchOrder(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow };
+// ── moveOrderTable ───────────────────────────────────────────
+// JP 2026-06-06: cliente si sposta da tav X a tav Y (es. cambia gruppo,
+// trasferimento per ombrellone diverso). Sposta l'ordine intero senza
+// modificare items/totale. Tavolo origine va in 'dirty' (sbarazzo
+// successivo), destinazione 'occupied'.
+async function moveOrderTable(req, res, next) {
+  const client = await pool.connect();
+  const tenantId = TENANT(req);
+  try {
+    const { id: order_id } = req.params;
+    const { to_table_id } = req.body || {};
+    if (!/^[0-9a-f-]{36}$/i.test(String(to_table_id || ''))) {
+      return res.status(400).json({ error: 'to_table_id non valido' });
+    }
+    await client.query('BEGIN');
+    // Lock dell'ordine + del tavolo dest per evitare race (due click).
+    const { rows: [order] } = await client.query(
+      `SELECT id, table_id, order_type, status, waiter_id
+         FROM orders WHERE id=$1 AND tenant_id=$2 FOR UPDATE`,
+      [order_id, tenantId]
+    );
+    if (!order) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Ordine non trovato' }); }
+    if (order.status !== 'open') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Ordine chiuso, non spostabile' }); }
+    if (order.order_type !== 'table') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Solo ordini al tavolo' }); }
+    if (order.table_id === to_table_id) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Stesso tavolo di origine' }); }
+    // Tavolo destinazione: stesso tenant, deve essere libero (oppure dirty
+    // → presumiamo che cameriere abbia gia' sbarazzato a mano).
+    const { rows: [destTable] } = await client.query(
+      `SELECT id, table_number, status FROM tables WHERE id=$1 AND tenant_id=$2 FOR UPDATE`,
+      [to_table_id, tenantId]
+    );
+    if (!destTable) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Tavolo destinazione non trovato' }); }
+    if (!['free', 'dirty', 'reserved'].includes(destTable.status)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: `Tavolo ${destTable.table_number} occupato (${destTable.status}). Scegline un altro.` });
+    }
+    // Origine
+    const { rows: [originTable] } = await client.query(
+      `SELECT id, table_number FROM tables WHERE id=$1 AND tenant_id=$2`,
+      [order.table_id, tenantId]
+    );
+    // Update atomico ordine
+    await client.query(
+      `UPDATE orders SET table_id=$1 WHERE id=$2 AND tenant_id=$3`,
+      [to_table_id, order_id, tenantId]
+    );
+    // Tavolo origine → dirty (lo sbarazza dopo)
+    if (order.table_id) {
+      await client.query(
+        `UPDATE tables SET status='dirty' WHERE id=$1 AND tenant_id=$2`,
+        [order.table_id, tenantId]
+      );
+    }
+    // Tavolo destinazione → occupied
+    await client.query(
+      `UPDATE tables SET status='occupied' WHERE id=$1 AND tenant_id=$2`,
+      [to_table_id, tenantId]
+    );
+    // Audit
+    await client.query(
+      `INSERT INTO order_audit_log (tenant_id, order_id, action, from_value, to_value, user_id, user_name, metadata)
+       VALUES ($1,$2,'order_table_move',$3,$4,$5,$6,$7)`,
+      [tenantId, order_id, originTable?.table_number || null, destTable.table_number,
+       req.user.id, req.user.name, JSON.stringify({
+         from_table_id: order.table_id, to_table_id, role: req.user.role
+       })]
+    );
+    await client.query('COMMIT');
+    const io = getIO();
+    io?.emit('table-status-changed', { tableId: order.table_id, status: 'dirty', active_order_id: null });
+    io?.emit('table-status-changed', { tableId: to_table_id, status: 'occupied', active_order_id: order_id });
+    io?.emit('order-table-moved', {
+      orderId: order_id,
+      fromTableId: order.table_id,
+      fromTableNumber: originTable?.table_number || null,
+      toTableId: to_table_id,
+      toTableNumber: destTable.table_number,
+    });
+    res.json({
+      ok: true,
+      order_id,
+      from_table: { id: order.table_id, table_number: originTable?.table_number || null },
+      to_table:   { id: to_table_id, table_number: destTable.table_number },
+    });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable };

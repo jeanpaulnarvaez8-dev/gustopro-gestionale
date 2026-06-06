@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { requireRole } = require('../middleware/requireRole');
-const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow } = require('../controllers/orders.controller');
+const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable } = require('../controllers/orders.controller');
 
 const router = Router();
 
@@ -22,6 +22,9 @@ router.patch('/:id/items/:itemId/price', requireRole('cashier','manager','admin'
 router.patch('/:id/items/:itemId/fire-at', requireRole('waiter','manager','admin','cashier'), setItemFireAt);
 // JP 2026-06-03: Comandista "INIZIA TAVOLO" → libera tutti i waiting alle stazioni.
 router.post('/:id/dispatch', requireRole('kitchen','manager','admin'), dispatchOrder);
+// JP 2026-06-06: sposta ordine da tav X a tav Y (cliente cambia tavolo).
+// Cameriere + admin/manager (cassa NO, e' azione di sala).
+router.post('/:id/move-table', requireRole('waiter','manager','admin'), moveOrderTable);
 // JP 2026-06-06: split flow chiusura asporto (rimpiazza /complete-asporto).
 // Solo admin/manager: il cameriere non puo' chiudere cassa da solo
 // (vedi audit CRITICAL su frode latente). Entrambi loggano in audit.

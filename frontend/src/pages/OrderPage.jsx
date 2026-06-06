@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Plus, Minus, Trash2, Send, ShoppingCart, RefreshCw,
-  CheckCircle2, BookOpen, ChevronRight, Building, Clock, Zap, PackageCheck, UserPlus2, Receipt, Pencil, Search, X,
+  CheckCircle2, BookOpen, ChevronRight, Building, Clock, Zap, PackageCheck, UserPlus2, Receipt, Pencil, Search, X, MoveRight,
 } from 'lucide-react'
 import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
@@ -304,6 +304,11 @@ export default function OrderPage() {
   const [waiters, setWaiters] = useState([])
   const [transferTo, setTransferTo] = useState('')
   const [transferring, setTransferring] = useState(false)
+  // JP 2026-06-06: trasferimento tavolo (cliente cambia da X a Y).
+  const [moveOpen, setMoveOpen] = useState(false)
+  const [moveTables, setMoveTables] = useState([])
+  const [moving, setMoving] = useState(false)
+  const [moveQuery, setMoveQuery] = useState('')
 
   // Acqua + pane reminder: SOP Riva chiede di portarli SUBITO all'apertura.
   // Banner visivo dismissibile, persistito per tavolo in localStorage cosi'
@@ -573,6 +578,33 @@ export default function OrderPage() {
             <UserPlus2 size={13} /> 32
           </button>
         )}
+
+        {/* JP 2026-06-06: Sposta tavolo (cliente cambia tavolo).
+            Cameriere + admin/manager. Carica al volo i tavoli liberi. */}
+        {table?.active_order_id && ['waiter','admin','manager'].includes(authUser?.role) && (
+          <button
+            onClick={async () => {
+              setMoveOpen(true)
+              setMoveQuery('')
+              try {
+                const { data } = await tablesAPI.list()
+                // Tavoli candidati = stesso tenant, non-occupied, escludi corrente
+                setMoveTables(
+                  (data || [])
+                    .filter(t => t.id !== table.id)
+                    .filter(t => ['free', 'dirty', 'reserved'].includes(t.status))
+                    .sort((a, b) => Number(a.table_number) - Number(b.table_number))
+                )
+              } catch (e) {
+                toast({ type: 'error', title: 'Errore caricamento tavoli' })
+              }
+            }}
+            className="shrink-0 px-2.5 py-1.5 rounded-lg bg-[var(--color-sea-soft)] border border-[var(--color-sea)]/40 text-[var(--color-sea)] text-xs font-semibold flex items-center gap-1 hover:brightness-110 active:scale-95 transition"
+            title="Sposta il tavolo (cliente cambia posizione)"
+          >
+            <MoveRight size={13} /> Sposta
+          </button>
+        )}
       </header>
 
       {/* ─── Banner acqua + pane (apertura tavolo) ─────────────── */}
@@ -643,6 +675,80 @@ export default function OrderPage() {
                 className="flex-1 px-4 py-2 rounded-lg bg-[var(--color-warn)] text-black text-sm font-bold disabled:opacity-40 hover:brightness-110"
               >
                 {transferring ? 'Passo…' : 'Conferma 32'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal Sposta tavolo ──────────────────────────────── */}
+      {moveOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => !moving && setMoveOpen(false)}>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border-strong)] rounded-2xl p-5 max-w-md w-full shadow-xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <h3 className="serif text-lg font-bold text-[var(--color-text)] mb-1 flex items-center gap-2">
+              <MoveRight size={18} className="text-[var(--color-sea)]" /> Sposta tavolo
+            </h3>
+            <p className="text-xs text-[var(--color-text-3)] mb-3">
+              Sposti l'ordine intero da <b>Tavolo {table?.table_number}</b> a un altro tavolo libero. I piatti già mandati restano (cambia solo il numero del tavolo).
+            </p>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="Filtra per numero tavolo…"
+              value={moveQuery}
+              onChange={e => setMoveQuery(e.target.value)}
+              className="mb-3 w-full bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] rounded-lg px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-sea)]"
+              disabled={moving}
+              autoFocus
+            />
+            <div className="flex-1 overflow-y-auto -mx-2 px-2">
+              <div className="grid grid-cols-4 gap-2">
+                {moveTables
+                  .filter(t => !moveQuery || String(t.table_number).includes(moveQuery.trim()))
+                  .map(t => {
+                    const statusTone = t.status === 'free' ? 'ok' : t.status === 'dirty' ? 'warn' : 'sea'
+                    return (
+                      <button
+                        key={t.id}
+                        disabled={moving}
+                        onClick={async () => {
+                          if (!window.confirm(`Sposto l'ordine dal Tavolo ${table.table_number} al Tavolo ${t.table_number}?`)) return
+                          setMoving(true)
+                          try {
+                            await ordersAPI.moveTable(table.active_order_id, t.id)
+                            toast({ type: 'success', title: `Spostato al Tavolo ${t.table_number}` })
+                            setMoveOpen(false)
+                            navigate('/tables')
+                          } catch (e) {
+                            toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+                          } finally {
+                            setMoving(false)
+                          }
+                        }}
+                        className={`relative aspect-square rounded-lg border-2 flex flex-col items-center justify-center font-bold text-[var(--color-text)] text-lg hover:brightness-110 active:scale-95 transition border-[var(--color-${statusTone})]/40 bg-[var(--color-${statusTone}-soft)]/40 disabled:opacity-40`}
+                        title={`Tavolo ${t.table_number} (${t.status})`}
+                      >
+                        {t.table_number}
+                        <span className={`absolute bottom-0.5 text-[9px] uppercase font-semibold text-[var(--color-${statusTone})]`}>
+                          {t.status === 'free' ? 'libero' : t.status === 'dirty' ? 'pulizia' : 'prenot.'}
+                        </span>
+                      </button>
+                    )
+                  })}
+              </div>
+              {moveTables.length === 0 && (
+                <p className="text-center text-[var(--color-text-3)] text-sm py-8">
+                  Nessun tavolo disponibile.
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setMoveOpen(false)}
+                disabled={moving}
+                className="flex-1 px-4 py-2 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] text-sm font-semibold hover:text-[var(--color-text)]"
+              >
+                Annulla
               </button>
             </div>
           </div>
