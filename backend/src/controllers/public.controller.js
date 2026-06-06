@@ -222,10 +222,13 @@ async function getPrecontoHtml(req, res, next) {
     // JP 2026-06-05 FIX CRITICO: LEFT JOIN + COALESCE per includere voci
     // libere (menu_item_id=NULL, hanno custom_name). Prima erano saltate
     // dal preconto → JP perdeva soldi.
+    // JP 2026-06-06: aggiunto weight_g + base_price/pricing_type per
+    // mostrare il peso del pesce sotto la riga (es. "4,100 kg @ 70/kg").
     const { rows: items } = await pool.query(
       `SELECT COALESCE(mi.name, oi.custom_name, oi.combo_menu_name, 'Voce') AS name,
               oi.quantity, oi.unit_price, oi.modifier_total,
-              oi.subtotal, oi.notes, oi.status, oi.workflow_status
+              oi.subtotal, oi.notes, oi.status, oi.workflow_status, oi.weight_g,
+              mi.pricing_type, mi.base_price
          FROM order_items oi
          LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
         WHERE oi.order_id = $1 AND oi.status <> 'cancelled'
@@ -245,15 +248,28 @@ async function getPrecontoHtml(req, res, next) {
     const copertoTot = hasManualCoperto ? 0 : Number(o.coperto_price || 0) * Number(o.covers || 0);
     const grandTotal = itemsSum + copertoTot;
 
-    const itemRows = items.map(it => `
+    const itemRows = items.map(it => {
+      // JP 2026-06-06: peso del pesce sotto il nome (sempre presente
+      // se l'item ha weight_g, anche su pricing_type='fixed' in caso JP
+      // abbia messo il peso a mano).
+      const weightLine = it.weight_g && Number(it.weight_g) > 0
+        ? `<div class="notes">${(Number(it.weight_g)/1000).toFixed(3).replace('.', ',')} kg${
+            it.pricing_type === 'per_kg' && it.base_price
+              ? ` @ ${money(it.base_price)}/kg`
+              : ''
+          }</div>`
+        : '';
+      return `
       <tr>
         <td class="qty">${Number(it.quantity)}</td>
         <td class="name">
           ${esc(it.name)}
+          ${weightLine}
           ${it.notes ? `<div class="notes">${esc(it.notes)}</div>` : ''}
         </td>
         <td class="price">${money(it.subtotal)}</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
 
     const html = `<!doctype html>
 <html lang="it"><head><meta charset="utf-8">
@@ -413,9 +429,12 @@ async function getPrecontoEscpos(req, res, next) {
     // JP 2026-06-05 FIX CRITICO: LEFT JOIN + COALESCE per includere voci
     // libere (menu_item_id=NULL, hanno custom_name). Prima erano saltate
     // dal preconto → totale stampato sottostimato → JP perdeva soldi.
+    // JP 2026-06-06: aggiunto weight_g + base_price/pricing_type per
+    // mostrare il peso del pesce sotto la riga (es. "Pesce Fresco 4,100 kg").
     const { rows: items } = await pool.query(
       `SELECT COALESCE(mi.name, oi.custom_name, oi.combo_menu_name, 'Voce') AS name,
-              oi.quantity, oi.subtotal, oi.notes
+              oi.quantity, oi.subtotal, oi.notes, oi.weight_g,
+              mi.pricing_type, mi.base_price
          FROM order_items oi
          LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
         WHERE oi.order_id = $1 AND oi.status <> 'cancelled'
@@ -460,6 +479,16 @@ async function getPrecontoEscpos(req, res, next) {
         for (const it of items) {
           const lab = `${Number(it.quantity)}x ${it.name}`;
           c.push(txt(row2(lab, money(it.subtotal))));
+          // JP 2026-06-06: peso del pesce sotto la riga, es:
+          //    "Pesce Fresco                      287,00"
+          //    "  4,100 kg @ 70,00/kg"
+          if (it.weight_g && Number(it.weight_g) > 0) {
+            const kg = (Number(it.weight_g) / 1000).toFixed(3).replace('.', ',');
+            const perKg = it.pricing_type === 'per_kg' && it.base_price
+              ? ` @ ${money(it.base_price)}/kg`
+              : '';
+            c.push(txt(`   ${kg} kg${perKg}`));
+          }
           if (it.notes) c.push(txt('   ' + it.notes));
         }
       }
