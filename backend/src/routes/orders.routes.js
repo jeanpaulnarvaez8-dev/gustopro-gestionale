@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { requireRole } = require('../middleware/requireRole');
-const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice, setItemFireAt, dispatchOrder, completeAsporto } = require('../controllers/orders.controller');
+const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow } = require('../controllers/orders.controller');
 
 const router = Router();
 
@@ -10,6 +10,9 @@ router.post('/',                    requireRole('waiter','manager','admin','cash
 router.get('/:id',                  getOrder);
 router.post('/:id/items',           requireRole('waiter','manager','admin','cashier'), addItems);
 router.post('/:id/transfer',        requireRole('waiter','manager','admin'), transferOrder);
+// JP 2026-06-06: Codice 32 inverso. Un waiter si riassume un ordine che
+// gli era stato trasferito. Solo waiter (controller verifica role).
+router.post('/:id/claim',           requireRole('waiter'),                    claimOrder);
 // cancelItem: il controller gestisce autorizzazione manager/admin OR
 // override PIN responsabile (waiter/cassa richiedono PIN responsabile).
 router.delete('/:id/items/:itemId', requireRole('waiter','manager','admin','cashier'), cancelItem);
@@ -19,8 +22,11 @@ router.patch('/:id/items/:itemId/price', requireRole('cashier','manager','admin'
 router.patch('/:id/items/:itemId/fire-at', requireRole('waiter','manager','admin','cashier'), setItemFireAt);
 // JP 2026-06-03: Comandista "INIZIA TAVOLO" → libera tutti i waiting alle stazioni.
 router.post('/:id/dispatch', requireRole('kitchen','manager','admin'), dispatchOrder);
-// JP 2026-06-04: chiusura asporto senza checkout (bottone "LIBERA" admin).
-router.post('/:id/complete-asporto', requireRole('admin','manager','cashier','waiter'), completeAsporto);
+// JP 2026-06-06: split flow chiusura asporto (rimpiazza /complete-asporto).
+// Solo admin/manager: il cameriere non puo' chiudere cassa da solo
+// (vedi audit CRITICAL su frode latente). Entrambi loggano in audit.
+router.post('/:id/asporto/ritirato', requireRole('admin','manager'), markAsportoRitirato);
+router.post('/:id/asporto/no-show',  requireRole('admin','manager'), markAsportoNoShow);
 router.delete('/:id',               requireRole('manager','admin'),          cancelOrder);
 
 module.exports = router;

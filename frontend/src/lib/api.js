@@ -220,7 +220,9 @@ export const ordersAPI = {
   // Comandista "INIZIA TAVOLO": libera tutti gli items waiting dell'ordine
   // → vanno alle stazioni cucina (frittura/antipasti/primi/pizzeria).
   dispatch: (id) => api.post(`/orders/${id}/dispatch`),
-  completeAsporto: (id) => api.post(`/orders/${id}/complete-asporto`),
+  // JP 2026-06-06: split flow asporto (rimpiazza completeAsporto).
+  asportoRitirato: (id, payload) => api.post(`/orders/${id}/asporto/ritirato`, payload),
+  asportoNoShow:   (id, payload) => api.post(`/orders/${id}/asporto/no-show`, payload),
 };
 
 // KDS — cucina principale (default station=cucina; supporta anche

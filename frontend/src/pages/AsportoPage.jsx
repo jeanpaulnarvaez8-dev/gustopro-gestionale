@@ -4,13 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, ShoppingBag, Plus, Minus, Trash2, Send, ShoppingCart,
   RefreshCw, CheckCircle2, User, Phone, Clock,
+  Printer, Package, XCircle, Banknote, CreditCard, Smartphone, X,
 } from 'lucide-react'
 import { menuAPI, asportoAPI, adminAPI, printAPI, ordersAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { Card, Badge, Button } from '../components/v2'
-import { Printer, Package } from 'lucide-react'
 
 export default function AsportoPage() {
   const navigate = useNavigate()
@@ -47,19 +47,42 @@ export default function AsportoPage() {
       setPrinting(p => { const n = { ...p }; delete n[orderId]; return n })
     }
   }
-  const [releasing, setReleasing] = useState({})
-  const handleReleaseAsporto = async (orderId, customer) => {
-    if (releasing[orderId]) return
-    if (!window.confirm(`Liberare l'asporto di ${customer || 'questo cliente'}?\nL'ordine verra' segnato come consegnato e pagato.`)) return
-    setReleasing(p => ({ ...p, [orderId]: true }))
+  // JP 2026-06-06: split flow chiusura asporto.
+  // releaseModal = { orderId, customer, total, action: 'ritirato'|'no_show' } | null
+  // action selezionata via due bottoni distinti sulla card.
+  // submit chiama ordersAPI.asportoRitirato / asportoNoShow.
+  const [releaseModal, setReleaseModal] = useState(null)
+  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [noShowReason, setNoShowReason] = useState('')
+  const [submittingRelease, setSubmittingRelease] = useState(false)
+
+  const openReleaseModal = (orderId, customer, total, action) => {
+    setReleaseModal({ orderId, customer, total, action })
+    setPaymentMethod('cash')
+    setNoShowReason('')
+  }
+  const closeReleaseModal = () => {
+    if (submittingRelease) return
+    setReleaseModal(null)
+  }
+  const handleSubmitRelease = async () => {
+    if (!releaseModal || submittingRelease) return
+    const { orderId, customer, action } = releaseModal
+    setSubmittingRelease(true)
     try {
-      await ordersAPI.completeAsporto(orderId)
-      toast({ type: 'success', title: '✅ Asporto liberato', message: customer || 'Ordine chiuso' })
+      if (action === 'ritirato') {
+        await ordersAPI.asportoRitirato(orderId, { payment_method: paymentMethod })
+        toast({ type: 'success', title: '✅ Ritirato + scontrino', message: `${customer || 'Asporto'} · ${paymentMethod}` })
+      } else {
+        await ordersAPI.asportoNoShow(orderId, { reason: noShowReason.trim() || null })
+        toast({ type: 'warning', title: '⚠ No show registrato', message: customer || 'Asporto' })
+      }
       setOpenAsporti(prev => prev.filter(x => x.id !== orderId))
+      setReleaseModal(null)
     } catch (e) {
       toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
     } finally {
-      setReleasing(p => { const n = { ...p }; delete n[orderId]; return n })
+      setSubmittingRelease(false)
     }
   }
 
@@ -239,15 +262,24 @@ export default function AsportoPage() {
                   <Printer size={13} />
                   {printing[o.id] ? '…' : 'Stampa preconto'}
                 </button>
-                <button
-                  onClick={() => handleReleaseAsporto(o.id, o.customer_name)}
-                  disabled={releasing[o.id]}
-                  className="w-full py-2 rounded-md bg-[var(--color-ok)] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 hover:brightness-110 active:scale-[0.98] transition disabled:opacity-50"
-                  title="Segna l'asporto come consegnato + pagato"
-                >
-                  <CheckCircle2 size={13} />
-                  {releasing[o.id] ? '…' : 'Libera'}
-                </button>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    onClick={() => openReleaseModal(o.id, o.customer_name, o.total_amount, 'ritirato')}
+                    className="py-2 rounded-md bg-[var(--color-ok)] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1 hover:brightness-110 active:scale-[0.98] transition"
+                    title="Cliente ritira + paga → scontrino"
+                  >
+                    <CheckCircle2 size={13} />
+                    Ritirato
+                  </button>
+                  <button
+                    onClick={() => openReleaseModal(o.id, o.customer_name, o.total_amount, 'no_show')}
+                    className="py-2 rounded-md bg-[var(--color-err)]/80 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1 hover:brightness-110 active:scale-[0.98] transition"
+                    title="Cliente non si presenta → cancellato"
+                  >
+                    <XCircle size={13} />
+                    No show
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -444,6 +476,116 @@ export default function AsportoPage() {
           </div>
         </div>
       </div>
+
+      {/* JP 2026-06-06: modal split flow chiusura asporto.
+          action='ritirato' → scelta payment_method (cash/card/digital)
+          action='no_show'   → motivo opzionale */}
+      <AnimatePresence>
+        {releaseModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={closeReleaseModal}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[var(--color-surface)] border-2 border-[var(--color-border-strong)] rounded-2xl w-full max-w-md p-5 flex flex-col gap-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[var(--color-text-3)] text-xs uppercase tracking-wider font-semibold">
+                    {releaseModal.action === 'ritirato' ? 'Ritirato + scontrino' : 'No show'}
+                  </p>
+                  <p className="serif text-[var(--color-text)] font-extrabold text-xl truncate">
+                    {releaseModal.customer || 'Asporto'}
+                  </p>
+                  <p className="text-[var(--color-gold)] font-bold text-sm tnum">
+                    {formatPrice(releaseModal.total)}
+                  </p>
+                </div>
+                <button
+                  onClick={closeReleaseModal}
+                  disabled={submittingRelease}
+                  className="text-[var(--color-text-3)] hover:text-[var(--color-text)] p-1 disabled:opacity-50"
+                  aria-label="Chiudi"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {releaseModal.action === 'ritirato' ? (
+                <>
+                  <p className="text-[var(--color-text-2)] text-sm">
+                    Metodo di pagamento incassato:
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: 'cash',    label: 'Contanti', Icon: Banknote },
+                      { key: 'card',    label: 'Carta',    Icon: CreditCard },
+                      { key: 'digital', label: 'Digitale', Icon: Smartphone },
+                    ].map(({ key, label, Icon }) => (
+                      <button
+                        key={key}
+                        onClick={() => setPaymentMethod(key)}
+                        className={`flex flex-col items-center gap-1.5 py-3 rounded-lg border-2 transition ${
+                          paymentMethod === key
+                            ? 'border-[var(--color-gold)] bg-[var(--color-gold)]/10 text-[var(--color-gold)]'
+                            : 'border-[var(--color-border-strong)] text-[var(--color-text-2)] hover:text-[var(--color-text)]'
+                        }`}
+                      >
+                        <Icon size={20} />
+                        <span className="text-xs font-bold uppercase tracking-wider">{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[var(--color-text-3)] text-xs leading-snug">
+                    Verra' generato uno scontrino con il metodo selezionato. L'azione e' tracciata in audit log.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <label className="text-[var(--color-text-2)] text-sm">
+                    Motivo (opzionale):
+                  </label>
+                  <textarea
+                    value={noShowReason}
+                    onChange={e => setNoShowReason(e.target.value)}
+                    placeholder="es. cliente non si e' presentato dopo 30 min, telefono spento..."
+                    rows={3}
+                    maxLength={500}
+                    className="bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] focus:border-[var(--color-gold)] focus:ring-2 focus:ring-[var(--color-gold-ring)] rounded-lg px-3 py-2 text-[var(--color-text)] text-sm placeholder:text-[var(--color-text-3)] outline-none resize-none"
+                  />
+                  <p className="text-[var(--color-text-3)] text-xs leading-snug">
+                    L'ordine verra' annullato e tracciato in audit log come no_show. Gli items gia' preparati restano nello storico KDS (per analytics spreco).
+                  </p>
+                </>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={closeReleaseModal}
+                  disabled={submittingRelease}
+                  className="flex-1 py-2.5 rounded-lg border border-[var(--color-border-strong)] text-[var(--color-text-2)] font-semibold text-sm hover:bg-[var(--color-surface-2)] disabled:opacity-50 transition"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleSubmitRelease}
+                  disabled={submittingRelease}
+                  className={`flex-1 py-2.5 rounded-lg text-white font-bold text-sm uppercase tracking-wider hover:brightness-110 active:scale-[0.98] disabled:opacity-50 transition ${
+                    releaseModal.action === 'ritirato'
+                      ? 'bg-[var(--color-ok)]'
+                      : 'bg-[var(--color-err)]'
+                  }`}
+                >
+                  {submittingRelease ? '…' : releaseModal.action === 'ritirato' ? 'Conferma' : 'Conferma no show'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

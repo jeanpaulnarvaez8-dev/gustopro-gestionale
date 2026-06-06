@@ -605,6 +605,21 @@ async function addItems(req, res, next) {
     );
     if (!order) return res.status(404).json({ error: 'Ordine non trovato o già chiuso' });
 
+    // JP 2026-06-06: Codice 32 + ownership check. Dopo trasferimento, il
+    // waiter precedente non puo' piu' aggiungere voci (confusione con due
+    // camerieri che scrivono lo stesso tavolo → ticket cucina sdoppiati).
+    // Manager/admin/cassa bypassano: servono per risolvere casi limite e
+    // per la cassa che compone il conto. Per ri-assumere il tavolo il
+    // waiter deve usare POST /orders/:id/claim (Codice 32 inverso).
+    if (req.user.role === 'waiter' && order.waiter_id && order.waiter_id !== req.user.id) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        error: 'Tavolo non più tuo. Usa "Subentra" o chiedi al cameriere attuale.',
+        error_code: 'NOT_TABLE_OWNER',
+        current_waiter_id: order.waiter_id,
+      });
+    }
+
     const addedItems = [];      // piatti veri (cucina/bar) → feed KDS/bar/direct-delivered
     const surchargeItems = [];  // voci libere cassa → solo conto, no cucina
     for (const item of items) {
@@ -893,35 +908,66 @@ async function cancelItem(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// JP 2026-06-04: completeAsporto — chiude un asporto consegnato senza
-// passare per il checkout (no covers, no coperto, no calcolo split).
-// Setta order.status='completed' e payment_status='paid'. Usato dal
-// bottone "LIBERA" nella pagina /asporto admin.
-async function completeAsporto(req, res, next) {
+// JP 2026-06-06: chiusura asporto SPLIT in due endpoint distinti
+// (sostituisce il vecchio completeAsporto che marcava paid senza scontrino).
+//
+// Razionale: il vecchio bottone "LIBERA" generava 4 problemi:
+//   1) compliance: dashboard revenue inflata da asporti paid senza scontrino
+//   2) audit: nessuna traccia di chi/quando/perche'
+//   3) frode latente: cameriere ritira cash, preme LIBERA, intasca
+//   4) no_show: cliente non ritira ma l'ordine resta marcato paid
+//
+// Nuovo flow:
+//   markAsportoRitirato → cliente ritira + paga: payment + receipt + paid
+//   markAsportoNoShow   → cliente non ritira: cancelled + audit con motivo
+// Entrambi solo admin/manager (vedi routes), entrambi loggati in audit.
+
+const VALID_ASPORTO_METHODS = ['cash', 'card', 'digital'];
+
+async function markAsportoRitirato(req, res, next) {
   const client = await pool.connect();
   const tenantId = TENANT(req);
   try {
     const { id } = req.params;
+    const { payment_method, register } = req.body || {};
+
+    if (!VALID_ASPORTO_METHODS.includes(payment_method)) {
+      return res.status(400).json({
+        error: `payment_method obbligatorio. Valori: ${VALID_ASPORTO_METHODS.join(', ')}`,
+      });
+    }
+    const registerNorm = register
+      ? String(register).toLowerCase().trim().slice(0, 32)
+      : null;
+
+    await client.query('BEGIN');
+
     const { rows: [order] } = await client.query(
-      "SELECT id, order_type, status FROM orders WHERE id=$1 AND tenant_id=$2",
+      `SELECT id, order_type, status, total_amount, tax_amount, customer_name
+         FROM orders
+        WHERE id=$1 AND tenant_id=$2`,
       [id, tenantId]
     );
-    if (!order) return res.status(404).json({ error: 'Ordine non trovato' });
+    if (!order) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Ordine non trovato' });
+    }
     if (order.order_type !== 'takeaway') {
-      return res.status(400).json({ error: 'Solo gli asporti possono essere liberati cosi' });
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solo gli asporti possono essere chiusi cosi' });
     }
     if (order.status !== 'open') {
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Asporto gia\' chiuso' });
     }
-    await client.query('BEGIN');
-    // Segna come serviti gli items non gia' chiusi (cuoco li ha completati).
+
     await client.query(
       "UPDATE order_items SET status='served', served_at=NOW() WHERE order_id=$1 AND tenant_id=$2 AND status NOT IN ('served','cancelled')",
       [id, tenantId]
     );
-    // JP 2026-06-05: UPDATE ATOMICO con WHERE status='open' per evitare
-    // race condition. Se due click LIBERA arrivano simultaneamente
-    // (multi-device), solo uno passa qui (RETURNING vuoto → 409).
+
+    // UPDATE ATOMICO con WHERE status='open' per intercettare race
+    // (due click "Ritirato" simultanei → solo uno passa, l'altro 409).
     const { rows: [updated] } = await client.query(
       "UPDATE orders SET status='completed', payment_status='paid' WHERE id=$1 AND tenant_id=$2 AND status='open' RETURNING *",
       [id, tenantId]
@@ -930,9 +976,132 @@ async function completeAsporto(req, res, next) {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: 'Asporto gia\' chiuso (race)' });
     }
+
+    const totalAmount = parseFloat(order.total_amount);
+    const { rows: [payment] } = await client.query(
+      `INSERT INTO payments (tenant_id, order_id, amount, payment_method, processed_by, register)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [tenantId, id, totalAmount, payment_method, req.user.id, registerNorm]
+    );
+
+    // Snapshot voci per il receipt (no coperto su asporto).
+    const { rows: items } = await client.query(
+      `SELECT
+         SUM(oi.quantity)::int AS quantity,
+         SUM(oi.subtotal) AS subtotal,
+         COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name
+       FROM order_items oi
+       LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+       WHERE oi.order_id=$1 AND oi.tenant_id=$2 AND oi.status <> 'cancelled'
+       GROUP BY COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item'), oi.unit_price
+       ORDER BY MIN(oi.sent_at) NULLS FIRST`,
+      [id, tenantId]
+    );
+
+    const { rows: [receipt] } = await client.query(
+      `INSERT INTO receipts (tenant_id, order_id, issued_by, total_amount, tax_amount, receipt_data, register)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [tenantId, id, req.user.id, totalAmount, order.tax_amount,
+       JSON.stringify({ items, channel: 'asporto' }), registerNorm]
+    );
+
+    await auditLog(client, {
+      tenant_id: tenantId,
+      order_id: id,
+      action: 'asporto_ritirato',
+      from_value: 'open',
+      to_value: 'completed',
+      user_id: req.user.id,
+      user_name: req.user.name,
+      metadata: {
+        customer_name: order.customer_name,
+        payment_method,
+        register: registerNorm,
+        amount: totalAmount,
+        receipt_id: receipt.id,
+      },
+    });
+
     await client.query('COMMIT');
     getIO()?.emit('order-completed', { orderId: id });
-    res.json(updated);
+    res.json({ order: updated, payment, receipt });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+async function markAsportoNoShow(req, res, next) {
+  const client = await pool.connect();
+  const tenantId = TENANT(req);
+  try {
+    const { id } = req.params;
+    const reason = req.body?.reason
+      ? String(req.body.reason).trim().slice(0, 500)
+      : null;
+
+    await client.query('BEGIN');
+
+    const { rows: [order] } = await client.query(
+      `SELECT id, order_type, status, customer_name, total_amount
+         FROM orders
+        WHERE id=$1 AND tenant_id=$2`,
+      [id, tenantId]
+    );
+    if (!order) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Ordine non trovato' });
+    }
+    if (order.order_type !== 'takeaway') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solo gli asporti possono essere marcati no_show' });
+    }
+    if (order.status !== 'open') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Asporto gia\' chiuso' });
+    }
+
+    // Cancello solo items ancora in pending/cooking (cucina ferma subito).
+    // Quelli gia' served/ready restano: erano stati preparati per davvero
+    // (spreco reale che vogliamo tracciare in inventory/waste analytics).
+    await client.query(
+      "UPDATE order_items SET status='cancelled' WHERE order_id=$1 AND tenant_id=$2 AND status IN ('pending','cooking')",
+      [id, tenantId]
+    );
+
+    const { rows: [updated] } = await client.query(
+      "UPDATE orders SET status='cancelled' WHERE id=$1 AND tenant_id=$2 AND status='open' RETURNING *",
+      [id, tenantId]
+    );
+    if (!updated) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Asporto gia\' chiuso (race)' });
+    }
+
+    await auditLog(client, {
+      tenant_id: tenantId,
+      order_id: id,
+      action: 'asporto_no_show',
+      from_value: 'open',
+      to_value: 'cancelled',
+      user_id: req.user.id,
+      user_name: req.user.name,
+      metadata: {
+        customer_name: order.customer_name,
+        lost_amount: parseFloat(order.total_amount),
+        reason,
+      },
+    });
+
+    await client.query('COMMIT');
+    getIO()?.emit('order-cancelled', {
+      orderId: id,
+      tableId: null,
+      orderType: 'takeaway',
+    });
+    res.json({ order: updated, reason });
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch {}
     next(err);
@@ -1094,6 +1263,90 @@ async function transferOrder(req, res, next) {
     io?.emit('table-status-changed', { tableId: order.table_id });
 
     res.json({ ok: true, order_id: id, new_waiter: { id: target.id, name: target.name } });
+  } catch (err) { next(err); }
+}
+
+// "Codice 32 inverso" — un cameriere subentra ad un altro su un ordine
+// aperto. Tipico: Marco aveva delegato a Umberto via transferOrder, poi
+// torna libero e vuole riprendersi il tavolo. Audit log esplicito per
+// non perdere chi serviva quando (mance, dispute). Solo waiter: manager/
+// admin/cassa bypassano gia' il check di ownership in addItems.
+async function claimOrder(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body || {};
+    const tenantId = req.tenant.id;
+
+    if (req.user.role !== 'waiter') {
+      return res.status(403).json({ error: 'Solo i camerieri possono subentrare a un tavolo' });
+    }
+
+    const { rows: [order] } = await pool.query(
+      `SELECT o.id, o.waiter_id, o.table_id, o.status, t.table_number, u.name AS from_waiter_name
+         FROM orders o
+         LEFT JOIN tables t ON t.id = o.table_id
+         LEFT JOIN users u ON u.id = o.waiter_id
+        WHERE o.id = $1 AND o.tenant_id = $2`,
+      [id, tenantId]
+    );
+    if (!order) return res.status(404).json({ error: 'Ordine non trovato' });
+    if (order.status !== 'open') {
+      return res.status(409).json({ error: `Ordine in stato '${order.status}' non subentrabile` });
+    }
+    if (order.waiter_id === req.user.id) {
+      return res.status(409).json({ error: 'Tavolo già tuo' });
+    }
+
+    const previousWaiterId = order.waiter_id;
+    const previousWaiterName = order.from_waiter_name || '';
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE orders SET waiter_id = $1 WHERE id = $2 AND tenant_id = $3`,
+        [req.user.id, id, tenantId]
+      );
+      await client.query(
+        `INSERT INTO order_audit_log
+           (tenant_id, order_id, user_id, user_name, action, from_value, to_value, metadata)
+         VALUES ($1, $2, $3, $4, 'claim', $5, $6, $7::jsonb)`,
+        [
+          tenantId, id, req.user.id, req.user.name,
+          previousWaiterName,
+          req.user.name,
+          JSON.stringify({
+            from_waiter_id: previousWaiterId,
+            to_waiter_id: req.user.id,
+            reason: reason || 'codice 32 inverso',
+          }),
+        ]
+      );
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    const io = getIO();
+    if (previousWaiterId) {
+      io?.to(`user:${previousWaiterId}`).emit('order-claimed-out', {
+        orderId: id, tableNumber: order.table_number, byWaiterName: req.user.name,
+      });
+    }
+    io?.to(`user:${req.user.id}`).emit('order-claimed-in', {
+      orderId: id, tableNumber: order.table_number, fromWaiterName: previousWaiterName,
+    });
+    io?.to('role:admin').to('role:manager').emit('order-claimed', {
+      orderId: id, tableNumber: order.table_number,
+      fromWaiterName: previousWaiterName, toWaiterName: req.user.name,
+      byUserName: req.user.name, reason: reason || 'codice 32 inverso',
+    });
+    io?.emit('table-status-changed', { tableId: order.table_id });
+
+    res.json({ ok: true, order_id: id, new_waiter: { id: req.user.id, name: req.user.name } });
   } catch (err) { next(err); }
 }
 
@@ -1336,4 +1589,4 @@ async function dispatchOrder(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, setItemPrice, setItemFireAt, dispatchOrder, completeAsporto };
+module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow };
