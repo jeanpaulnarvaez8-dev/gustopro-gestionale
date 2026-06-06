@@ -1135,6 +1135,22 @@ async function cancelOrder(req, res, next) {
       [id, tenantId]
     );
 
+    // JP 2026-06-06 FIX (anti-frode HIGH): audit log obbligatorio.
+    // Prima cancelOrder NON scriveva audit → manager poteva cancellare
+    // tavoli pagati cash senza traccia.
+    await client.query(
+      `INSERT INTO order_audit_log (tenant_id, order_id, action, from_value, to_value, user_id, user_name, metadata)
+       VALUES ($1,$2,'order_cancel',$3,'cancelled',$4,$5,$6)`,
+      [tenantId, id, order.status, req.user.id, req.user.name,
+       JSON.stringify({
+         order_type: order.order_type,
+         table_id: order.table_id,
+         customer_name: order.customer_name,
+         total_amount: order.total_amount,
+         role: req.user.role,
+       })]
+    );
+
     await client.query('COMMIT');
 
     if (order.table_id) {
@@ -1554,6 +1570,17 @@ async function dispatchOrder(req, res, next) {
           AND fire_at IS NOT NULL AND fire_at > NOW()`,
       [order_id, tenantId]
     );
+    // JP 2026-06-06: anche quanti sono in manual hold (tenuti dal cameriere
+    // senza timer). Non partono col INIZIA TAVOLO → il Comandista deve
+    // sapere che ce ne sono ancora "appiccicati" all'ordine.
+    const { rows: [held] } = await pool.query(
+      `SELECT COUNT(*)::int AS n
+         FROM order_items
+        WHERE order_id = $1 AND tenant_id = $2
+          AND workflow_status = 'waiting'
+          AND COALESCE(is_manual_hold, false) = true`,
+      [order_id, tenantId]
+    );
     const io = getIO();
     for (const it of items) {
       io?.emit('workflow-status-changed', {
@@ -1584,6 +1611,7 @@ async function dispatchOrder(req, res, next) {
       dispatched: items.length,
       preallerta: preallerta.length,
       still_waiting: pending?.n || 0,
+      manual_hold: held?.n || 0,
       order_id,
     });
   } catch (err) { next(err); }

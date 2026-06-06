@@ -315,6 +315,13 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
     socket.on('workflow-status-changed', onWorkflowChanged)
     socket.on('item-released-to-production', onWorkflowChanged)
 
+    // JP 2026-06-06: reazione real-time a cancel/move (prima il KDS
+    // mostrava table_number sbagliato per 15s o item cancellati in chef).
+    const onAnyRefresh = () => loadOrders()
+    socket.on('order-table-moved', onAnyRefresh)
+    socket.on('order-cancelled', onAnyRefresh)
+    socket.on('item-cancelled', onAnyRefresh)
+
     const onReconnect = () => loadOrders()
     socket.on('connect', onReconnect)
 
@@ -325,6 +332,9 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
       socket.off('item-status-updated', onItemUpdated)
       socket.off('workflow-status-changed', onWorkflowChanged)
       socket.off('item-released-to-production', onWorkflowChanged)
+      socket.off('order-table-moved', onAnyRefresh)
+      socket.off('order-cancelled', onAnyRefresh)
+      socket.off('item-cancelled', onAnyRefresh)
       socket.off('connect', onReconnect)
     }
   }, [socket, loadOrders])
@@ -347,12 +357,15 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
     try {
       const { data } = await ordersAPI.dispatch(orderId)
       const still = Number(data.still_waiting || 0)
+      const held = Number(data.manual_hold || 0)
+      // JP 2026-06-06: messaggio differenziato per timer vs hold manuale.
+      const parts = []
+      if (still > 0) parts.push(`${still} con timer`)
+      if (held > 0) parts.push(`${held} TENUTI dal cameriere`)
       toast({
         type: 'success',
         title: `🚀 Tavolo ${tableNumber}: ${data.dispatched || 0} piatti partiti`,
-        message: still > 0
-          ? `${still} ancora in attesa (timer del cameriere)`
-          : 'Inviati alle stazioni',
+        message: parts.length > 0 ? parts.join(' · ') : 'Inviati alle stazioni',
       })
       loadOrders()
     } catch (e) {
@@ -794,8 +807,15 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
 
                     {/* JP 2026-06-04: SEMPRE visibile se c'e' almeno un
                         waiting. Niente piu' check release_at o role —
-                        guard di sicurezza solo lato backend. */}
-                    {order.items.some(it => it.workflow_status === 'waiting') && (
+                        guard di sicurezza solo lato backend.
+                        JP 2026-06-06: NASCONDI se TUTTI i waiting sono in
+                        manual hold (INIZIA TAVOLO non li toccherebbe) o
+                        con timer futuro. */}
+                    {order.items.some(it =>
+                      it.workflow_status === 'waiting' &&
+                      !it.is_manual_hold &&
+                      (!it.fire_at || new Date(it.fire_at) <= new Date())
+                    ) && (
                       <button
                         onClick={() => handleDispatchOrder(order.order_id, order.table_number)}
                         disabled={dispatching[order.order_id]}

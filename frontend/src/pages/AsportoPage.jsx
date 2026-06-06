@@ -10,12 +10,14 @@ import { menuAPI, asportoAPI, adminAPI, printAPI, ordersAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
+import { useSocket } from '../context/SocketContext'
 import { Card, Badge, Button } from '../components/v2'
 
 export default function AsportoPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { user } = useAuth()
+  const { socket } = useSocket()
   const canManageList = ['admin', 'manager'].includes(user?.role)
 
   // JP 2026-06-04: lista asporti di oggi (solo admin/manager) — top panel
@@ -35,6 +37,24 @@ export default function AsportoPage() {
     const id = setInterval(loadAsporti, 15000)
     return () => clearInterval(id)
   }, [canManageList, loadAsporti])
+
+  // JP 2026-06-06: socket real-time per asporti.
+  // Senza, due admin che premono RITIRATO sullo stesso ordine generavano 409.
+  useEffect(() => {
+    if (!canManageList || !socket) return
+    const onClosed = (payload) => {
+      if (!payload?.orderId) return
+      setOpenAsporti(prev => prev.filter(x => x.id !== payload.orderId))
+    }
+    socket.on('order-completed', onClosed)
+    socket.on('order-cancelled', onClosed)
+    socket.on('new-order', loadAsporti)
+    return () => {
+      socket.off('order-completed', onClosed)
+      socket.off('order-cancelled', onClosed)
+      socket.off('new-order', loadAsporti)
+    }
+  }, [canManageList, socket, loadAsporti])
   const handlePrintAsporto = async (orderId, customer) => {
     if (printing[orderId]) return
     setPrinting(p => ({ ...p, [orderId]: true }))
@@ -71,7 +91,12 @@ export default function AsportoPage() {
     setSubmittingRelease(true)
     try {
       if (action === 'ritirato') {
-        await ordersAPI.asportoRitirato(orderId, { payment_method: paymentMethod })
+        // JP 2026-06-06: propaga register (stesso pattern di CheckoutPage).
+        // Senza, payments/receipts venivano salvati con register=NULL e
+        // dayClose non riusciva a riconciliarli al registratore corretto.
+        let register = null
+        try { register = localStorage.getItem('gustopro_register') || null } catch {}
+        await ordersAPI.asportoRitirato(orderId, { payment_method: paymentMethod, register })
         toast({ type: 'success', title: '✅ Ritirato + scontrino', message: `${customer || 'Asporto'} · ${paymentMethod}` })
       } else {
         await ordersAPI.asportoNoShow(orderId, { reason: noShowReason.trim() || null })

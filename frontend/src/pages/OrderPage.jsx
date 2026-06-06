@@ -239,8 +239,8 @@ export default function OrderPage() {
     for (const it of existingItems) {
       const refKey = it.menu_item_id
         ? `m:${it.menu_item_id}`
-        : it.combo_id
-          ? `b:${it.combo_id}`
+        : it.combo_menu_id
+          ? `b:${it.combo_menu_id}`
           : `c:${it.custom_name || it.item_name || ''}`
       const modKey = Array.isArray(it.modifiers) && it.modifiers.length > 0
         ? JSON.stringify(it.modifiers.map(m => m.modifier_id || m.id).sort())
@@ -432,12 +432,18 @@ export default function OrderPage() {
               : {}),
         }))
 
+      // JP 2026-06-06 FIX CRITICO: aggiungere type:'combo' (backend usa
+      // item.type per dispatch insertComboItem) e rinominare
+      // combo_selections → selections (backend destructure 'selections').
+      // Prima i menu combo venivano dispatchati a insertRegularItem e
+      // fallivano perché senza menu_item_id.
       const comboItems = cartItems
         .filter(ci => ci.item.is_combo)
         .map(ci => ({
+          type: 'combo',
           combo_menu_id: ci.combo_id,
           quantity: ci.quantity,
-          combo_selections: ci.combo_selections,
+          selections: ci.combo_selections,
           workflow_status: ci.workflow_status || 'production',
         }))
 

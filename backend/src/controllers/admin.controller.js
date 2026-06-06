@@ -385,7 +385,7 @@ async function getAuditReport(req, res, next) {
        LEFT JOIN orders o  ON o.id = oal.order_id AND o.tenant_id = oal.tenant_id
        LEFT JOIN tables t  ON t.id = o.table_id AND t.tenant_id = oal.tenant_id
        WHERE oal.tenant_id = $1
-         AND oal.action IN ('item_delete','transfer','order_cancel')
+         AND oal.action IN ('item_delete','transfer','order_cancel','asporto_no_show')
          AND DATE(oal.created_at AT TIME ZONE 'Europe/Rome') BETWEEN $2 AND $3
        ORDER BY oal.created_at DESC
        LIMIT 100`,
