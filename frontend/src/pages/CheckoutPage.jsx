@@ -567,6 +567,10 @@ export default function CheckoutPage() {
   const [editingPriceFor, setEditingPriceFor] = useState(null)
   const [editPriceInput, setEditPriceInput] = useState('')
   const [editingPrice, setEditingPrice] = useState(false)
+  // JP 2026-06-06: edit peso (pesce al kg) — backend ricalcola prezzo.
+  const [editingWeightFor, setEditingWeightFor] = useState(null)
+  const [editWeightInput, setEditWeightInput] = useState('')
+  const [editingWeight, setEditingWeight] = useState(false)
 
   // Cassa fisica: persistita in localStorage per device. Default null,
   // l'utente la seleziona dalla pillola in alto. Inviata al backend con
@@ -726,6 +730,37 @@ export default function CheckoutPage() {
   const startEditPrice = (item) => {
     setEditingPriceFor(item.id)
     setEditPriceInput(String(parseFloat(item.subtotal).toFixed(2)))
+  }
+  // JP 2026-06-06: edit peso pesce. Backend ricalcola unit_price+subtotal
+  // automaticamente da weight_g (per i pricing_type='per_kg').
+  const startEditWeight = (item) => {
+    setEditingWeightFor(item.id)
+    setEditWeightInput(String(item.weight_g || ''))
+  }
+  const cancelEditWeight = () => {
+    setEditingWeightFor(null); setEditWeightInput('')
+  }
+  const submitWeightEdit = async (item) => {
+    const wg = parseInt(editWeightInput, 10)
+    if (!Number.isFinite(wg) || wg <= 0 || wg > 30000) {
+      toast({ type: 'warning', title: 'Peso non valido (1-30000g)' })
+      return
+    }
+    const ids = Array.isArray(item.ids) && item.ids.length ? item.ids : [item.id]
+    setEditingWeight(true)
+    try {
+      for (const id of ids) {
+        await ordersAPI.setItemWeight(orderId, id, wg)
+      }
+      const updatedBill = accumulateBill(await billingAPI.preConto(orderId).then(r => r.data))
+      setBill(updatedBill)
+      cancelEditWeight()
+      toast({ type: 'success', title: 'Peso aggiornato', message: `${item.item_name} · ${(wg/1000).toFixed(3).replace('.', ',')} kg` })
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    } finally {
+      setEditingWeight(false)
+    }
   }
   const cancelEditPrice = () => {
     setEditingPriceFor(null); setEditPriceInput('')
@@ -1014,6 +1049,55 @@ export default function CheckoutPage() {
                       <p className="text-[var(--color-text-3)] text-xs mt-0.5 truncate">
                         {item.modifiers.map(m => m.name).join(', ')}
                       </p>
+                    )}
+                    {/* JP 2026-06-06: peso pesce cliccabile (solo cassa+).
+                        Sotto al nome appare una pill "🐟 1,900 kg" che apre
+                        input inline. Backend ricalcola prezzo automaticamente. */}
+                    {item.weight_g != null && Number(item.weight_g) > 0 && (
+                      canAddCustom && editingWeightFor === item.id ? (
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="text-[var(--color-sea)] text-xs font-semibold">🐟</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            autoFocus
+                            value={editWeightInput}
+                            onChange={e => setEditWeightInput(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') submitWeightEdit(item)
+                              if (e.key === 'Escape') cancelEditWeight()
+                            }}
+                            className="w-[72px] bg-[var(--color-canvas)] border-2 border-[var(--color-sea)] rounded-md px-2 py-1 text-[var(--color-text)] text-xs font-bold text-right outline-none tnum"
+                            placeholder="grammi"
+                          />
+                          <span className="text-[10px] text-[var(--color-text-3)]">g</span>
+                          <button
+                            onClick={() => submitWeightEdit(item)}
+                            disabled={editingWeight}
+                            className="w-6 h-6 rounded-md bg-[var(--color-sea)] text-white flex items-center justify-center active:scale-90 disabled:opacity-50"
+                            aria-label="Conferma peso"
+                          >
+                            <CheckCircle2 size={14} strokeWidth={2.5} />
+                          </button>
+                          <button
+                            onClick={cancelEditWeight}
+                            className="w-6 h-6 rounded-md bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] flex items-center justify-center active:scale-90"
+                            aria-label="Annulla"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => canAddCustom && startEditWeight(item)}
+                          disabled={!canAddCustom}
+                          className={`mt-1 inline-flex items-center gap-1 text-[var(--color-sea)] text-xs font-semibold ${canAddCustom ? 'hover:underline decoration-dotted cursor-pointer' : 'cursor-default'}`}
+                          title={canAddCustom ? 'Tocca per modificare il peso' : ''}
+                        >
+                          🐟 {(Number(item.weight_g) / 1000).toFixed(3).replace('.', ',')} kg
+                        </button>
+                      )
                     )}
                   </div>
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">

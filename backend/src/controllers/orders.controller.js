@@ -1406,6 +1406,64 @@ async function setItemPrice(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// ── setItemWeight ────────────────────────────────────────────
+// JP 2026-06-06: cassa/cameriere correggono il peso di un pesce gia'
+// inserito (es. pesato 1kg ma in realta' era 1.9kg). Aggiorna weight_g
+// e RICALCOLA automaticamente unit_price + subtotal in base al
+// menu_items.base_price (€/kg).
+//
+// Per i piatti pricing_type='per_kg':
+//   unit_price = (base_price * weight_g) / 1000
+//   subtotal   = (unit_price + modifier_total) * quantity
+//
+// Per i piatti fixed: aggiorna SOLO weight_g (non ricalcola prezzo —
+// utile per registrare info nutrizionale o servizio).
+async function setItemWeight(req, res, next) {
+  try {
+    const { id: order_id, itemId } = req.params;
+    const tenantId = TENANT(req);
+    const { weight_g } = req.body || {};
+    const wg = parseInt(weight_g, 10);
+    if (!Number.isFinite(wg) || wg < 0 || wg > 30000) {
+      return res.status(400).json({ error: 'Peso non valido (0-30000g)' });
+    }
+    const { rows: [item] } = await pool.query(
+      `SELECT oi.id, oi.quantity, oi.modifier_total, oi.status, oi.unit_price AS curr_price,
+              mi.base_price, mi.pricing_type,
+              o.status AS order_status
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+        WHERE oi.id = $1 AND oi.order_id = $2 AND oi.tenant_id = $3`,
+      [itemId, order_id, tenantId]
+    );
+    if (!item) return res.status(404).json({ error: 'Voce non trovata' });
+    if (item.status === 'cancelled') return res.status(400).json({ error: 'Voce cancellata' });
+    if (item.order_status !== 'open') return res.status(400).json({ error: 'Ordine chiuso, non modificabile' });
+
+    const qty = Number(item.quantity) || 1;
+    const modTot = Number(item.modifier_total) || 0;
+    let unitPrice, subtotal;
+    if (item.pricing_type === 'per_kg' && item.base_price) {
+      unitPrice = Math.round((Number(item.base_price) * wg) / 1000 * 100) / 100;
+      subtotal  = Math.round((unitPrice + modTot) * qty * 100) / 100;
+    } else {
+      // Piatto fixed: preserva prezzo corrente, aggiorna solo weight_g.
+      unitPrice = Number(item.curr_price) || 0;
+      subtotal  = Math.round((unitPrice + modTot) * qty * 100) / 100;
+    }
+
+    const { rows: [updated] } = await pool.query(
+      `UPDATE order_items
+          SET weight_g = $1, unit_price = $2, subtotal = $3
+        WHERE id = $4 AND tenant_id = $5
+        RETURNING id, weight_g, unit_price, subtotal, quantity`,
+      [wg, unitPrice, subtotal, itemId, tenantId]
+    );
+    res.json(updated);
+  } catch (err) { next(err); }
+}
+
 // ── setItemFireAt ────────────────────────────────────────────
 // JP 2026-06-01: il cameriere imposta i minuti tra cui un piatto in attesa
 // deve auto-firare in cucina. Body: { minutes } (intero >0). Per annullare,
@@ -1709,4 +1767,4 @@ async function moveOrderTable(req, res, next) {
   }
 }
 
-module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable };
+module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable };

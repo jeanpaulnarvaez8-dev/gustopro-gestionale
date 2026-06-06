@@ -214,6 +214,9 @@ export const ordersAPI = {
   // Modifica prezzo unitario di una voce (sconto inline su conto). Cassa+.
   setItemPrice: (id, itemId, unit_price) =>
                   api.patch(`/orders/${id}/items/${itemId}/price`, { unit_price }),
+  // JP 2026-06-06: corregge peso pesce al kg → backend ricalcola prezzo
+  setItemWeight: (id, itemId, weight_g) =>
+                  api.patch(`/orders/${id}/items/${itemId}/weight`, { weight_g }),
   // Timer auto-fire su voce in attesa. minutes=0/null annulla. JP 2026-06-01.
   setItemFireAt: (id, itemId, minutes) =>
                   api.patch(`/orders/${id}/items/${itemId}/fire-at`, { minutes }),

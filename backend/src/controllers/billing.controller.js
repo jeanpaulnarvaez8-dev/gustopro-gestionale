@@ -14,9 +14,11 @@ async function generatePreConto(req, res, next) {
     );
     if (!order) return res.status(404).json({ error: 'Ordine non trovato' });
 
+    // JP 2026-06-06: aggiunto weight_g per UI checkout (bottone "Modifica peso").
     const { rows: items } = await pool.query(
       `SELECT
          oi.id, oi.quantity, oi.unit_price, oi.modifier_total, oi.subtotal, oi.notes, oi.status,
+         oi.weight_g,
          COALESCE(oi.is_surcharge, false) AS is_surcharge,
          oi.custom_name, oi.menu_item_id,
          COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name,

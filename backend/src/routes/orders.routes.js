@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { requireRole } = require('../middleware/requireRole');
-const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable } = require('../controllers/orders.controller');
+const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable } = require('../controllers/orders.controller');
 
 const router = Router();
 
@@ -18,6 +18,8 @@ router.post('/:id/claim',           requireRole('waiter'),                    cl
 router.delete('/:id/items/:itemId', requireRole('waiter','manager','admin','cashier'), cancelItem);
 // JP 2026-05-31: la cassa puo' modificare il prezzo di una voce (sconto inline).
 router.patch('/:id/items/:itemId/price', requireRole('cashier','manager','admin'), setItemPrice);
+// JP 2026-06-06: modifica peso (pesce al kg). Cassa + waiter + admin/manager.
+router.patch('/:id/items/:itemId/weight', requireRole('waiter','cashier','manager','admin'), setItemWeight);
 // JP 2026-06-01: cameriere imposta i minuti di auto-fire su voce in attesa.
 router.patch('/:id/items/:itemId/fire-at', requireRole('waiter','manager','admin','cashier'), setItemFireAt);
 // JP 2026-06-03: Comandista "INIZIA TAVOLO" → libera tutti i waiting alle stazioni.
