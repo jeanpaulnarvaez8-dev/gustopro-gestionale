@@ -13,13 +13,32 @@ async function listTables(req, res, next) {
     // Schema reservations: reserved_date (date) + reserved_time (time) →
     // unisco in timestamp per il filtro temporale + sorting.
     // Frontend usa `next_reservation_at` per mostrare countdown pre-arrival.
+    // JP 2026-06-07: espongo anche covers, active_waiter_name e
+    // active_items_count (numero piatti vivi sul tavolo). La view base
+    // tables_with_active_order non li ha → JOIN con orders + users +
+    // LATERAL count su order_items.
     const { rows } = await pool.query(
       `SELECT t.*,
+              o.covers,                     -- numero persone al tavolo
+              o.customer_name AS order_customer_name,
+              u.name AS active_waiter_name, -- chi gestisce il tavolo
+              COALESCE(ic.active_items_count, 0) AS active_items_count,
               r.reservation_at,
               r.customer_name AS next_reservation_guest,
               r.party_size    AS next_reservation_party_size,
               COALESCE(w.waiting_count, 0) AS waiting_items_count
        FROM tables_with_active_order t
+       LEFT JOIN orders o ON o.id = t.active_order_id AND o.status='open'
+       LEFT JOIN users u ON u.id = t.active_waiter_id
+       LEFT JOIN LATERAL (
+         /* JP 2026-06-07: piatti vivi = non cancellati. Per badge
+            "N piatti" sulla card del tavolo. */
+         SELECT COUNT(*)::int AS active_items_count
+         FROM order_items oi
+         WHERE oi.order_id = t.active_order_id
+           AND oi.status <> 'cancelled'
+           AND COALESCE(oi.is_surcharge, false) = false
+       ) ic ON true
        LEFT JOIN LATERAL (
          SELECT
            (reserved_date + reserved_time) AT TIME ZONE 'Europe/Rome' AS reservation_at,
