@@ -17,7 +17,7 @@ router.post('/:id/claim',           requireRole('waiter'),                    cl
 // override PIN responsabile (waiter/cassa richiedono PIN responsabile).
 router.delete('/:id/items/:itemId', requireRole('waiter','manager','admin','cashier'), cancelItem);
 // JP 2026-05-31: la cassa puo' modificare il prezzo di una voce (sconto inline).
-router.patch('/:id/items/:itemId/price', requireRole('cashier','manager','admin'), setItemPrice);
+router.patch('/:id/items/:itemId/price', requireRole('waiter','cashier','manager','admin'), setItemPrice);
 // JP 2026-06-06: modifica peso (pesce al kg). Cassa + waiter + admin/manager.
 router.patch('/:id/items/:itemId/weight', requireRole('waiter','cashier','manager','admin'), setItemWeight);
 // JP 2026-06-01: cameriere imposta i minuti di auto-fire su voce in attesa.
@@ -30,8 +30,11 @@ router.post('/:id/move-table', requireRole('waiter','manager','admin'), moveOrde
 // JP 2026-06-06: split flow chiusura asporto (rimpiazza /complete-asporto).
 // Solo admin/manager: il cameriere non puo' chiudere cassa da solo
 // (vedi audit CRITICAL su frode latente). Entrambi loggano in audit.
-router.post('/:id/asporto/ritirato', requireRole('admin','manager'), markAsportoRitirato);
-router.post('/:id/asporto/no-show',  requireRole('admin','manager'), markAsportoNoShow);
+// JP 2026-06-07: Alessandra (waiter sub_role='asporto') deve poter chiudere
+// i suoi asporti. Il controller filtra su order_type='takeaway' quindi
+// non rischia di toccare i tavoli.
+router.post('/:id/asporto/ritirato', requireRole('waiter','cashier','admin','manager'), markAsportoRitirato);
+router.post('/:id/asporto/no-show',  requireRole('waiter','cashier','admin','manager'), markAsportoNoShow);
 router.delete('/:id',               requireRole('manager','admin'),          cancelOrder);
 
 module.exports = router;

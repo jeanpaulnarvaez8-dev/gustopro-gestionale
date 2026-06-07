@@ -621,8 +621,12 @@ async function addItems(req, res, next) {
       try {
         // Voce a prezzo libero (cassa): qualcosa fuori menu da mettere sul conto.
         // Solo cassa/manager/admin possono fissare un prezzo arbitrario.
+        // JP 2026-06-07: anche waiter+asporto solo se ordine takeaway
+        // (Alessandra fa cassa asporto).
         if (item.type === 'custom') {
-          if (!['cashier', 'manager', 'admin'].includes(req.user.role)) {
+          const isPrivileged = ['cashier', 'manager', 'admin'].includes(req.user.role);
+          const isAsportoCassa = req.user.role === 'waiter' && req.user.sub_role === 'asporto' && order.order_type === 'takeaway';
+          if (!isPrivileged && !isAsportoCassa) {
             await client.query('ROLLBACK');
             return res.status(403).json({ error: 'Solo la cassa può aggiungere voci a prezzo libero' });
           }
@@ -1378,7 +1382,7 @@ async function setItemPrice(req, res, next) {
     // Verifica che l'item appartenga all'ordine + tenant; ricava qty per
     // ricalcolare il subtotal in modo coerente con la riga.
     const { rows: [item] } = await pool.query(
-      `SELECT oi.id, oi.quantity, oi.modifier_total, oi.status, o.status AS order_status
+      `SELECT oi.id, oi.quantity, oi.modifier_total, oi.status, o.status AS order_status, o.order_type
          FROM order_items oi
          JOIN orders o ON o.id = oi.order_id
         WHERE oi.id = $1 AND oi.order_id = $2 AND oi.tenant_id = $3`,
@@ -1387,6 +1391,12 @@ async function setItemPrice(req, res, next) {
     if (!item) return res.status(404).json({ error: 'Voce non trovata' });
     if (item.status === 'cancelled') return res.status(400).json({ error: 'Voce cancellata' });
     if (item.order_status !== 'open') return res.status(400).json({ error: 'Ordine chiuso, non modificabile' });
+    // JP 2026-06-07: waiter+asporto puo' modificare prezzo SOLO su takeaway.
+    const isPrivileged = ['cashier', 'manager', 'admin'].includes(req.user.role);
+    const isAsportoCassa = req.user.role === 'waiter' && req.user.sub_role === 'asporto' && item.order_type === 'takeaway';
+    if (!isPrivileged && !isAsportoCassa) {
+      return res.status(403).json({ error: 'Solo la cassa puo modificare il prezzo' });
+    }
     const qty = Number(item.quantity) || 1;
     const modTot = Number(item.modifier_total) || 0;
     const newSubtotal = Math.round((price + modTot) * qty * 100) / 100;
@@ -1425,7 +1435,7 @@ async function setItemWeight(req, res, next) {
     const { rows: [item] } = await pool.query(
       `SELECT oi.id, oi.quantity, oi.modifier_total, oi.status, oi.unit_price AS curr_price,
               mi.base_price, mi.pricing_type,
-              o.status AS order_status
+              o.status AS order_status, o.order_type
          FROM order_items oi
          JOIN orders o ON o.id = oi.order_id
          LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
@@ -1435,6 +1445,15 @@ async function setItemWeight(req, res, next) {
     if (!item) return res.status(404).json({ error: 'Voce non trovata' });
     if (item.status === 'cancelled') return res.status(400).json({ error: 'Voce cancellata' });
     if (item.order_status !== 'open') return res.status(400).json({ error: 'Ordine chiuso, non modificabile' });
+    // JP 2026-06-07: waiter+asporto puo' modificare peso SOLO su takeaway.
+    const isPrivilegedW = ['cashier', 'manager', 'admin', 'waiter'].includes(req.user.role);
+    const isAsportoCassaW = req.user.role === 'waiter' && req.user.sub_role === 'asporto' && item.order_type === 'takeaway';
+    // I waiter normali possono cambiare il peso sui tavoli (sala). I waiter
+    // asporto possono cambiare il peso sugli asporti. Cassa/admin/manager
+    // sempre.
+    if (!isPrivilegedW && !isAsportoCassaW) {
+      return res.status(403).json({ error: 'Non autorizzato' });
+    }
 
     const qty = Number(item.quantity) || 1;
     const modTot = Number(item.modifier_total) || 0;

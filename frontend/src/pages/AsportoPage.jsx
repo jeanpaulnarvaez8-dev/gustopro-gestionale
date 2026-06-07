@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, ShoppingBag, Plus, Minus, Trash2, Send, ShoppingCart,
-  RefreshCw, CheckCircle2, User, Phone, Clock,
+  RefreshCw, CheckCircle2, User, Phone, Clock, Receipt,
   Printer, Package, XCircle, Banknote, CreditCard, Smartphone, X,
 } from 'lucide-react'
 import { menuAPI, asportoAPI, adminAPI, printAPI, ordersAPI } from '../lib/api'
@@ -286,6 +286,17 @@ export default function AsportoPage() {
                 >
                   <Printer size={13} />
                   {printing[o.id] ? '…' : 'Stampa preconto'}
+                </button>
+                {/* JP 2026-06-07: bottone "Cassa" che apre il checkout
+                    completo (sconti, split, voce libera, modifica peso/prezzo).
+                    Per asporti complessi quando il quick-flow Ritirato non basta. */}
+                <button
+                  onClick={() => navigate(`/checkout/${o.id}`)}
+                  className="w-full py-2 rounded-md bg-[var(--color-sea)] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 hover:brightness-110 active:scale-[0.98] transition"
+                  title="Cassa completa (sconti, split, voce libera)"
+                >
+                  <Receipt size={13} />
+                  Cassa completa
                 </button>
                 <div className="grid grid-cols-2 gap-1.5">
                   <button

@@ -81,6 +81,20 @@ async function processPayment(req, res, next) {
     if (!order_id || amount == null || !payment_method) {
       return res.status(400).json({ error: 'order_id, amount, payment_method obbligatori' });
     }
+    // JP 2026-06-07: waiter+sub_role='asporto' (Alessandra) puo' chiudere
+    // SOLO asporti. Cassa/admin/manager qualsiasi ordine.
+    if (req.user.role === 'waiter') {
+      if (req.user.sub_role !== 'asporto') {
+        return res.status(403).json({ error: 'Cassa riservata' });
+      }
+      const { rows: [ord] } = await pool.query(
+        `SELECT order_type FROM orders WHERE id=$1 AND tenant_id=$2`,
+        [order_id, tenantId]
+      );
+      if (!ord || ord.order_type !== 'takeaway') {
+        return res.status(403).json({ error: 'Puoi fare cassa solo degli asporti' });
+      }
+    }
     if (parseFloat(amount) <= 0) {
       return res.status(400).json({ error: 'amount deve essere maggiore di 0' });
     }

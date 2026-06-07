@@ -5,7 +5,9 @@ const { generatePreConto, processPayment, listReceipts } = require('../controlle
 const router = Router();
 
 router.get('/pre-conto/:orderId', requireRole('waiter','cashier','manager','admin'), generatePreConto);
-router.post('/pay',               requireRole('cashier','manager','admin'),           processPayment);
+// JP 2026-06-07: waiter+sub_role='asporto' (Alessandra) ammessa
+// (controller filtra: solo se ordine takeaway).
+router.post('/pay',               requireRole('waiter','cashier','manager','admin'),  processPayment);
 router.get('/receipts',           requireRole('cashier','manager','admin'),           listReceipts);
 
 module.exports = router;

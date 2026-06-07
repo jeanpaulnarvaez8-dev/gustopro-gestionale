@@ -551,7 +551,12 @@ export default function CheckoutPage() {
   const [finalReceipt, setFinalReceipt] = useState(null) // { bill, payment, receipt }
 
   // Voce a prezzo libero (cassa): qualcosa fuori menu da mettere sul conto.
-  const canAddCustom = ['cashier', 'admin', 'manager'].includes(user?.role)
+  // JP 2026-06-07: Alessandra (waiter + sub_role='asporto') deve poter fare
+  // cassa MA SOLO sugli asporti — split, sconti, voce libera, modifica
+  // peso, modifica prezzo. Sui tavoli resta bloccata.
+  const isAsporto = bill?.order_type === 'takeaway'
+  const isAsportoCassa = user?.role === 'waiter' && user?.sub_role === 'asporto' && isAsporto
+  const canAddCustom = ['cashier', 'admin', 'manager'].includes(user?.role) || isAsportoCassa
   const [showAddItem, setShowAddItem] = useState(false)
   const [customName, setCustomName]   = useState('')
   const [customPrice, setCustomPrice] = useState('')
