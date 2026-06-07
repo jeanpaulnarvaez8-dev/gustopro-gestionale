@@ -54,8 +54,10 @@ async function enqueuePrintJob(req, res, next) {
       return res.status(400).json({ error: 'order_id non valido' });
     }
     // Guard: l'ordine appartiene davvero a questo tenant?
+    // JP 2026-06-07: include order_type per routing preconto su
+    // stampante diversa (asporti → bar .21, tavoli → sala .24).
     const { rows: [o] } = await pool.query(
-      `SELECT id, tenant_id FROM orders WHERE id = $1`,
+      `SELECT id, tenant_id, order_type FROM orders WHERE id = $1`,
       [order_id]
     );
     if (!o || o.tenant_id !== tenant_id) {
@@ -78,10 +80,14 @@ async function enqueuePrintJob(req, res, next) {
         if (now - t > 30_000) _lastPrecontoEmit.delete(k);
       }
     }
+    // JP 2026-06-07: routing destinazione. Asporti → BAR (.21) perche'
+    // Alessandra ritira lì. Tavoli → SALA (.24) come prima.
+    const target = o.order_type === 'takeaway' ? 'bar' : 'sala';
     const job = {
       id: crypto.randomUUID(),
       kind,
       order_id,
+      target,                            // 'bar' | 'sala'
       created_by: req.user?.id || null,
       created_at: new Date().toISOString(),
     };
