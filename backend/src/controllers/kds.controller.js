@@ -184,6 +184,31 @@ async function updateItemStatus(req, res, next) {
       return res.status(400).json({ error: `Status non valido. Valori: ${validStatuses.join(', ')}` });
     }
 
+    // JP 2026-06-07 FIX: piatti in waiting NON possono saltare al status
+    // 'cooking'/'ready'/'served' (cucina non li ha mai ricevuti).
+    // Solo 'cancelled' e' sempre permesso. Prima si poteva marcare server
+    // un piatto tenuto → vista cucina restava "in attesa" indefinita
+    // (caso tavolo 19 di oggi).
+    if (status !== 'cancelled') {
+      const { rows: [check] } = await pool.query(
+        `SELECT workflow_status, is_manual_hold
+           FROM order_items WHERE id=$1 AND tenant_id=$2`,
+        [id, tenantId]
+      );
+      if (!check) return res.status(404).json({ error: 'Item non trovato' });
+      if (check.workflow_status === 'waiting') {
+        const msg = check.is_manual_hold
+          ? 'Piatto TENUTO dal cameriere. Premi "Manda in cucina" prima.'
+          : 'Piatto in attesa. Il Comandista deve premere INIZIA TAVOLO prima.';
+        return res.status(409).json({
+          error: msg,
+          error_code: 'ITEM_STILL_WAITING',
+          workflow_status: check.workflow_status,
+          is_manual_hold: check.is_manual_hold,
+        });
+      }
+    }
+
     const { rows: [item] } = await pool.query(
       `UPDATE order_items SET
          status    = $1::varchar,
@@ -589,15 +614,21 @@ async function batchUpdateStatus(req, res, next) {
       return res.status(400).json({ error: `Status non valido. Valori: ${valid.join(', ')}` });
     }
 
+    // JP 2026-06-07 FIX: in batch UPDATE escludo i waiting (non possono
+    // saltare). Solo 'cancelled' batch-cancella anche waiting.
+    const waitingGuard = status === 'cancelled' ? '' : "AND workflow_status <> 'waiting'";
     const { rows } = await pool.query(
       `UPDATE order_items SET
          status   = $1::varchar,
          ready_at = CASE WHEN $1::varchar = 'ready'  AND ready_at  IS NULL THEN NOW() ELSE ready_at  END,
          served_at = CASE WHEN $1::varchar = 'served' AND served_at IS NULL THEN NOW() ELSE served_at END
-       WHERE id = ANY($2::uuid[]) AND tenant_id = $3
+       WHERE id = ANY($2::uuid[]) AND tenant_id = $3 ${waitingGuard}
        RETURNING id, order_id, status`,
       [status, item_ids, tenantId]
     );
+    // Se alcuni items sono stati skippati (in waiting), lo comunichiamo
+    // al frontend per toast info.
+    const skipped = item_ids.length - rows.length;
 
     // JP 2026-06-05: stampa ticket cucina su START batch (chip TOTALI "×4
     // DA FARE" cliccato). Debounce per orderId → un solo ticket per tavolo
@@ -621,7 +652,7 @@ async function batchUpdateStatus(req, res, next) {
       count: rows.length,
     });
 
-    res.json({ updated: rows.length, items: rows });
+    res.json({ updated: rows.length, items: rows, skipped_waiting: skipped });
   } catch (err) { next(err); }
 }
 
