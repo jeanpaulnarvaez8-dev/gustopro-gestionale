@@ -24,7 +24,7 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
   // menu_item must belong to the same tenant. JOIN su categories per sapere
   // se e' bevanda (bar bypassa il comandista).
   const { rows: [menuItem] } = await client.query(
-    `SELECT mi.base_price, mi.pricing_type, mi.name,
+    `SELECT mi.base_price, mi.pricing_type, mi.name, mi.prep_station,
             COALESCE(c.is_beverage, false) AS is_beverage,
             COALESCE(mi.auto_print, c.auto_print, false) AS auto_print,
             COALESCE(mi.goes_to_bar, c.goes_to_bar, false) AS goes_to_bar
@@ -54,7 +54,10 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
   const isTakeaway = orderInfo?.order_type === 'takeaway';
   // JP 2026-06-03: bypass Comandista anche per items auto_print (dessert/
   // acque/vini/bollicine/spina) e per gli asporti.
-  if (tcfg?.requires_dispatch && !menuItem.is_beverage && !menuItem.auto_print && !isTakeaway && workflow_status === 'production') {
+  // JP 2026-06-07: anche PIZZE bypass — vanno direttamente a Simone (PIN
+  // 2099, KDS pizzeria). Il Comandista non smista le pizze.
+  const isPizza = menuItem.prep_station === 'pizzeria';
+  if (tcfg?.requires_dispatch && !menuItem.is_beverage && !menuItem.auto_print && !isTakeaway && !isPizza && workflow_status === 'production') {
     workflow_status = 'waiting';
   }
 
