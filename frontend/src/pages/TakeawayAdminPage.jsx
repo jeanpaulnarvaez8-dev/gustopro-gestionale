@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Printer, Clock, User, Phone, Package } from 'lucide-react'
-import { adminAPI, printAPI } from '../lib/api'
+import { ArrowLeft, RefreshCw, Printer, Clock, User, Phone, Package, CheckCircle2, XCircle, X } from 'lucide-react'
+import { adminAPI, printAPI, ordersAPI } from '../lib/api'
 import { useToast } from '../context/ToastContext'
+import { useSocket } from '../context/SocketContext'
 import { formatPrice } from '../lib/utils'
 
 /**
@@ -16,9 +17,16 @@ import { formatPrice } from '../lib/utils'
 export default function TakeawayAdminPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { socket } = useSocket()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [printing, setPrinting] = useState({})
+  // JP 2026-06-07: split flow chiusura asporto anche da admin (prima
+  // solo Alessandra dalla AsportoPage poteva chiudere).
+  const [releaseModal, setReleaseModal] = useState(null)
+  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [noShowReason, setNoShowReason] = useState('')
+  const [submittingRelease, setSubmittingRelease] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -36,6 +44,54 @@ export default function TakeawayAdminPage() {
     const id = setInterval(load, 15000)
     return () => clearInterval(id)
   }, [load])
+
+  // JP 2026-06-07: subscribe socket events per refresh real-time (chiusure
+  // simultanee da altri device admin/Alessandra → no race 409).
+  useEffect(() => {
+    if (!socket) return
+    const onRefresh = () => load()
+    socket.on('order-completed', onRefresh)
+    socket.on('order-cancelled', onRefresh)
+    socket.on('new-order', onRefresh)
+    return () => {
+      socket.off('order-completed', onRefresh)
+      socket.off('order-cancelled', onRefresh)
+      socket.off('new-order', onRefresh)
+    }
+  }, [socket, load])
+
+  const openReleaseModal = (orderId, customer, total, action) => {
+    setReleaseModal({ orderId, customer, total, action })
+    setPaymentMethod('cash')
+    setNoShowReason('')
+  }
+  const closeReleaseModal = () => {
+    if (submittingRelease) return
+    setReleaseModal(null)
+  }
+  const handleSubmitRelease = async () => {
+    if (!releaseModal || submittingRelease) return
+    const { orderId, customer, action } = releaseModal
+    setSubmittingRelease(true)
+    try {
+      if (action === 'ritirato') {
+        let register = null
+        try { register = localStorage.getItem('gustopro_register') || null } catch {}
+        await ordersAPI.asportoRitirato(orderId, { payment_method: paymentMethod, register })
+        toast({ type: 'success', title: '✅ Ritirato + scontrino', message: `${customer || 'Asporto'} · ${paymentMethod}` })
+      } else {
+        await ordersAPI.asportoNoShow(orderId, { reason: noShowReason.trim() || null })
+        toast({ type: 'warning', title: '⚠ No show registrato', message: customer || 'Asporto' })
+      }
+      setOrders(prev => prev.filter(x => x.id !== orderId))
+      setReleaseModal(null)
+      load()
+    } catch (e) {
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+    } finally {
+      setSubmittingRelease(false)
+    }
+  }
 
   const handlePrint = async (orderId, customer) => {
     if (printing[orderId]) return
@@ -178,11 +234,107 @@ export default function TakeawayAdminPage() {
                   <Printer size={16} />
                   {printing[o.id] ? '…' : 'Stampa preconto'}
                 </button>
+
+                {/* JP 2026-06-07: chiusura asporto dall'admin. Solo se aperto. */}
+                {o.status === 'open' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => openReleaseModal(o.id, o.customer_name, o.total_amount, 'ritirato')}
+                      className="py-2.5 rounded-lg bg-[var(--color-ok)] text-white font-extrabold text-sm uppercase tracking-wider flex items-center justify-center gap-1 hover:brightness-110 active:scale-[0.98] transition"
+                      title="Cliente ritirato + emetti scontrino"
+                    >
+                      <CheckCircle2 size={16} /> Ritirato
+                    </button>
+                    <button
+                      onClick={() => openReleaseModal(o.id, o.customer_name, o.total_amount, 'no_show')}
+                      className="py-2.5 rounded-lg bg-[var(--color-err-soft)] border-2 border-[var(--color-err)]/40 text-[var(--color-err)] font-extrabold text-sm uppercase tracking-wider flex items-center justify-center gap-1 hover:brightness-110 active:scale-[0.98] transition"
+                      title="Cliente non ritirato (no show)"
+                    >
+                      <XCircle size={16} /> No show
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Modal chiusura asporto Ritirato / No-show */}
+      {releaseModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={closeReleaseModal}>
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border-strong)] rounded-2xl p-5 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="serif text-lg font-bold text-[var(--color-text)] flex items-center gap-2">
+                {releaseModal.action === 'ritirato' ? (
+                  <><CheckCircle2 size={20} className="text-[var(--color-ok)]" /> Ritirato + scontrino</>
+                ) : (
+                  <><XCircle size={20} className="text-[var(--color-err)]" /> No show</>
+                )}
+              </h3>
+              <button onClick={closeReleaseModal} disabled={submittingRelease} className="text-[var(--color-text-3)] hover:text-[var(--color-text)] p-1"><X size={18} /></button>
+            </div>
+            <p className="text-sm text-[var(--color-text-2)] mb-4">
+              {releaseModal.customer || 'Asporto'} · <span className="text-[var(--color-gold)] font-bold tnum">{formatPrice(releaseModal.total)}</span>
+            </p>
+
+            {releaseModal.action === 'ritirato' ? (
+              <div className="space-y-3">
+                <label className="text-[10px] uppercase tracking-wider text-[var(--color-text-2)] font-semibold">Metodo pagamento</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { key: 'cash',  label: '💶 Contanti' },
+                    { key: 'card',  label: '💳 Carta' },
+                    { key: 'other', label: '🔧 Altro' },
+                  ].map(m => (
+                    <button
+                      key={m.key}
+                      onClick={() => setPaymentMethod(m.key)}
+                      disabled={submittingRelease}
+                      className={`py-2.5 rounded-lg border-2 text-sm font-bold transition ${
+                        paymentMethod === m.key
+                          ? 'border-[var(--color-gold)] bg-[var(--color-gold-soft)] text-[var(--color-gold)]'
+                          : 'border-[var(--color-border-strong)] text-[var(--color-text-2)] hover:border-[var(--color-text-3)]'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-wider text-[var(--color-text-2)] font-semibold">Motivo (opzionale)</label>
+                <input
+                  type="text"
+                  value={noShowReason}
+                  onChange={e => setNoShowReason(e.target.value)}
+                  placeholder="Es: non si è presentato, errore inserimento…"
+                  disabled={submittingRelease}
+                  className="w-full bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] rounded-lg px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-err)]"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-5">
+              <button onClick={closeReleaseModal} disabled={submittingRelease} className="flex-1 px-4 py-2.5 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] text-sm font-semibold hover:text-[var(--color-text)]">
+                Annulla
+              </button>
+              <button
+                onClick={handleSubmitRelease}
+                disabled={submittingRelease}
+                className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-extrabold uppercase tracking-wider disabled:opacity-40 hover:brightness-110 ${
+                  releaseModal.action === 'ritirato'
+                    ? 'bg-[var(--color-ok)] text-white'
+                    : 'bg-[var(--color-err)] text-white'
+                }`}
+              >
+                {submittingRelease ? '…' : (releaseModal.action === 'ritirato' ? 'Conferma ritiro' : 'Conferma no show')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
