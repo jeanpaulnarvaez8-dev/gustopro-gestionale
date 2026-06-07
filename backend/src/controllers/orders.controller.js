@@ -605,20 +605,15 @@ async function addItems(req, res, next) {
     );
     if (!order) return res.status(404).json({ error: 'Ordine non trovato o già chiuso' });
 
-    // JP 2026-06-06: Codice 32 + ownership check. Dopo trasferimento, il
-    // waiter precedente non puo' piu' aggiungere voci (confusione con due
-    // camerieri che scrivono lo stesso tavolo → ticket cucina sdoppiati).
-    // Manager/admin/cassa bypassano: servono per risolvere casi limite e
-    // per la cassa che compone il conto. Per ri-assumere il tavolo il
-    // waiter deve usare POST /orders/:id/claim (Codice 32 inverso).
-    if (req.user.role === 'waiter' && order.waiter_id && order.waiter_id !== req.user.id) {
-      await client.query('ROLLBACK');
-      return res.status(403).json({
-        error: 'Tavolo non più tuo. Usa "Subentra" o chiedi al cameriere attuale.',
-        error_code: 'NOT_TABLE_OWNER',
-        current_waiter_id: order.waiter_id,
-      });
-    }
+    // JP 2026-06-07: ownership check RIMOSSO. Stile operativo Riva: tutti
+    // i camerieri si aiutano sui tavoli. Marco apre tav 5 e va in cucina,
+    // Umberto passa e aggiunge una voce → deve poterlo fare. Stesso vale
+    // per i tavoli aperti dall'admin (waiter_id = admin) — Marco deve
+    // poterli gestire come fossero suoi. L'audit log traccia chi ha fatto
+    // cosa, basta a ricostruire la storia.
+    // Per il Codice 32 inverso (subentra) resta l'endpoint /claim che
+    // aggiorna waiter_id formalmente.
+    void order;
 
     const addedItems = [];      // piatti veri (cucina/bar) → feed KDS/bar/direct-delivered
     const surchargeItems = [];  // voci libere cassa → solo conto, no cucina
