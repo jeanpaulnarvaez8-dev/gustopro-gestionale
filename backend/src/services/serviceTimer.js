@@ -538,6 +538,8 @@ async function tick() {
       await checkCourseCycleForTenant(client, tenantId);
       // JP 2026-06-01: piatti in attesa con fire_at scaduto → auto-fire.
       await checkScheduledFiresForTenant(client, tenantId);
+      // JP 2026-06-08: prenotazioni imminenti (≤ 1h) → setta tavolo 'reserved'.
+      await checkUpcomingReservationsForTenant(client, tenantId);
     });
   } catch (err) {
     // Errori transient (es. tabella non ancora migrata, DB non pronto)
@@ -578,6 +580,34 @@ async function checkScheduledFiresForTenant(client, tenantId) {
     io.emit('item-released-to-production', {
       orderId: r.order_id, itemId: r.id, auto: true,
     });
+  }
+}
+
+// ─── Auto-setta status='reserved' su tavoli con prenotazione imminente ──
+// JP 2026-06-08: prenotazioni create lontano dalla data ora restano 'free'
+// nel tavolo. Qui ogni tick controlliamo le prenotazioni entro 1h e
+// settiamo lo stato. Idempotente: rispetta tavoli in 'occupied'/'seated'/
+// 'dirty' (non li sovrascrive).
+async function checkUpcomingReservationsForTenant(client, tenantId) {
+  const { rows } = await client.query(
+    `UPDATE tables t
+        SET status = 'reserved', status_changed_at = NOW()
+       FROM reservations r
+      WHERE r.tenant_id = $1
+        AND r.tenant_id = t.tenant_id
+        AND r.table_id  = t.id
+        AND r.status    = 'confirmed'
+        AND t.status    = 'free'
+        AND (r.reserved_date + r.reserved_time) AT TIME ZONE 'Europe/Rome' <= NOW() + INTERVAL '1 hour'
+        AND (r.reserved_date + r.reserved_time) AT TIME ZONE 'Europe/Rome' >= NOW() - INTERVAL '30 minutes'
+      RETURNING t.id`,
+    [tenantId]
+  );
+  if (rows.length === 0) return;
+  const io = getIO();
+  if (!io) return;
+  for (const r of rows) {
+    io.emit('table-status-changed', { tableId: r.id, status: 'reserved' });
   }
 }
 

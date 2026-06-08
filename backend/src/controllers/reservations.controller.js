@@ -83,13 +83,23 @@ async function createReservation(req, res, next) {
       ]
     );
 
-    // Mark table as reserved if assigned (tenant-scoped)
+    // JP 2026-06-08 FIX: marca 'reserved' SOLO se la prenotazione e' OGGI
+    // ed entro 4 ore. Prima si bloccava il tavolo per giorni interi anche
+    // per prenotazioni future (caso tav 19: prenotato per venerdì 13/6,
+    // tavolo segnato reserved gia' domenica 8/6).
+    // Per le prenotazioni future, il tavolo resta 'free' e si vede solo
+    // come "imminente" (next_reservation_at) quando si avvicina.
     if (table_id) {
-      await pool.query(
-        "UPDATE tables SET status='reserved' WHERE id=$1 AND tenant_id=$2 AND status='free'",
-        [table_id, TENANT(req)]
+      const { rowCount } = await pool.query(
+        `UPDATE tables SET status='reserved', status_changed_at=NOW()
+          WHERE id=$1 AND tenant_id=$2 AND status='free'
+            AND $3::date = (NOW() AT TIME ZONE 'Europe/Rome')::date
+            AND ($3::date + $4::time) AT TIME ZONE 'Europe/Rome' <= NOW() + INTERVAL '4 hours'`,
+        [table_id, TENANT(req), reserved_date, reserved_time]
       );
-      getIO()?.emit('table-status-changed', { tableId: table_id, status: 'reserved' });
+      if (rowCount > 0) {
+        getIO()?.emit('table-status-changed', { tableId: table_id, status: 'reserved' });
+      }
     }
 
     getIO()?.to('role:admin').to('role:manager').emit('reservation:new', {
