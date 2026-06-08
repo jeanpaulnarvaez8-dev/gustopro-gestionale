@@ -464,8 +464,10 @@ async function getPrecontoEscpos(req, res, next) {
       if (copyLabel) c.push(txt(copyLabel));
       if (isTakeaway) {
         c.push(DBL_ON, txt('ASPORTO'), DBL_OFF);
-        if (o.customer_name) c.push(BOLD_ON, txt(o.customer_name), BOLD_OFF);
-        if (o.pickup_time) c.push(txt('Ritiro: ' + String(o.pickup_time).slice(0, 5)));
+        // JP 2026-06-08: nome cliente IN GRANDE per identificare il
+        // sacchetto al volo al bar (.21). Doppia altezza + bold.
+        if (o.customer_name) c.push(BOLD_ON, DBL_ON, txt(String(o.customer_name).toUpperCase()), DBL_OFF, BOLD_OFF);
+        if (o.pickup_time) c.push(BOLD_ON, txt('Ritiro: ' + String(o.pickup_time).slice(0, 5)), BOLD_OFF);
       } else {
         c.push(DBL_ON, txt('TAVOLO ' + o.table_number), DBL_OFF);
         if (o.zone_name) c.push(txt(o.zone_name));
