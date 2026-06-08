@@ -225,6 +225,35 @@ async function updateItemStatus(req, res, next) {
       status,
     });
 
+    // JP 2026-06-08: stampa al PASS (.102 Epson TM-m30II) quando un
+    // piatto diventa READY. Un foglio per piatto: TAV X + nome + qty.
+    // Il cameriere lo prende dal gancio al pass + abbina al piatto.
+    if (status === 'ready') {
+      try {
+        const { rows: [info] } = await pool.query(
+          `SELECT COALESCE(t.table_number, 'ASPORTO') AS table_number,
+                  COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Piatto') AS name,
+                  oi.quantity
+             FROM order_items oi
+             LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+             LEFT JOIN orders o ON o.id = oi.order_id
+             LEFT JOIN tables t ON t.id = o.table_id
+            WHERE oi.id = $1 AND oi.tenant_id = $2`,
+          [id, tenantId]
+        );
+        if (info) {
+          const { enqueuePassTicketJob } = require('./print.controller');
+          enqueuePassTicketJob(tenantId, item.order_id, id, {
+            table_number: String(info.table_number),
+            name: String(info.name),
+            quantity: Number(info.quantity || 1),
+          });
+        }
+      } catch (e) {
+        req.log?.warn?.({ err: e.message }, 'pass-ticket enqueue failed (non-blocking)');
+      }
+    }
+
     if (status === 'served') {
       await pool.query(
         'DELETE FROM service_alerts WHERE order_item_id = $1 AND tenant_id = $2',

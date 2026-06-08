@@ -128,6 +128,25 @@ async function getQueueSize(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// JP 2026-06-08: ticket PASS (.102 Epson TM-m30II). Stampato ogni volta
+// che un piatto diventa 'ready' in cucina. Il foglio singolo (1 piatto
+// = 1 foglio) viene appeso al gancio del pass, il cameriere lo prende
+// + il piatto fisico e va al tavolo. Formato semplicissimo: TAV X
+// gigante + nome piatto.
+//   payload: { table_number, name, quantity }
+function enqueuePassTicketJob(tenantId, orderId, itemId, payload) {
+  const job = {
+    id: crypto.randomUUID(),
+    kind: 'pass-ticket',
+    order_id: orderId,
+    item_id: itemId,
+    payload,
+    created_at: new Date().toISOString(),
+  };
+  pushJob(tenantId, job);
+  return job;
+}
+
 // JP 2026-06-04: enqueue job FISCALE (Custom Q3X-F). Payload completo
 // strutturato (items + IVA + metodo pagamento). L'agent locale lo
 // traduce in protocollo Custom Q3X e dialoga con la RT via TCP.
@@ -304,4 +323,4 @@ function scheduleBarTicket(tenantId, orderId, newItemIds) {
   _barDebounce.set(orderId, entry);
 }
 
-module.exports = { enqueuePrintJob, getPendingJobs, getQueueSize, enqueueAutoPrintJob, enqueueFiscalJob, enqueueKitchenPassJob, scheduleKitchenTicket, enqueueBarPassJob, scheduleBarTicket };
+module.exports = { enqueuePrintJob, getPendingJobs, getQueueSize, enqueueAutoPrintJob, enqueueFiscalJob, enqueueKitchenPassJob, scheduleKitchenTicket, enqueueBarPassJob, scheduleBarTicket, enqueuePassTicketJob };
