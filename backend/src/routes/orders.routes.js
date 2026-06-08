@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { requireRole } = require('../middleware/requireRole');
-const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable } = require('../controllers/orders.controller');
+const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemQuantity, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable } = require('../controllers/orders.controller');
 
 const router = Router();
 
@@ -20,6 +20,8 @@ router.delete('/:id/items/:itemId', requireRole('waiter','manager','admin','cash
 router.patch('/:id/items/:itemId/price', requireRole('waiter','cashier','manager','admin'), setItemPrice);
 // JP 2026-06-06: modifica peso (pesce al kg). Cassa + waiter + admin/manager.
 router.patch('/:id/items/:itemId/weight', requireRole('waiter','cashier','manager','admin'), setItemWeight);
+// JP 2026-06-08: cassa decrementa quantita' (es: 2x Spritz → 1x). Se 0, cancella.
+router.patch('/:id/items/:itemId/quantity', requireRole('waiter','cashier','manager','admin'), setItemQuantity);
 // JP 2026-06-01: cameriere imposta i minuti di auto-fire su voce in attesa.
 router.patch('/:id/items/:itemId/fire-at', requireRole('waiter','manager','admin','cashier'), setItemFireAt);
 // JP 2026-06-03: Comandista "INIZIA TAVOLO" → libera tutti i waiting alle stazioni.

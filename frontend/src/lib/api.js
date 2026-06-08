@@ -217,6 +217,10 @@ export const ordersAPI = {
   // JP 2026-06-06: corregge peso pesce al kg → backend ricalcola prezzo
   setItemWeight: (id, itemId, weight_g) =>
                   api.patch(`/orders/${id}/items/${itemId}/weight`, { weight_g }),
+  // JP 2026-06-08: cassa decrementa quantita' di una voce (toglie 1 di x2).
+  // Se quantity=0, equivale a cancel.
+  setItemQuantity: (id, itemId, quantity) =>
+                  api.patch(`/orders/${id}/items/${itemId}/quantity`, { quantity }),
   // Timer auto-fire su voce in attesa. minutes=0/null annulla. JP 2026-06-01.
   setItemFireAt: (id, itemId, minutes) =>
                   api.patch(`/orders/${id}/items/${itemId}/fire-at`, { minutes }),

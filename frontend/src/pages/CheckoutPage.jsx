@@ -800,14 +800,22 @@ export default function CheckoutPage() {
 
   // Togli un piatto dal conto. Admin/manager: diretto. Cassa/cameriere: PIN responsabile.
   const removeBillItem = async (item) => {
-    // item ora e' un GRUPPO accumulato (ids[] = voci sottostanti). Togliamo
-    // 1 unita' alla volta: rimuoviamo l'ultimo id del gruppo (x3 -> x2 -> ...).
+    // 3 casi possibili (JP 2026-06-08):
+    //  A) Gruppo accumulato di ids multipli (2x perche' aggiunti 2 volte
+    //     separatamente): cancelItem sull'ULTIMO id. Restano N-1.
+    //  B) 1 solo id ma quantity > 1 (2x perche' qty=2 sulla stessa voce):
+    //     decrementa la qty di 1 via setItemQuantity. Resta x(N-1).
+    //  C) 1 id, quantity = 1: cancelItem normale → fila intera via.
     const groupIds = Array.isArray(item.ids) && item.ids.length ? item.ids : [item.id]
+    const itemQty = Number(item.quantity || 1)
+    const totalUnits = groupIds.length > 1 ? groupIds.length : itemQty
     const targetId = groupIds[groupIds.length - 1]
-    const msg = groupIds.length > 1
-      ? `Togliere 1 di "${item.item_name}" dal conto? (restano ${groupIds.length - 1})`
+
+    const msg = totalUnits > 1
+      ? `Togliere 1 di "${item.item_name}" dal conto? (restano ${totalUnits - 1})`
       : `Togliere "${item.item_name}" dal conto?`
     if (!window.confirm(msg)) return
+
     let override
     if (!['admin', 'manager'].includes(user?.role)) {
       const pin = window.prompt('PIN del responsabile per togliere il piatto:')
@@ -815,10 +823,19 @@ export default function CheckoutPage() {
       override = { pin, reason: 'Rimozione dal conto (cassa)' }
     }
     try {
-      await ordersAPI.cancelItem(orderId, targetId, override)
+      if (groupIds.length > 1) {
+        // CASO A: rimuovo 1 dei record separati
+        await ordersAPI.cancelItem(orderId, targetId, override)
+      } else if (itemQty > 1) {
+        // CASO B: decremento la quantity della voce singola
+        await ordersAPI.setItemQuantity(orderId, targetId, itemQty - 1)
+      } else {
+        // CASO C: cancel totale (ultima unita')
+        await ordersAPI.cancelItem(orderId, targetId, override)
+      }
       const updated = accumulateBill(await billingAPI.preConto(orderId).then(r => r.data))
       setBill(updated)
-      toast({ type: 'success', title: 'Piatto tolto dal conto', message: item.item_name })
+      toast({ type: 'success', title: totalUnits > 1 ? 'Tolto 1 dal conto' : 'Piatto tolto dal conto', message: item.item_name })
     } catch (e) {
       toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
     }

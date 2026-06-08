@@ -1414,6 +1414,63 @@ async function setItemPrice(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// ── setItemQuantity ──────────────────────────────────────────
+// JP 2026-06-08: cassa decrementa quantita' di una voce nel conto
+// (es: 2x Spritz, cliente ne paga 1 e l'altro non lo vuole). Aggiorna
+// quantity e ricalcola subtotal. Se nuova quantity = 0, cancella.
+// Permessi: stesso pattern di setItemPrice (cassa/admin/manager +
+// waiter+asporto su takeaway).
+async function setItemQuantity(req, res, next) {
+  try {
+    const { id: order_id, itemId } = req.params;
+    const tenantId = TENANT(req);
+    const { quantity } = req.body || {};
+    const newQty = parseInt(quantity, 10);
+    if (!Number.isFinite(newQty) || newQty < 0 || newQty > 99) {
+      return res.status(400).json({ error: 'Quantita non valida (0-99)' });
+    }
+    const { rows: [item] } = await pool.query(
+      `SELECT oi.id, oi.quantity, oi.unit_price, oi.modifier_total, oi.status,
+              o.status AS order_status, o.order_type
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+        WHERE oi.id = $1 AND oi.order_id = $2 AND oi.tenant_id = $3`,
+      [itemId, order_id, tenantId]
+    );
+    if (!item) return res.status(404).json({ error: 'Voce non trovata' });
+    if (item.status === 'cancelled') return res.status(400).json({ error: 'Voce gia cancellata' });
+    if (item.order_status !== 'open') return res.status(400).json({ error: 'Ordine chiuso' });
+    // Permessi: cassa/admin/manager + Alessandra (waiter+asporto su takeaway).
+    const isPrivileged = ['cashier', 'manager', 'admin'].includes(req.user.role);
+    const isAsportoCassa = req.user.role === 'waiter' && req.user.sub_role === 'asporto' && item.order_type === 'takeaway';
+    if (!isPrivileged && !isAsportoCassa) {
+      return res.status(403).json({ error: 'Solo la cassa puo modificare la quantita' });
+    }
+
+    if (newQty === 0) {
+      // Equivale a cancelItem: piu' semplice farlo qui in unico endpoint.
+      await pool.query(
+        `UPDATE order_items SET status='cancelled'
+           WHERE id=$1 AND tenant_id=$2 AND status<>'cancelled'`,
+        [itemId, tenantId]
+      );
+      try { getIO()?.emit('item-cancelled', { orderId: order_id, itemId, prevStatus: item.status }); } catch {}
+      return res.json({ id: itemId, cancelled: true });
+    }
+
+    const unitPrice = Number(item.unit_price) || 0;
+    const modTot = Number(item.modifier_total) || 0;
+    const newSubtotal = Math.round((unitPrice + modTot) * newQty * 100) / 100;
+    const { rows: [updated] } = await pool.query(
+      `UPDATE order_items SET quantity=$1, subtotal=$2
+        WHERE id=$3 AND tenant_id=$4
+        RETURNING id, quantity, unit_price, subtotal`,
+      [newQty, newSubtotal, itemId, tenantId]
+    );
+    res.json(updated);
+  } catch (err) { next(err); }
+}
+
 // ── setItemWeight ────────────────────────────────────────────
 // JP 2026-06-06: cassa/cameriere correggono il peso di un pesce gia'
 // inserito (es. pesato 1kg ma in realta' era 1.9kg). Aggiorna weight_g
@@ -1784,4 +1841,4 @@ async function moveOrderTable(req, res, next) {
   }
 }
 
-module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable };
+module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemQuantity, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable };
