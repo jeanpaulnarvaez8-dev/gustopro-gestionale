@@ -12,6 +12,9 @@ router.get('/tax-report',            requireRole('admin'),            getTaxRepo
 router.get('/stock-reconciliation',  requireRole('admin', 'manager'), getStockReconciliation);
 router.get('/staff-performance',     requireRole('admin', 'manager'), getStaffPerformance);
 router.get('/audit-report',          requireRole('admin', 'manager'), getAuditReport);
-router.get('/takeaway',              requireRole('admin', 'manager'), getTakeawayList);
+// JP 2026-06-08: ammessa anche Alessandra (waiter sub_role='asporto')
+// per vedere la lista asporti aperti. Controller restituisce solo
+// asporti del tenant — niente leak su altri ordini di sala.
+router.get('/takeaway',              requireRole('admin', 'manager', 'waiter'), getTakeawayList);
 
 module.exports = router;

@@ -18,7 +18,11 @@ export default function AsportoPage() {
   const { toast } = useToast()
   const { user } = useAuth()
   const { socket } = useSocket()
+  // JP 2026-06-08: anche Alessandra (waiter+sub_role='asporto') vede la
+  // lista degli asporti aperti, stampa preconti, chiude col flow
+  // Ritirato/No-show, e accede alla Cassa completa di un asporto.
   const canManageList = ['admin', 'manager'].includes(user?.role)
+    || (user?.role === 'waiter' && user?.sub_role === 'asporto')
 
   // JP 2026-06-04: lista asporti di oggi (solo admin/manager) — top panel
   // sopra il form di creazione. Include stampa preconto per ciascuno.
