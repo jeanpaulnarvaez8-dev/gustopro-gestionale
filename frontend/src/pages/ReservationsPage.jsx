@@ -302,12 +302,15 @@ export default function ReservationsPage() {
   const [tables, setTables]             = useState([])
   const [loading, setLoading]           = useState(true)
   const [editing, setEditing]           = useState(null)
+  // JP 2026-06-08: vista "Tutte le prossime" — mostra tutte le
+  // prenotazioni dei prossimi giorni ordinate per data crescente.
+  const [view, setView] = useState('day') // 'day' | 'upcoming'
 
-  const load = useCallback(async (d = currentDate) => {
+  const load = useCallback(async () => {
     setLoading(true)
     try {
       const [rRes, tRes] = await Promise.all([
-        reservationsAPI.list(dateStr(d)),
+        view === 'upcoming' ? reservationsAPI.upcoming() : reservationsAPI.list(dateStr(currentDate)),
         tablesAPI.list(),
       ])
       setReservations(rRes.data)
@@ -315,9 +318,9 @@ export default function ReservationsPage() {
     } catch {
       toast({ type: 'error', title: 'Errore caricamento' })
     } finally { setLoading(false) }
-  }, []) // eslint-disable-line
+  }, [view, currentDate]) // eslint-disable-line
 
-  useEffect(() => { load(currentDate) }, [currentDate]) // eslint-disable-line
+  useEffect(() => { load() }, [view, currentDate]) // eslint-disable-line
 
   const handleStatus = async (id, status) => {
     try {
@@ -356,7 +359,32 @@ export default function ReservationsPage() {
           Prenotazioni
         </h1>
 
-        {/* Date navigator */}
+        {/* JP 2026-06-08: toggle vista Per data / Tutte le prossime */}
+        <div className="flex items-center gap-0.5 ml-1 bg-[var(--color-surface-2)] rounded-lg border border-[var(--color-border-strong)] overflow-hidden p-0.5">
+          <button
+            onClick={() => setView('day')}
+            className={`text-xs font-semibold px-2.5 py-1 rounded transition ${
+              view === 'day'
+                ? 'bg-[var(--color-gold)] text-[#13181C]'
+                : 'text-[var(--color-text-2)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            Per data
+          </button>
+          <button
+            onClick={() => setView('upcoming')}
+            className={`text-xs font-semibold px-2.5 py-1 rounded transition ${
+              view === 'upcoming'
+                ? 'bg-[var(--color-gold)] text-[#13181C]'
+                : 'text-[var(--color-text-2)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            Tutte le prossime
+          </button>
+        </div>
+
+        {/* Date navigator (solo in vista "Per data") */}
+        {view === 'day' && (
         <div className="flex items-center gap-1 ml-1 bg-[var(--color-surface-2)] rounded-lg border border-[var(--color-border-strong)] overflow-hidden">
           <button
             onClick={() => changeDate(-1)}
@@ -384,6 +412,7 @@ export default function ReservationsPage() {
             <ChevronRight size={16} />
           </button>
         </div>
+        )}
 
         {/* Stats live */}
         <div className="flex items-center gap-2 text-xs ml-2">
@@ -407,7 +436,9 @@ export default function ReservationsPage() {
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-5 max-w-3xl mx-auto w-full">
-        <p className="text-[var(--color-text-3)] text-xs mb-4 capitalize tnum">{fmtDate(dateStr(currentDate))}</p>
+        <p className="text-[var(--color-text-3)] text-xs mb-4 capitalize tnum">
+          {view === 'upcoming' ? `Prossime ${reservations.length} prenotazioni` : fmtDate(dateStr(currentDate))}
+        </p>
 
         {loading ? (
           <div className="flex justify-center py-16 gap-2 text-[var(--color-text-2)]">
@@ -418,11 +449,39 @@ export default function ReservationsPage() {
           <div className="flex flex-col items-center gap-3 py-20">
             <CalendarDays size={48} className="text-[var(--color-text-3)]/40" />
             <p className="serif text-[var(--color-text-2)] text-base font-semibold">
-              Nessuna prenotazione per questo giorno
+              {view === 'upcoming' ? 'Nessuna prenotazione futura' : 'Nessuna prenotazione per questo giorno'}
             </p>
             <Button leftIcon={<Plus size={14} />} onClick={() => setEditing('new')}>
               Aggiungi prenotazione
             </Button>
+          </div>
+        ) : view === 'upcoming' ? (
+          // JP 2026-06-08: vista "Tutte le prossime" raggruppate per data.
+          <div className="flex flex-col gap-6">
+            {(() => {
+              const groups = {}
+              for (const r of reservations) {
+                const k = String(r.reserved_date).slice(0, 10)
+                if (!groups[k]) groups[k] = []
+                groups[k].push(r)
+              }
+              const dates = Object.keys(groups).sort()
+              return dates.map(date => {
+                const items = groups[date]
+                return (
+                  <section key={date}>
+                    <h3 className="text-[var(--color-gold)] text-sm uppercase tracking-wider font-bold mb-3 flex items-center gap-2 capitalize">
+                      <CalendarDays size={14} /> {fmtDate(date)} ({items.length})
+                    </h3>
+                    <div className="flex flex-col gap-2">
+                      {items.map(r => (
+                        <ResCard key={r.id} r={r} onEdit={setEditing} onStatus={handleStatus} />
+                      ))}
+                    </div>
+                  </section>
+                )
+              })
+            })()}
           </div>
         ) : (
           <div className="flex flex-col gap-6">
