@@ -162,13 +162,19 @@ export default function AsportoPage() {
     setCart(prev => {
       const existing = prev.find(c => c.item.id === item.id)
       if (existing) return prev.map(c => c.item.id === item.id ? { ...c, quantity: c.quantity + 1 } : c)
-      return [...prev, { item, quantity: 1, _key: `${item.id}-${Date.now()}` }]
+      return [...prev, { item, quantity: 1, notes: '', _key: `${item.id}-${Date.now()}` }]
     })
   }
 
   const updateQty = (key, qty) => {
     if (qty < 1) return removeFromCart(key)
     setCart(prev => prev.map(c => c._key === key ? { ...c, quantity: qty } : c))
+  }
+
+  // JP 2026-06-08: note libere per ogni voce del carrello asporto
+  // (toglie/aggiunge ingredienti, anche per le pizze).
+  const updateNote = (key, note) => {
+    setCart(prev => prev.map(c => c._key === key ? { ...c, notes: note } : c))
   }
 
   const removeFromCart = (key) => setCart(prev => prev.filter(c => c._key !== key))
@@ -194,7 +200,7 @@ export default function AsportoPage() {
         items: cart.map(c => ({
           menu_item_id: c.item.id,
           quantity: c.quantity,
-          notes: null,
+          notes: c.notes?.trim() || null,
           modifiers: [],
         })),
       })
@@ -480,6 +486,16 @@ export default function AsportoPage() {
                         {formatPrice(parseFloat(ci.item.base_price) * ci.quantity)}
                       </span>
                     </div>
+                    {/* JP 2026-06-08: note ingredienti (toglie/aggiunge,
+                        anche su pizze). Vanno sul ticket cucina + preconto. */}
+                    <input
+                      type="text"
+                      value={ci.notes || ''}
+                      onChange={(e) => updateNote(ci._key, e.target.value)}
+                      placeholder="Note (es: no olive, +acciughe)"
+                      maxLength={120}
+                      className="mt-1.5 w-full bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] rounded-md px-2 py-1 text-[var(--color-text)] text-[11px] outline-none focus:border-[var(--color-sea)] placeholder:text-[var(--color-text-3)] placeholder:italic"
+                    />
                   </motion.div>
                 ))}
               </AnimatePresence>
