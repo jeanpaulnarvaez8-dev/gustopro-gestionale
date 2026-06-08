@@ -52,6 +52,17 @@ export default function TableMapPage() {
   const navigate = useNavigate()
   const [bellOpen, setBellOpen] = useState(false)
 
+  // JP 2026-06-07: Alessandra (waiter+sub_role='asporto') non deve vedere
+  // i tavoli della sala. Se atterra qui per qualsiasi via, redirect a
+  // /asporto. Stesso pattern per bar.
+  useEffect(() => {
+    if (user?.role === 'waiter' && user?.sub_role === 'asporto') {
+      navigate('/asporto', { replace: true })
+    } else if (user?.role === 'waiter' && ['bar', 'bar/caffetteria'].includes(user?.sub_role)) {
+      navigate('/bar', { replace: true })
+    }
+  }, [user?.role, user?.sub_role, navigate])
+
   const [zones, setZones] = useState([])
   const [tables, setTables] = useState([])
   const [activeZone, setActiveZone] = useState(null)

@@ -146,9 +146,15 @@ function HomeRedirect() {
     return <Navigate to="/kds" replace />
   }
   if (['admin', 'manager'].includes(user?.role)) return <Navigate to="/admin-home" replace />
-  // Waiter al bar / asporto: landing diretto sulla coda bar invece di /tables.
-  if (user?.role === 'waiter' && ['bar', 'bar/caffetteria', 'asporto'].includes(user?.sub_role)) {
+  // Waiter al bar: landing su coda bar (cocktail/caffe').
+  if (user?.role === 'waiter' && ['bar', 'bar/caffetteria'].includes(user?.sub_role)) {
     return <Navigate to="/bar" replace />
+  }
+  // JP 2026-06-07: waiter asporto (Alessandra PIN 3000) → landing su
+  // /asporto (lista asporti + nuovo asporto + cassa). NON deve vedere
+  // i tavoli della sala.
+  if (user?.role === 'waiter' && user?.sub_role === 'asporto') {
+    return <Navigate to="/asporto" replace />
   }
   return <Navigate to="/tables" replace />
 }
