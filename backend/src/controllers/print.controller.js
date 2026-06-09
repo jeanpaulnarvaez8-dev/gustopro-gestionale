@@ -41,6 +41,45 @@ function drain(tenant_id) {
 const _lastPrecontoEmit = new Map();
 const PRECONTO_DEDUP_MS = 5000;
 
+// JP 2026-06-08: stampa di prova su uno dei target (bar / sala / pass /
+// cucina). Utile per testare connettività con stampanti dopo
+// spostamenti/cambio cavi. body: { target: 'pass'|'bar'|'sala'|'cucina',
+// table_number?, name?, quantity? }
+async function enqueueTestPrint(req, res, next) {
+  try {
+    const tenant_id = TENANT(req);
+    const { target = 'pass', table_number = 'TEST', name = 'STAMPA DI PROVA', quantity = 1 } = req.body || {};
+    if (!['pass', 'bar', 'sala', 'cucina'].includes(target)) {
+      return res.status(400).json({ error: `target invalid: ${target}` });
+    }
+    let job;
+    if (target === 'pass') {
+      job = enqueuePassTicketJob(tenant_id, null, null, {
+        table_number: String(table_number),
+        name: String(name),
+        quantity: Number(quantity),
+      });
+    } else if (target === 'bar') {
+      job = enqueueBarPassJob(tenant_id, null, {
+        table_number: String(table_number),
+        items: [{ name: String(name), quantity: Number(quantity) }],
+      });
+    } else if (target === 'cucina') {
+      job = enqueueKitchenPassJob(tenant_id, null, null, {
+        table_number: String(table_number),
+        items: [{ name: String(name), quantity: Number(quantity) }],
+      });
+    } else {
+      // sala: tipo preconto su .24. Non c'e' endpoint kind dedicato a
+      // 'bytes raw' — la stampa di prova sala fa solo un emit log per
+      // verificare connettivita' agent → coda → backend. Non emette
+      // job che porti a stampa sulla .24 (mancherebbero dati preconto).
+      return res.status(400).json({ error: 'Test sala non disponibile (richiede order_id reale)' });
+    }
+    res.json({ enqueued: true, job });
+  } catch (err) { next(err); }
+}
+
 // POST /api/print/enqueue  — autenticato (admin/manager/cassa/waiter)
 // body: { kind: 'preconto', order_id }
 async function enqueuePrintJob(req, res, next) {
@@ -323,4 +362,4 @@ function scheduleBarTicket(tenantId, orderId, newItemIds) {
   _barDebounce.set(orderId, entry);
 }
 
-module.exports = { enqueuePrintJob, getPendingJobs, getQueueSize, enqueueAutoPrintJob, enqueueFiscalJob, enqueueKitchenPassJob, scheduleKitchenTicket, enqueueBarPassJob, scheduleBarTicket, enqueuePassTicketJob };
+module.exports = { enqueuePrintJob, enqueueTestPrint, getPendingJobs, getQueueSize, enqueueAutoPrintJob, enqueueFiscalJob, enqueueKitchenPassJob, scheduleKitchenTicket, enqueueBarPassJob, scheduleBarTicket, enqueuePassTicketJob };
