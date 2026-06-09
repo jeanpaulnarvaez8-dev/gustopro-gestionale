@@ -230,24 +230,29 @@ async function updateItemStatus(req, res, next) {
     // Il cameriere lo prende dal gancio al pass + abbina al piatto.
     if (status === 'ready') {
       try {
+        // JP 2026-06-09: aggiunto prep_station per routing pizza-pass (.25).
         const { rows: [info] } = await pool.query(
           `SELECT COALESCE(t.table_number, 'ASPORTO') AS table_number,
                   COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Piatto') AS name,
-                  oi.quantity
+                  oi.quantity,
+                  COALESCE(mi.prep_station, c.prep_station, 'cucina') AS prep_station
              FROM order_items oi
              LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+             LEFT JOIN categories c ON c.id = mi.category_id
              LEFT JOIN orders o ON o.id = oi.order_id
              LEFT JOIN tables t ON t.id = o.table_id
             WHERE oi.id = $1 AND oi.tenant_id = $2`,
           [id, tenantId]
         );
         if (info) {
+          // Routing: pizze/panini (stazione pizzeria) → .25; resto → .102.
+          const target = info.prep_station === 'pizzeria' ? 'pizza-pass' : 'pass';
           const { enqueuePassTicketJob } = require('./print.controller');
           enqueuePassTicketJob(tenantId, item.order_id, id, {
             table_number: String(info.table_number),
             name: String(info.name),
             quantity: Number(info.quantity || 1),
-          });
+          }, target);
         }
       } catch (e) {
         req.log?.warn?.({ err: e.message }, 'pass-ticket enqueue failed (non-blocking)');

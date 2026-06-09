@@ -49,16 +49,16 @@ async function enqueueTestPrint(req, res, next) {
   try {
     const tenant_id = TENANT(req);
     const { target = 'pass', table_number = 'TEST', name = 'STAMPA DI PROVA', quantity = 1 } = req.body || {};
-    if (!['pass', 'bar', 'sala', 'cucina'].includes(target)) {
+    if (!['pass', 'pizza-pass', 'bar', 'sala', 'cucina'].includes(target)) {
       return res.status(400).json({ error: `target invalid: ${target}` });
     }
     let job;
-    if (target === 'pass') {
+    if (target === 'pass' || target === 'pizza-pass') {
       job = enqueuePassTicketJob(tenant_id, null, null, {
         table_number: String(table_number),
         name: String(name),
         quantity: Number(quantity),
-      });
+      }, target);
     } else if (target === 'bar') {
       job = enqueueBarPassJob(tenant_id, null, {
         table_number: String(table_number),
@@ -173,12 +173,16 @@ async function getQueueSize(req, res, next) {
 // + il piatto fisico e va al tavolo. Formato semplicissimo: TAV X
 // gigante + nome piatto.
 //   payload: { table_number, name, quantity }
-function enqueuePassTicketJob(tenantId, orderId, itemId, payload) {
+//
+// JP 2026-06-09: parametro target opzionale per routing pizza-pass (.25,
+// stampante dedicata pizze/panini). Default 'pass' → .102 standard.
+function enqueuePassTicketJob(tenantId, orderId, itemId, payload, target = 'pass') {
   const job = {
     id: crypto.randomUUID(),
     kind: 'pass-ticket',
     order_id: orderId,
     item_id: itemId,
+    target,            // 'pass' | 'pizza-pass'
     payload,
     created_at: new Date().toISOString(),
   };
