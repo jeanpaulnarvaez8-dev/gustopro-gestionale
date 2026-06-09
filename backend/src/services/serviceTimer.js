@@ -43,13 +43,20 @@ async function forEachActiveTenant(fn) {
 }
 
 // ─── Inserisci alert (tenant-aware) ──────────────────────────
-async function tryInsertAlert(client, tenantId, orderItemId, alertType, targetUserId) {
+// JP 2026-06-09: passa anche waiter_name/item_name/table_number/order_id
+// cosi' il bell admin mostra info leggibili (prima erano NULL → alert orfani
+// che contavano nel badge ma senza testo).
+async function tryInsertAlert(client, tenantId, orderItemId, alertType, targetUserId, meta = {}) {
+  const { waiter_name = null, item_name = null, table_number = null, order_id = null } = meta;
   const { rows } = await client.query(
-    `INSERT INTO service_alerts (tenant_id, order_item_id, alert_type, target_user_id)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO service_alerts
+       (tenant_id, order_item_id, alert_type, target_user_id,
+        waiter_name, item_name, table_number, order_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (order_item_id, alert_type) DO NOTHING
      RETURNING *`,
-    [tenantId, orderItemId, alertType, targetUserId]
+    [tenantId, orderItemId, alertType, targetUserId,
+     waiter_name, item_name, table_number, order_id]
   );
   return rows[0] || null;
 }
@@ -93,7 +100,7 @@ async function checkReadyItemsForTenant(client, tenantId) {
     // Alert cameriere
     if (elapsedMin >= thresholds.waiter) {
       const alertType = row.is_beverage ? 'beverage_alert' : 'waiter_20min';
-      const inserted = await tryInsertAlert(client, tenantId, row.item_id, alertType, row.waiter_id);
+      const inserted = await tryInsertAlert(client, tenantId, row.item_id, alertType, row.waiter_id, { waiter_name: row.waiter_name, item_name: row.item_name, table_number: row.table_number, order_id: row.order_id });
 
       if (inserted) {
         io.to(`user:${row.waiter_id}`).emit('service-alert', {
@@ -125,7 +132,7 @@ async function checkReadyItemsForTenant(client, tenantId) {
 
     // Sprint 10: Delegate step (catena failover prima del manager)
     if (elapsedMin >= thresholds.delegate) {
-      const inserted = await tryInsertAlert(client, tenantId, row.item_id, 'delegate_alert', null);
+      const inserted = await tryInsertAlert(client, tenantId, row.item_id, "delegate_alert", null, { waiter_name: row.waiter_name, item_name: row.item_name, table_number: row.table_number, order_id: row.order_id });
       if (inserted) {
         // Notifica al delegato del cameriere primario, se configurato
         const { rows: [waiter] } = await client.query(
@@ -155,7 +162,7 @@ async function checkReadyItemsForTenant(client, tenantId) {
 
     // Escalation
     if (elapsedMin >= thresholds.manager) {
-      const inserted = await tryInsertAlert(client, tenantId, row.item_id, 'manager_25min', null);
+      const inserted = await tryInsertAlert(client, tenantId, row.item_id, "manager_25min", null, { waiter_name: row.waiter_name, item_name: row.item_name, table_number: row.table_number, order_id: row.order_id });
 
       if (inserted) {
         io.to('role:admin').to('role:manager').emit('service-escalation', {
@@ -259,7 +266,7 @@ async function checkMandatoryAlertsForTenant(client, tenantId) {
   for (const row of rows) {
     if (!row.has_served_items) continue;
 
-    const inserted = await tryInsertAlert(client, tenantId, row.item_id, 'course_next', row.waiter_id);
+    const inserted = await tryInsertAlert(client, tenantId, row.item_id, "course_next", row.waiter_id, { waiter_name: row.waiter_name, item_name: row.item_name, table_number: row.table_number, order_id: row.order_id });
 
     if (inserted) {
       await client.query(
