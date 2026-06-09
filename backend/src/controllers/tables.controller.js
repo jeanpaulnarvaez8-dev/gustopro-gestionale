@@ -53,13 +53,21 @@ async function listTables(req, res, next) {
          LIMIT 1
        ) r ON true
        LEFT JOIN LATERAL (
-         /* JP 2026-05-27: tavoli con piatti IN ATTESA (workflow_status='waiting',
-            non ancora mandati in cucina) devono avere colore diverso. */
+         /* JP 2026-05-27: tavoli con piatti IN ATTESA → colore diverso.
+            JP 2026-06-09 FIX: conta SOLO i waiting che il cameriere ha
+            scelto di tenere (manual_hold) o con timer attivo. I waiting
+            "tecnici" forzati da requires_dispatch (Comandista) NON
+            devono colorare la mappa — il tavolo è semplicemente occupato
+            in attesa di INIZIA TAVOLO, non "in attesa decisa". */
          SELECT COUNT(*)::int AS waiting_count
          FROM order_items oi
          WHERE oi.order_id = t.active_order_id
            AND oi.workflow_status = 'waiting'
            AND oi.status <> 'cancelled'
+           AND (
+                COALESCE(oi.is_manual_hold, false) = true
+             OR (oi.fire_at IS NOT NULL AND oi.fire_at > NOW())
+           )
        ) w ON true
        WHERE t.tenant_id = $1
        ORDER BY t.table_number`,
