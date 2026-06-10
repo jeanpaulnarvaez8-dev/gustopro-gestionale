@@ -15,6 +15,9 @@ async function generatePreConto(req, res, next) {
     if (!order) return res.status(404).json({ error: 'Ordine non trovato' });
 
     // JP 2026-06-06: aggiunto weight_g per UI checkout (bottone "Modifica peso").
+    // JP 2026-06-10: aggiunto mi.pricing_type AS menu_pricing_type cosi' il
+    // checkout sa quali items sono pesce al kg e mostra il pill 🐟 SEMPRE
+    // (anche se weight_g e' null perche' mandato in fretta).
     const { rows: items } = await pool.query(
       `SELECT
          oi.id, oi.quantity, oi.unit_price, oi.modifier_total, oi.subtotal, oi.notes, oi.status,
@@ -22,6 +25,7 @@ async function generatePreConto(req, res, next) {
          COALESCE(oi.is_surcharge, false) AS is_surcharge,
          oi.custom_name, oi.menu_item_id,
          COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name,
+         mi.pricing_type AS menu_pricing_type,
          COALESCE(
            json_agg(json_build_object('name', m.name, 'price_extra', oim.price_extra))
            FILTER (WHERE m.id IS NOT NULL), '[]'
@@ -31,7 +35,7 @@ async function generatePreConto(req, res, next) {
        LEFT JOIN order_item_modifiers oim ON oim.order_item_id = oi.id
        LEFT JOIN modifiers m ON m.id = oim.modifier_id
        WHERE oi.order_id = $1 AND oi.tenant_id = $2 AND oi.status != 'cancelled'
-       GROUP BY oi.id, mi.name, oi.combo_menu_name
+       GROUP BY oi.id, mi.name, oi.combo_menu_name, mi.pricing_type
        -- JP 2026-05-27: i coperti devono uscire per primi nel conto.
        ORDER BY (CASE WHEN oi.custom_name = 'Coperto' THEN 0 ELSE 1 END), oi.sent_at NULLS FIRST`,
       [orderId, tenantId]
