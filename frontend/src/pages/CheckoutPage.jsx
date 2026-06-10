@@ -1074,8 +1074,13 @@ export default function CheckoutPage() {
                     )}
                     {/* JP 2026-06-06: peso pesce cliccabile (solo cassa+).
                         Sotto al nome appare una pill "🐟 1,900 kg" che apre
-                        input inline. Backend ricalcola prezzo automaticamente. */}
-                    {item.weight_g != null && Number(item.weight_g) > 0 && (
+                        input inline. Backend ricalcola prezzo automaticamente.
+                        JP 2026-06-10: il pill appare SEMPRE sui pesci al kg
+                        anche senza peso (label "Inserisci peso") — cosi'
+                        la cassa puo' settarlo al momento del conto se il
+                        cameriere l'aveva mandato in fretta. */}
+                    {(item.menu_pricing_type === 'per_kg' ||
+                      (item.weight_g != null && Number(item.weight_g) > 0)) && (
                       canAddCustom && editingWeightFor === item.id ? (
                         <div className="flex items-center gap-1 mt-1">
                           <span className="text-[var(--color-sea)] text-xs font-semibold">🐟</span>
@@ -1114,10 +1119,17 @@ export default function CheckoutPage() {
                           type="button"
                           onClick={() => canAddCustom && startEditWeight(item)}
                           disabled={!canAddCustom}
-                          className={`mt-1 inline-flex items-center gap-1 text-[var(--color-sea)] text-xs font-semibold ${canAddCustom ? 'hover:underline decoration-dotted cursor-pointer' : 'cursor-default'}`}
-                          title={canAddCustom ? 'Tocca per modificare il peso' : ''}
+                          className={`mt-1 inline-flex items-center gap-1 text-xs font-semibold ${
+                            // Se non c'e' peso ma e' al kg → giallo pulsante (azione richiesta)
+                            (!item.weight_g || Number(item.weight_g) === 0)
+                              ? 'text-amber-700 bg-amber-50 border border-amber-300 rounded-md px-2 py-0.5 animate-pulse'
+                              : 'text-[var(--color-sea)]'
+                          } ${canAddCustom ? 'hover:underline decoration-dotted cursor-pointer' : 'cursor-default'}`}
+                          title={canAddCustom ? 'Tocca per inserire/modificare il peso' : ''}
                         >
-                          🐟 {(Number(item.weight_g) / 1000).toFixed(3).replace('.', ',')} kg
+                          🐟 {(!item.weight_g || Number(item.weight_g) === 0)
+                            ? 'Inserisci peso'
+                            : `${(Number(item.weight_g) / 1000).toFixed(3).replace('.', ',')} kg`}
                         </button>
                       )
                     )}

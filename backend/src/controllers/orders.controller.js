@@ -574,9 +574,13 @@ async function getOrder(req, res, next) {
     );
     if (!order) return res.status(404).json({ error: 'Ordine non trovato' });
 
+    // JP 2026-06-10: includo mi.pricing_type per far apparire il pill peso
+    // pesce nel checkout ANCHE se weight_g e' null (pesce mandato in fretta).
+    // Cosi' la cassa puo' inserire il peso dopo, prima del preconto.
     const { rows: items } = await pool.query(
       `SELECT oi.*,
-              COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name
+              COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name,
+              mi.pricing_type AS menu_pricing_type
        FROM order_items oi
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        WHERE oi.order_id = $1 AND oi.tenant_id = $2
