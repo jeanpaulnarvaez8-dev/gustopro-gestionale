@@ -240,7 +240,7 @@ async function getPrecontoHtml(req, res, next) {
     const restoLine1 = esc(o.restaurant_name || '');
     const restoLine2 = [fd.address, fd.city].filter(Boolean).map(esc).join(' · ');
     const restoLine3 = [fd.piva ? 'P.IVA ' + fd.piva : null, fd.phone].filter(Boolean).map(esc).join(' · ');
-    const dt = new Date(o.created_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+    const dt = new Date(o.created_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Rome' });
     const itemsSum = items.reduce((s, it) => s + Number(it.subtotal || 0), 0);
     // JP 2026-06-05 FIX: skip coperto auto se cassa lo ha gia' aggiunto
     // come voce libera (era doppio addebito).
@@ -440,7 +440,7 @@ async function getPrecontoEscpos(req, res, next) {
         WHERE oi.order_id = $1 AND oi.status <> 'cancelled'
         ORDER BY name`, [order_id]);
     const fd = o.fiscal_data || {};
-    const dt = new Date(o.created_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+    const dt = new Date(o.created_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Rome' });
     const itemsSum = items.reduce((s, it) => s + Number(it.subtotal || 0), 0);
     // JP 2026-06-04: asporto = niente coperto. Per dine-in calcolato come prima.
     const isTakeaway = o.order_type === 'takeaway';
@@ -578,7 +578,7 @@ async function getAutoPrintEscpos(req, res, next) {
       [order_id, itemIds]);
     if (items.length === 0) return res.status(404).type('text/plain').send('items not found');
 
-    const dt = new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+    const dt = new Date().toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Rome' });
     // JP 2026-06-04: ticket sala con scritte piu' grandi. I nomi piatto
     // in altezza doppia (DBL_H_ON) per non wrappare; il TAVOLO X in
     // altezza+larghezza doppia perche' e' la cosa piu' importante.
