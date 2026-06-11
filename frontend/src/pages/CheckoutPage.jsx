@@ -557,6 +557,11 @@ export default function CheckoutPage() {
   const isAsporto = bill?.order_type === 'takeaway'
   const isAsportoCassa = user?.role === 'waiter' && user?.sub_role === 'asporto' && isAsporto
   const canAddCustom = ['cashier', 'admin', 'manager'].includes(user?.role) || isAsportoCassa
+  // JP 2026-06-11: il PESO del pesce lo possono mettere ANCHE i camerieri
+  // (pesano il pesce al tavolo/in cucina). Il backend gia' lo permette
+  // (setItemWeight: waiter autorizzato). Permesso separato da canAddCustom
+  // perche' quello sblocca anche prezzo libero/sconti, riservati alla cassa.
+  const canEditWeight = ['cashier', 'admin', 'manager', 'waiter'].includes(user?.role)
   const [showAddItem, setShowAddItem] = useState(false)
   const [customName, setCustomName]   = useState('')
   const [customPrice, setCustomPrice] = useState('')
@@ -1081,7 +1086,7 @@ export default function CheckoutPage() {
                         cameriere l'aveva mandato in fretta. */}
                     {(item.menu_pricing_type === 'per_kg' ||
                       (item.weight_g != null && Number(item.weight_g) > 0)) && (
-                      canAddCustom && editingWeightFor === item.id ? (
+                      canEditWeight && editingWeightFor === item.id ? (
                         <div className="flex items-center gap-1 mt-1">
                           <span className="text-[var(--color-sea)] text-xs font-semibold">🐟</span>
                           <input
@@ -1117,15 +1122,15 @@ export default function CheckoutPage() {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => canAddCustom && startEditWeight(item)}
-                          disabled={!canAddCustom}
+                          onClick={() => canEditWeight && startEditWeight(item)}
+                          disabled={!canEditWeight}
                           className={`mt-1 inline-flex items-center gap-1 text-xs font-semibold ${
                             // Se non c'e' peso ma e' al kg → giallo pulsante (azione richiesta)
                             (!item.weight_g || Number(item.weight_g) === 0)
                               ? 'text-amber-700 bg-amber-50 border border-amber-300 rounded-md px-2 py-0.5 animate-pulse'
                               : 'text-[var(--color-sea)]'
-                          } ${canAddCustom ? 'hover:underline decoration-dotted cursor-pointer' : 'cursor-default'}`}
-                          title={canAddCustom ? 'Tocca per inserire/modificare il peso' : ''}
+                          } ${canEditWeight ? 'hover:underline decoration-dotted cursor-pointer' : 'cursor-default'}`}
+                          title={canEditWeight ? 'Tocca per inserire/modificare il peso' : ''}
                         >
                           🐟 {(!item.weight_g || Number(item.weight_g) === 0)
                             ? 'Inserisci peso'
