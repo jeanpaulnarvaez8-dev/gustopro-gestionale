@@ -30,6 +30,7 @@ const VenueAdminPage         = lazy(() => import('./pages/VenueAdminPage'))
 const TableQRCodesPage       = lazy(() => import('./pages/TableQRCodesPage'))
 const PublicMenuPage         = lazy(() => import('./pages/PublicMenuPage'))
 const SelfOrderPage          = lazy(() => import('./pages/SelfOrderPage'))
+const QrOrdersPage           = lazy(() => import('./pages/QrOrdersPage'))
 const KDSComandistaPage      = lazy(() => import('./pages/KDSComandistaPage'))
 const PublicReceiptPage      = lazy(() => import('./pages/PublicReceiptPage'))
 const MenuQRPage             = lazy(() => import('./pages/MenuQRPage'))
@@ -200,6 +201,12 @@ export default function App() {
             <Route path="/tables" element={<TableMapPage />} />
             <Route path="/order/:tableId" element={<OrderPage />} />
             <Route path="/checkout/:orderId" element={<CheckoutPage />} />
+            {/* JP 2026-06-12: vista cassa ordini self-order da QR */}
+            <Route path="/qr-orders" element={
+              <RoleRoute roles={['cashier', 'waiter', 'admin', 'manager']}>
+                <QrOrdersPage />
+              </RoleRoute>
+            } />
             <Route path="/kds" element={
               <RoleRoute roles={['kitchen', 'admin', 'manager']}>
                 <KDSPage />

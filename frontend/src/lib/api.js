@@ -202,6 +202,8 @@ export const menuAPI = {
 export const ordersAPI = {
   create:     (data)          => api.post('/orders', data),
   get:        (id)            => api.get(`/orders/${id}`),
+  // JP 2026-06-12: ordini self-order da QR in attesa di incasso (vista cassa).
+  qrPending:  ()              => api.get('/orders/qr-pending'),
   addItems:   (id, items)     => api.post(`/orders/${id}/items`, { items }),
   // Voce a prezzo libero dalla cassa (qualcosa fuori menu). Solo cassa/manager/admin.
   addCustomItem: (id, { custom_name, unit_price, quantity = 1 }) =>
