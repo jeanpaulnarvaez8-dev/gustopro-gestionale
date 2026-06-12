@@ -61,8 +61,8 @@ export default function QrOrdersPage() {
           <QrCode size={24} />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-[var(--color-text)]">Ordini da QR</h1>
-          <p className="text-sm text-[var(--color-text-3)]">In attesa di incasso · la comanda parte quando incassi</p>
+          <h1 className="text-xl font-bold text-[var(--color-text)]">Ordini da incassare</h1>
+          <p className="text-sm text-[var(--color-text-3)]">QR + asporti · la comanda parte quando incassi</p>
         </div>
         <div className="ml-auto flex items-center gap-2 bg-[var(--color-surface-2)] px-3 py-2 rounded-lg">
           <ShoppingBag size={18} className="text-[var(--color-sea)]" />
@@ -98,11 +98,16 @@ export default function QrOrdersPage() {
             <div className="flex items-start justify-between gap-2 mb-3">
               <div>
                 <div className="text-lg font-bold text-[var(--color-text)] leading-tight">{o.customer_name}</div>
-                <div className="text-xs text-[var(--color-text-3)] mt-0.5">
-                  {o.table_number === 'ASPORTO'
-                    ? `🥡 Asporto${o.takeaway_number ? ` #${o.takeaway_number}` : ''}`
-                    : `🍽️ Tavolo ${o.table_number}`}
-                  {' · '}{new Date(o.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}
+                <div className="text-xs text-[var(--color-text-3)] mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <span>
+                    {o.table_number === 'ASPORTO'
+                      ? `🥡 Asporto${o.takeaway_number ? ` #${o.takeaway_number}` : ''}`
+                      : `🍽️ Tavolo ${o.table_number}`}
+                  </span>
+                  {o.source === 'qr' && (
+                    <span className="px-1.5 py-0.5 rounded bg-[var(--color-sea)] text-white text-[10px] font-bold">📱 QR</span>
+                  )}
+                  <span>· {new Date(o.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</span>
                 </div>
               </div>
               <div className="text-xl font-extrabold text-[var(--color-sea)] tnum">{formatPrice(o.total_amount)}</div>

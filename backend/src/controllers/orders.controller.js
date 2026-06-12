@@ -606,14 +606,15 @@ async function getOrder(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// JP 2026-06-12: lista ordini SELF-ORDER da QR in attesa di incasso.
-// La cassa li vede in una schermata dedicata, incassa, e la comanda parte
-// (anti-furto: niente parte finche' non e' pagato). source='qr' + held.
+// JP 2026-06-12: lista ordini DA INCASSARE alla cassa = self-order da QR
+// (source='qr') + ASPORTI (order_type='takeaway') in attesa di pagamento.
+// La cassa li vede, incassa, e la comanda parte (anti-furto: niente parte
+// finche' non e' pagato). JP 2026-06-12: aggiunti asporti, non solo QR.
 async function getQrPendingOrders(req, res, next) {
   try {
     const tenantId = TENANT(req);
     const { rows } = await pool.query(
-      `SELECT o.id, o.customer_name, o.order_type, o.total_amount,
+      `SELECT o.id, o.customer_name, o.order_type, o.source, o.total_amount,
               o.takeaway_number, o.created_at,
               COALESCE(t.table_number, 'ASPORTO') AS table_number,
               COALESCE(
@@ -628,8 +629,9 @@ async function getQrPendingOrders(req, res, next) {
          LEFT JOIN order_items oi ON oi.order_id = o.id
               AND oi.status <> 'cancelled' AND COALESCE(oi.is_surcharge, false) = false
          LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
-        WHERE o.tenant_id = $1 AND o.source = 'qr'
+        WHERE o.tenant_id = $1
           AND o.status = 'open' AND o.payment_status = 'unpaid'
+          AND (o.source = 'qr' OR o.order_type = 'takeaway')
         GROUP BY o.id, t.table_number
         ORDER BY o.created_at ASC`,
       [tenantId]
