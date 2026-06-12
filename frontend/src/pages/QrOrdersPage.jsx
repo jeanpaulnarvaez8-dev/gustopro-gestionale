@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { ShoppingBag, CheckCircle2, Loader2, Banknote, CreditCard, Smartphone, QrCode } from 'lucide-react'
+import { ShoppingBag, CheckCircle2, Loader2, Banknote, CreditCard, Smartphone, QrCode, LogOut } from 'lucide-react'
 import { ordersAPI, billingAPI } from '../lib/api'
 import { useSocket } from '../context/SocketContext'
 import { formatPrice } from '../lib/utils'
@@ -68,6 +68,13 @@ export default function QrOrdersPage() {
           <ShoppingBag size={18} className="text-[var(--color-sea)]" />
           <span className="font-bold text-lg text-[var(--color-text)] tnum">{orders.length}</span>
         </div>
+        {/* JP 2026-06-12: torna alla cassa (chiude la finestra app Chrome) */}
+        <button
+          onClick={() => { try { window.close() } catch {} window.open('', '_self'); window.close() }}
+          className="flex items-center gap-2 bg-[var(--color-coral,#c0533a)] text-white px-4 py-2.5 rounded-lg font-semibold active:scale-95"
+        >
+          <LogOut size={18} /> Torna alla cassa
+        </button>
       </header>
 
       {loading && (
