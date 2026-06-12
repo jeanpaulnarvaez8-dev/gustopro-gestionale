@@ -606,6 +606,38 @@ async function getOrder(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// JP 2026-06-12: lista ordini SELF-ORDER da QR in attesa di incasso.
+// La cassa li vede in una schermata dedicata, incassa, e la comanda parte
+// (anti-furto: niente parte finche' non e' pagato). source='qr' + held.
+async function getQrPendingOrders(req, res, next) {
+  try {
+    const tenantId = TENANT(req);
+    const { rows } = await pool.query(
+      `SELECT o.id, o.customer_name, o.order_type, o.total_amount,
+              o.takeaway_number, o.created_at,
+              COALESCE(t.table_number, 'ASPORTO') AS table_number,
+              COALESCE(
+                json_agg(json_build_object(
+                  'name', COALESCE(mi.name, oi.combo_menu_name, 'Piatto'),
+                  'quantity', oi.quantity
+                ) ORDER BY oi.sent_at)
+                FILTER (WHERE oi.id IS NOT NULL), '[]'
+              ) AS items
+         FROM orders o
+         LEFT JOIN tables t ON t.id = o.table_id
+         LEFT JOIN order_items oi ON oi.order_id = o.id
+              AND oi.status <> 'cancelled' AND COALESCE(oi.is_surcharge, false) = false
+         LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+        WHERE o.tenant_id = $1 AND o.source = 'qr'
+          AND o.status = 'open' AND o.payment_status = 'unpaid'
+        GROUP BY o.id, t.table_number
+        ORDER BY o.created_at ASC`,
+      [tenantId]
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+}
+
 // ── addItems ─────────────────────────────────────────────────
 
 async function addItems(req, res, next) {
@@ -1874,4 +1906,4 @@ async function moveOrderTable(req, res, next) {
   }
 }
 
-module.exports = { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemQuantity, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable };
+module.exports = { createOrder, getOrder, getQrPendingOrders, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemQuantity, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable };

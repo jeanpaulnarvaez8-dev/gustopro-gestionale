@@ -1,12 +1,15 @@
 const { Router } = require('express');
 const { requireRole } = require('../middleware/requireRole');
-const { createOrder, getOrder, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemQuantity, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable } = require('../controllers/orders.controller');
+const { createOrder, getOrder, getQrPendingOrders, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemQuantity, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable } = require('../controllers/orders.controller');
 
 const router = Router();
 
 // Cassa abilitata a creare/aggiungere piatti: spesso e' il cassiere a
 // comporre il conto del tavolo selezionando cosa hanno mangiato.
 router.post('/',                    requireRole('waiter','manager','admin','cashier'), createOrder);
+// JP 2026-06-12: lista ordini QR in attesa di incasso (vista cassa).
+// PRIMA di /:id altrimenti la route param cattura 'qr-pending'.
+router.get('/qr-pending',           requireRole('waiter','cashier','manager','admin'), getQrPendingOrders);
 router.get('/:id',                  getOrder);
 router.post('/:id/items',           requireRole('waiter','manager','admin','cashier'), addItems);
 router.post('/:id/transfer',        requireRole('waiter','manager','admin'), transferOrder);
