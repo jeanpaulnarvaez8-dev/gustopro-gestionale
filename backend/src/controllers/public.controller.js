@@ -81,6 +81,163 @@ async function getPublicMenu(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// ─── SELF-ORDER da QR (JP 2026-06-12) ───────────────────────────────
+// Il cliente scansiona il QR, mette il nome, ordina. L'ordine nasce HELD
+// (waiting + unpaid, source='qr'): la comanda NON parte finche' la cassa non
+// incassa (motore pre-pagato fireTakeawayItems). Abilitato SOLO per la zona
+// "Botti in Legno" (tavoli) e per l'asporto bar. Pagamento sempre in cassa.
+//
+// SICUREZZA: prezzi calcolati SEMPRE server-side dal DB (il client manda solo
+// menu_item_id + quantity). Rate-limit per tavolo/sessione anti-spam. Validati
+// tenant, disponibilita' prodotti, zona abilitata, quantita'.
+const SELF_ORDER_ZONES = ['Botti in Legno'];   // zone abilitate al self-order tavolo
+const _publicOrderRate = new Map();
+const PUBLIC_ORDER_RATE_MS = 45 * 1000;        // max 1 ordine ogni 45s per tavolo/sessione
+
+async function createPublicOrder(req, res, next) {
+  try {
+    const tenant = await resolveTenantBySlug(req.params.slug);
+    if (!tenant) return res.status(404).json({ error: 'Ristorante non trovato' });
+
+    const { table_number, customer_name, items, order_type = 'table' } = req.body || {};
+
+    // Nome cliente obbligatorio (serve alla cassa per identificare l'ordine)
+    const name = String(customer_name || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+    if (name.length < 2) return res.status(400).json({ error: 'Inserisci il tuo nome' });
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Carrello vuoto' });
+    }
+    if (items.length > 60) return res.status(400).json({ error: 'Troppi articoli' });
+    if (!['table', 'takeaway'].includes(order_type)) {
+      return res.status(400).json({ error: 'Tipo ordine non valido' });
+    }
+
+    // Risolvi tavolo + zona abilitata (solo per ordini al tavolo)
+    let table_id = null;
+    if (order_type === 'table') {
+      if (!table_number) return res.status(400).json({ error: 'Tavolo mancante' });
+      const { rows: [tbl] } = await pool.query(
+        `SELECT t.id, z.name AS zone_name
+           FROM tables t LEFT JOIN zones z ON z.id = t.zone_id
+          WHERE t.tenant_id = $1 AND t.table_number = $2`,
+        [tenant.id, String(table_number)]
+      );
+      if (!tbl) return res.status(404).json({ error: 'Tavolo non trovato' });
+      if (!SELF_ORDER_ZONES.includes(tbl.zone_name)) {
+        return res.status(403).json({ error: 'Ordinazione da QR non attiva per questo tavolo' });
+      }
+      table_id = tbl.id;
+    }
+
+    // Rate-limit per tavolo (o per nome se asporto)
+    const rateKey = `${tenant.id}:${order_type}:${table_number || name.toLowerCase()}`;
+    const now = Date.now();
+    if (now - (_publicOrderRate.get(rateKey) || 0) < PUBLIC_ORDER_RATE_MS) {
+      return res.status(429).json({ error: 'Ordine gia\' inviato, attendi qualche secondo' });
+    }
+
+    // Validazione prodotti + PREZZI SERVER-SIDE (mai dal client)
+    const itemIds = [...new Set(items.map(i => String(i.menu_item_id)))];
+    const { rows: valid } = await pool.query(
+      `SELECT id, name, base_price, pricing_type
+         FROM menu_items
+        WHERE id = ANY($1::uuid[]) AND tenant_id = $2 AND is_available = true`,
+      [itemIds, tenant.id]
+    );
+    const vmap = new Map(valid.map(v => [v.id, v]));
+
+    const lines = [];
+    let total = 0;
+    for (const it of items) {
+      const mi = vmap.get(String(it.menu_item_id));
+      if (!mi) return res.status(400).json({ error: 'Un prodotto non e\' piu\' disponibile' });
+      // pesce al kg non ordinabile da QR (serve pesatura) → lo blocco
+      if (mi.pricing_type === 'per_kg') {
+        return res.status(400).json({ error: `"${mi.name}" si ordina al banco (prezzo al peso)` });
+      }
+      const qty = Math.max(1, Math.min(99, parseInt(it.quantity, 10) || 1));
+      const unit = parseFloat(mi.base_price);
+      const sub = Math.round(unit * qty * 100) / 100;
+      total += sub;
+      lines.push({ menu_item_id: mi.id, quantity: qty, unit_price: unit, subtotal: sub });
+    }
+    total = Math.round(total * 100) / 100;
+
+    // waiter_id tecnico: l'admin del tenant (l'ordine QR non ha un cameriere
+    // finche' la cassa non lo prende in carico)
+    const { rows: [sysUser] } = await pool.query(
+      `SELECT id FROM users WHERE tenant_id = $1 AND role = 'admin' AND is_active = true
+        ORDER BY created_at LIMIT 1`,
+      [tenant.id]
+    );
+    if (!sysUser) return res.status(500).json({ error: 'Config tenant incompleta' });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      let takeawayNumber = null;
+      if (order_type === 'takeaway') {
+        const { rows: [c] } = await client.query(
+          `INSERT INTO takeaway_counters (tenant_id, business_date, last_number)
+           VALUES ($1, CURRENT_DATE, 1)
+           ON CONFLICT (tenant_id, business_date)
+             DO UPDATE SET last_number = takeaway_counters.last_number + 1
+           RETURNING last_number`,
+          [tenant.id]
+        );
+        takeawayNumber = c.last_number;
+      }
+
+      const { rows: [order] } = await client.query(
+        `INSERT INTO orders
+           (tenant_id, table_id, waiter_id, order_type, customer_name, source,
+            status, payment_status, covers, takeaway_number, subtotal, total_amount)
+         VALUES ($1,$2,$3,$4,$5,'qr','open','unpaid',1,$6,$7,$7)
+         RETURNING id`,
+        [tenant.id, table_id, sysUser.id, order_type, name, takeawayNumber, total]
+      );
+
+      for (const l of lines) {
+        await client.query(
+          `INSERT INTO order_items
+             (tenant_id, order_id, menu_item_id, quantity, unit_price, modifier_total,
+              subtotal, workflow_status, status, is_manual_hold)
+           VALUES ($1,$2,$3,$4,$5,0,$6,'waiting','pending',false)`,
+          [tenant.id, order.id, l.menu_item_id, l.quantity, l.unit_price, l.subtotal]
+        );
+      }
+
+      await client.query('COMMIT');
+      _publicOrderRate.set(rateKey, now);
+
+      // Notifica la cassa: nuovo ordine QR in attesa di incasso
+      getIO()?.to(`tenant:${tenant.id}`).emit('qr-order-received', {
+        orderId: order.id, customer_name: name,
+        table_number: table_number || null, order_type, total,
+        item_count: lines.length,
+      });
+      // fallback broadcast (se le room tenant non sono usate ovunque)
+      getIO()?.emit('qr-order-received', {
+        orderId: order.id, tenantId: tenant.id, customer_name: name,
+        table_number: table_number || null, order_type, total, item_count: lines.length,
+      });
+
+      return res.status(201).json({
+        ok: true, order_id: order.id, customer_name: name,
+        total, takeaway_number: takeawayNumber,
+        message: 'Ordine ricevuto! Vai in cassa a pagare per farlo partire.',
+      });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (err) { next(err); }
+}
+
 // Throttle in-memory: una chiamata cameriere per tavolo ogni 30 min (richiesta
 // cliente: si puo' richiamare solo dopo 30 minuti dalla chiamata precedente).
 const lastCall = new Map();
@@ -611,5 +768,5 @@ async function getAutoPrintEscpos(req, res, next) {
 module.exports = {
   getPublicMenu, callWaiter, getPublicReceipt, getPrecontoHtml,
   getPrecontoEscpos, getPrecontoEscposByTable,
-  getAutoPrintEscpos,
+  getAutoPrintEscpos, createPublicOrder,
 };

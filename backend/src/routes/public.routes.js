@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const {
   getPublicMenu, callWaiter, getPublicReceipt, getPrecontoHtml,
   getPrecontoEscpos, getPrecontoEscposByTable, getAutoPrintEscpos,
+  createPublicOrder,
 } = require('../controllers/public.controller');
 const { getPendingJobs } = require('../controllers/print.controller');
 
@@ -20,6 +21,14 @@ const callLimiter = rateLimit({
 
 router.get('/menu/:slug', getPublicMenu);
 router.post('/call-waiter/:slug', callLimiter, callWaiter);
+// JP 2026-06-12: self-order da QR. Il cliente crea un ordine HELD (parte solo
+// dopo incasso in cassa). Rate-limit stretto (anti-spam ordini falsi).
+const orderLimiter = rateLimit({
+  windowMs: 60_000, max: 12,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Troppi ordini, riprova tra poco' },
+});
+router.post('/order/:slug', orderLimiter, createPublicOrder);
 // Scontrino pubblico (link condivisibile via WhatsApp/SMS/Mail).
 router.get('/receipt/:id', getPublicReceipt);
 // Preconto HTML stampabile (apre il dialog di stampa onload). Pensato per

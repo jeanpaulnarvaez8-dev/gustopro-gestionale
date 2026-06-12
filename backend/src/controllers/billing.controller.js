@@ -167,13 +167,16 @@ async function processPayment(req, res, next) {
     const orderTotal = parseFloat(order.total_amount);
     const newPaymentStatus = totalPaid >= orderTotal ? 'paid' : 'partial';
 
-    // JP 2026-06-12: ASPORTO PRE-PAGATO. Un asporto pagato NON viene
-    // completato (il cliente deve ancora ritirare) — resta 'open' e la
-    // comanda parte ora (fireTakeawayItems dopo il commit). Lo chiude poi
-    // markAsportoRitirato al ritiro. I tavoli normali restano invariati.
+    // JP 2026-06-12: PRE-PAGATO. Un ordine pre-pagato (asporto OPPURE self-order
+    // da QR, source='qr') pagato NON viene completato — resta 'open' e la
+    // comanda parte ora (fireTakeawayItems dopo il commit). Asporto: lo chiude
+    // markAsportoRitirato al ritiro. Tavolo QR: il cliente mangia, il tavolo si
+    // libera normalmente dopo. I tavoli/ordini staff normali restano invariati.
     const isTakeaway = order.order_type === 'takeaway';
+    const isQrOrder = order.source === 'qr';
+    const isPrepaid = isTakeaway || isQrOrder;
     if (newPaymentStatus === 'paid') {
-      if (isTakeaway) {
+      if (isPrepaid) {
         await client.query(
           "UPDATE orders SET payment_status='paid' WHERE id=$1 AND tenant_id=$2",
           [order_id, tenantId]
@@ -207,7 +210,7 @@ async function processPayment(req, res, next) {
     // soppresse alla creazione: cucina .23 / bar .21 / auto .24). Fuori dalla
     // transazione: il pagamento e' gia' committato, le stampe sono best-effort.
     let takeawayFired = null;
-    if (newPaymentStatus === 'paid' && isTakeaway) {
+    if (newPaymentStatus === 'paid' && isPrepaid) {
       try {
         const { fireTakeawayItems } = require('./print.controller');
         takeawayFired = await fireTakeawayItems(tenantId, order_id);
@@ -217,7 +220,7 @@ async function processPayment(req, res, next) {
       }
     }
 
-    if (newPaymentStatus === 'paid' && !isTakeaway) {
+    if (newPaymentStatus === 'paid' && !isPrepaid) {
       getIO()?.emit('order-settled', { orderId: order_id, tableId: order.table_id });
       if (order.table_id) {
         getIO()?.emit('table-status-changed', {
