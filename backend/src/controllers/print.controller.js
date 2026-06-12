@@ -374,4 +374,47 @@ function scheduleBarTicket(tenantId, orderId, newItemIds) {
   _barDebounce.set(orderId, entry);
 }
 
-module.exports = { enqueuePrintJob, enqueueTestPrint, getPendingJobs, getQueueSize, enqueueAutoPrintJob, enqueueFiscalJob, enqueueKitchenPassJob, scheduleKitchenTicket, enqueueBarPassJob, scheduleBarTicket, enqueuePassTicketJob };
+// JP 2026-06-12: ASPORTI PRE-PAGATI. Al pagamento di un asporto, gli item
+// 'waiting' (held) partono → 'production' e si attivano TUTTE le stampe che
+// alla creazione erano state soppresse: comanda cucina (.23), bar-pass (.21),
+// auto-print (.24). Chiamata da billing.controller.processPayment dopo il
+// commit del pagamento. Idempotente: se non ci sono item waiting, no-op.
+async function fireTakeawayItems(tenantId, orderId) {
+  // 1. waiting → production (esclude surcharge/voci libere)
+  const { rows: fired } = await pool.query(
+    `UPDATE order_items
+        SET workflow_status = 'production', released_at = NOW(), fire_at = NULL,
+            is_manual_hold = false
+      WHERE order_id = $1 AND tenant_id = $2
+        AND workflow_status = 'waiting'
+        AND COALESCE(is_surcharge, false) = false
+        AND status NOT IN ('cancelled')
+      RETURNING id`,
+    [orderId, tenantId]
+  );
+  if (fired.length === 0) return { fired: 0 };
+
+  // 2. classifica gli item appena partiti: bar / auto-print
+  const ids = fired.map(f => f.id);
+  const { rows: cls } = await pool.query(
+    `SELECT oi.id,
+            COALESCE(mi.goes_to_bar, c.goes_to_bar, false) AS goes_to_bar,
+            COALESCE(mi.auto_print,  c.auto_print,  false) AS auto_print
+       FROM order_items oi
+       LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+       LEFT JOIN categories c  ON c.id = mi.category_id
+      WHERE oi.id = ANY($1::uuid[]) AND oi.tenant_id = $2`,
+    [ids, tenantId]
+  );
+  const barIds  = cls.filter(r => r.goes_to_bar).map(r => r.id);
+  const autoIds = cls.filter(r => r.auto_print).map(r => r.id);
+
+  // 3. fai partire le stampe (stesse usate da createOrder/dispatchOrder)
+  try { scheduleKitchenTicket(tenantId, orderId); } catch (e) { console.error('[fireTakeaway] kitchen', e.message); }
+  if (barIds.length)  { try { scheduleBarTicket(tenantId, orderId, barIds); } catch (e) { console.error('[fireTakeaway] bar', e.message); } }
+  if (autoIds.length) { try { enqueueAutoPrintJob(tenantId, orderId, autoIds); } catch (e) { console.error('[fireTakeaway] auto', e.message); } }
+
+  return { fired: fired.length, bar: barIds.length, auto: autoIds.length };
+}
+
+module.exports = { enqueuePrintJob, enqueueTestPrint, getPendingJobs, getQueueSize, enqueueAutoPrintJob, enqueueFiscalJob, enqueueKitchenPassJob, scheduleKitchenTicket, enqueueBarPassJob, scheduleBarTicket, enqueuePassTicketJob, fireTakeawayItems };

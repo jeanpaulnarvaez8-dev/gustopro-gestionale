@@ -57,7 +57,15 @@ async function insertRegularItem(client, order_id, item, userId, tenantId) {
   // JP 2026-06-07: anche PIZZE bypass — vanno direttamente a Simone (PIN
   // 2099, KDS pizzeria). Il Comandista non smista le pizze.
   const isPizza = menuItem.prep_station === 'pizzeria';
-  if (tcfg?.requires_dispatch && !menuItem.is_beverage && !menuItem.auto_print && !isTakeaway && !isPizza && workflow_status === 'production') {
+  // JP 2026-06-12: ASPORTI PRE-PAGATI. Tutti gli item di un asporto nascono
+  // 'waiting' (held): la comanda NON parte finche' il cliente non ha pagato.
+  // Al pagamento (processPayment) gli item passano a 'production' e parte la
+  // comanda cucina/bar. Vale per TUTTO l'asporto (anche bevande/dessert/pizze
+  // che normalmente bypasserebbero l'attesa). is_manual_hold=true marca questi
+  // come hold "tecnico da pagamento" (non li libera INIZIA TAVOLO per sbaglio).
+  if (isTakeaway && workflow_status === 'production') {
+    workflow_status = 'waiting';
+  } else if (tcfg?.requires_dispatch && !menuItem.is_beverage && !menuItem.auto_print && !isTakeaway && !isPizza && workflow_status === 'production') {
     workflow_status = 'waiting';
   }
 
@@ -414,8 +422,12 @@ async function createOrder(req, res, next) {
     // JP 2026-06-03: auto-print sala (.24). Acqua/dessert vengono
     // stampati subito sul ticket di sala col numero tavolo. Marker
     // __autoPrint settato in insertRegularItem.
+    // JP 2026-06-12: per gli ASPORTI le stampe NON partono alla creazione
+    // (item in waiting, non pagato). Partiranno tutte al pagamento — vedi
+    // fireAsportoItems in billing.controller.processPayment.
     try {
-      const autoIds = orderItems.filter(it => it.__autoPrint).map(it => it.id);
+      const autoIds = order_type !== 'takeaway'
+        ? orderItems.filter(it => it.__autoPrint).map(it => it.id) : [];
       if (autoIds.length > 0) {
         const { enqueueAutoPrintJob } = require('./print.controller');
         enqueueAutoPrintJob(tenantId, order.id, autoIds);
@@ -427,7 +439,9 @@ async function createOrder(req, res, next) {
     // JP 2026-06-05: bar pass (.21). Cocktail/birre/vini/bollicine/caffe'/
     // digestivi → ticket aggregato sulla stampante bar con TAV X.
     try {
-      const barIds = orderItems.filter(it => it.__goesToBar).map(it => it.id);
+      // JP 2026-06-12: asporti → niente bar-pass alla creazione (parte al pagamento).
+      const barIds = order_type !== 'takeaway'
+        ? orderItems.filter(it => it.__goesToBar).map(it => it.id) : [];
       if (barIds.length > 0) {
         const { scheduleBarTicket } = require('./print.controller');
         scheduleBarTicket(tenantId, order.id, barIds);
@@ -936,12 +950,6 @@ async function markAsportoRitirato(req, res, next) {
   try {
     const { id } = req.params;
     const { payment_method, register } = req.body || {};
-
-    if (!VALID_ASPORTO_METHODS.includes(payment_method)) {
-      return res.status(400).json({
-        error: `payment_method obbligatorio. Valori: ${VALID_ASPORTO_METHODS.join(', ')}`,
-      });
-    }
     const registerNorm = register
       ? String(register).toLowerCase().trim().slice(0, 32)
       : null;
@@ -949,7 +957,7 @@ async function markAsportoRitirato(req, res, next) {
     await client.query('BEGIN');
 
     const { rows: [order] } = await client.query(
-      `SELECT id, order_type, status, total_amount, tax_amount, customer_name
+      `SELECT id, order_type, status, payment_status, total_amount, tax_amount, customer_name
          FROM orders
         WHERE id=$1 AND tenant_id=$2`,
       [id, tenantId]
@@ -965,6 +973,19 @@ async function markAsportoRitirato(req, res, next) {
     if (order.status !== 'open') {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Asporto gia\' chiuso' });
+    }
+
+    // JP 2026-06-12: ASPORTO PRE-PAGATO. Se l'asporto e' GIA' stato incassato
+    // (payment_status='paid', flusso "incassa → parte comanda → ritira"), il
+    // ritiro fa SOLO la chiusura (no nuovo payment/receipt, sarebbe doppio
+    // incasso). payment_method obbligatorio solo se NON ancora pagato (fallback
+    // vecchio flusso: ritira+paga insieme).
+    const alreadyPaid = order.payment_status === 'paid';
+    if (!alreadyPaid && !VALID_ASPORTO_METHODS.includes(payment_method)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `payment_method obbligatorio. Valori: ${VALID_ASPORTO_METHODS.join(', ')}`,
+      });
     }
 
     await client.query(
@@ -984,32 +1005,39 @@ async function markAsportoRitirato(req, res, next) {
     }
 
     const totalAmount = parseFloat(order.total_amount);
-    const { rows: [payment] } = await client.query(
-      `INSERT INTO payments (tenant_id, order_id, amount, payment_method, processed_by, register)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [tenantId, id, totalAmount, payment_method, req.user.id, registerNorm]
-    );
+    // JP 2026-06-12: payment + receipt SOLO se non gia' incassato in cassa.
+    // Se alreadyPaid, il pagamento e la ricevuta sono gia' stati creati da
+    // processPayment all'incasso → qui solo chiusura (no doppio incasso).
+    let payment = null;
+    let receipt = null;
+    if (!alreadyPaid) {
+      ({ rows: [payment] } = await client.query(
+        `INSERT INTO payments (tenant_id, order_id, amount, payment_method, processed_by, register)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [tenantId, id, totalAmount, payment_method, req.user.id, registerNorm]
+      ));
 
-    // Snapshot voci per il receipt (no coperto su asporto).
-    const { rows: items } = await client.query(
-      `SELECT
-         SUM(oi.quantity)::int AS quantity,
-         SUM(oi.subtotal) AS subtotal,
-         COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name
-       FROM order_items oi
-       LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
-       WHERE oi.order_id=$1 AND oi.tenant_id=$2 AND oi.status <> 'cancelled'
-       GROUP BY COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item'), oi.unit_price
-       ORDER BY MIN(oi.sent_at) NULLS FIRST`,
-      [id, tenantId]
-    );
+      // Snapshot voci per il receipt (no coperto su asporto).
+      const { rows: items } = await client.query(
+        `SELECT
+           SUM(oi.quantity)::int AS quantity,
+           SUM(oi.subtotal) AS subtotal,
+           COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item') AS item_name
+         FROM order_items oi
+         LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+         WHERE oi.order_id=$1 AND oi.tenant_id=$2 AND oi.status <> 'cancelled'
+         GROUP BY COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item'), oi.unit_price
+         ORDER BY MIN(oi.sent_at) NULLS FIRST`,
+        [id, tenantId]
+      );
 
-    const { rows: [receipt] } = await client.query(
-      `INSERT INTO receipts (tenant_id, order_id, issued_by, total_amount, tax_amount, receipt_data, register)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [tenantId, id, req.user.id, totalAmount, order.tax_amount,
-       JSON.stringify({ items, channel: 'asporto' }), registerNorm]
-    );
+      ({ rows: [receipt] } = await client.query(
+        `INSERT INTO receipts (tenant_id, order_id, issued_by, total_amount, tax_amount, receipt_data, register)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+        [tenantId, id, req.user.id, totalAmount, order.tax_amount,
+         JSON.stringify({ items, channel: 'asporto' }), registerNorm]
+      ));
+    }
 
     await auditLog(client, {
       tenant_id: tenantId,
@@ -1021,10 +1049,11 @@ async function markAsportoRitirato(req, res, next) {
       user_name: req.user.name,
       metadata: {
         customer_name: order.customer_name,
-        payment_method,
+        payment_method: alreadyPaid ? 'gia_incassato' : payment_method,
         register: registerNorm,
         amount: totalAmount,
-        receipt_id: receipt.id,
+        receipt_id: receipt?.id || null,
+        already_paid: alreadyPaid,
       },
     });
 

@@ -167,20 +167,32 @@ async function processPayment(req, res, next) {
     const orderTotal = parseFloat(order.total_amount);
     const newPaymentStatus = totalPaid >= orderTotal ? 'paid' : 'partial';
 
+    // JP 2026-06-12: ASPORTO PRE-PAGATO. Un asporto pagato NON viene
+    // completato (il cliente deve ancora ritirare) — resta 'open' e la
+    // comanda parte ora (fireTakeawayItems dopo il commit). Lo chiude poi
+    // markAsportoRitirato al ritiro. I tavoli normali restano invariati.
+    const isTakeaway = order.order_type === 'takeaway';
     if (newPaymentStatus === 'paid') {
-      await client.query(
-        "UPDATE orders SET payment_status='paid', status='completed' WHERE id=$1 AND tenant_id=$2",
-        [order_id, tenantId]
-      );
-      // Bug fix 2026-05-18: il pagamento NON aggiornava tables.status, emetteva
-      // solo il socket event. Risultato: ricaricando il tablet il tavolo
-      // tornava 'occupied' perche' il DB non era stato persistito. Adesso
-      // l'UPDATE viene fatto nella stessa transazione del payment.
-      if (order.table_id) {
+      if (isTakeaway) {
         await client.query(
-          "UPDATE tables SET status='dirty' WHERE id=$1 AND tenant_id=$2",
-          [order.table_id, tenantId]
+          "UPDATE orders SET payment_status='paid' WHERE id=$1 AND tenant_id=$2",
+          [order_id, tenantId]
         );
+      } else {
+        await client.query(
+          "UPDATE orders SET payment_status='paid', status='completed' WHERE id=$1 AND tenant_id=$2",
+          [order_id, tenantId]
+        );
+        // Bug fix 2026-05-18: il pagamento NON aggiornava tables.status, emetteva
+        // solo il socket event. Risultato: ricaricando il tablet il tavolo
+        // tornava 'occupied' perche' il DB non era stato persistito. Adesso
+        // l'UPDATE viene fatto nella stessa transazione del payment.
+        if (order.table_id) {
+          await client.query(
+            "UPDATE tables SET status='dirty' WHERE id=$1 AND tenant_id=$2",
+            [order.table_id, tenantId]
+          );
+        }
       }
     } else {
       await client.query(
@@ -191,7 +203,21 @@ async function processPayment(req, res, next) {
 
     await client.query('COMMIT');
 
-    if (newPaymentStatus === 'paid') {
+    // JP 2026-06-12: asporto appena saldato → FA PARTIRE la comanda (le stampe
+    // soppresse alla creazione: cucina .23 / bar .21 / auto .24). Fuori dalla
+    // transazione: il pagamento e' gia' committato, le stampe sono best-effort.
+    let takeawayFired = null;
+    if (newPaymentStatus === 'paid' && isTakeaway) {
+      try {
+        const { fireTakeawayItems } = require('./print.controller');
+        takeawayFired = await fireTakeawayItems(tenantId, order_id);
+        getIO()?.emit('takeaway-fired', { orderId: order_id, ...takeawayFired });
+      } catch (e) {
+        req.log?.warn?.({ err: e.message }, 'fireTakeawayItems failed (non-blocking)');
+      }
+    }
+
+    if (newPaymentStatus === 'paid' && !isTakeaway) {
       getIO()?.emit('order-settled', { orderId: order_id, tableId: order.table_id });
       if (order.table_id) {
         getIO()?.emit('table-status-changed', {
@@ -202,7 +228,7 @@ async function processPayment(req, res, next) {
       }
     }
 
-    res.status(201).json({ payment, receipt, payment_status: newPaymentStatus });
+    res.status(201).json({ payment, receipt, payment_status: newPaymentStatus, takeaway_fired: takeawayFired });
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);
