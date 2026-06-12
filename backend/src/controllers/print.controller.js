@@ -239,8 +239,14 @@ function scheduleKitchenTicket(tenantId, orderId /* itemId ignorato */) {
   entry.timeoutId = setTimeout(async () => {
     _kitchenDebounce.delete(orderId);
     try {
+      // JP 2026-06-11: per gli ASPORTI la comanda cucina deve mostrare il
+      // NOME DEL CLIENTE in cima (non "TAV ASPORTO") — con tanti asporti
+      // insieme non si capisce di chi e' il piatto. Aggiungo customer_name
+      // + is_takeaway al payload; l'agent decide il titolo del ticket.
       const { rows: [hdr] } = await pool.query(
-        `SELECT COALESCE(t.table_number, 'ASPORTO') AS table_number
+        `SELECT COALESCE(t.table_number, 'ASPORTO') AS table_number,
+                o.customer_name,
+                (o.order_type = 'takeaway') AS is_takeaway
            FROM orders o LEFT JOIN tables t ON t.id = o.table_id
           WHERE o.id = $1 AND o.tenant_id = $2`,
         [orderId, entry.tenantId]
@@ -263,6 +269,8 @@ function scheduleKitchenTicket(tenantId, orderId /* itemId ignorato */) {
       if (hdr && items.length > 0) {
         enqueueKitchenPassJob(entry.tenantId, orderId, null, {
           table_number: String(hdr.table_number),
+          customer_name: hdr.customer_name || null,
+          is_takeaway: hdr.is_takeaway || false,
           items: items.map(it => ({
             name: String(it.name),
             quantity: Number(it.quantity || 1),
