@@ -470,6 +470,8 @@ export const publicAPI = {
   menu:       (slug, lang)         => publicApi.get(`/public/menu/${slug}`, { params: lang ? { lang } : {} }),
   callWaiter: (slug, tableNumber)  => publicApi.post(`/public/call-waiter/${slug}`, { table_number: tableNumber }),
   receipt:    (id)                 => publicApi.get(`/public/receipt/${id}`),
+  // JP 2026-06-12: self-order da QR. payload = { order_type, table_number, customer_name, items:[{menu_item_id, quantity}] }
+  createOrder: (slug, payload)     => publicApi.post(`/public/order/${slug}`, payload),
 };
 
 // Debug helper opt-in (solo se localStorage.gustopro_dev_mode === '1')

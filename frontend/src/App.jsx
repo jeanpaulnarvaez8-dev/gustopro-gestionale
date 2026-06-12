@@ -29,6 +29,7 @@ const MenuAdminPage          = lazy(() => import('./pages/MenuAdminPage'))
 const VenueAdminPage         = lazy(() => import('./pages/VenueAdminPage'))
 const TableQRCodesPage       = lazy(() => import('./pages/TableQRCodesPage'))
 const PublicMenuPage         = lazy(() => import('./pages/PublicMenuPage'))
+const SelfOrderPage          = lazy(() => import('./pages/SelfOrderPage'))
 const KDSComandistaPage      = lazy(() => import('./pages/KDSComandistaPage'))
 const PublicReceiptPage      = lazy(() => import('./pages/PublicReceiptPage'))
 const MenuQRPage             = lazy(() => import('./pages/MenuQRPage'))
@@ -186,6 +187,9 @@ export default function App() {
               risolto dallo slug. Con o senza numero tavolo (per "chiama cameriere"). */}
           <Route path="/menu/:slug" element={<PublicMenuPage />} />
           <Route path="/menu/:slug/:table" element={<PublicMenuPage />} />
+          {/* JP 2026-06-12: self-order da QR (cliente ordina dal telefono) */}
+          <Route path="/ordina/:slug/:table" element={<SelfOrderPage />} />
+          <Route path="/ordina/:slug" element={<SelfOrderPage />} />
 
           {/* Scontrino pubblico via link condivisibile (WhatsApp/SMS/Mail) —
               PUBBLICO (no login). id = UUID non indovinabile. */}
