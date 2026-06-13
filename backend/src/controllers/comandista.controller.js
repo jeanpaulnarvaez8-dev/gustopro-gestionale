@@ -45,7 +45,7 @@ async function getReadyOrders(req, res, next) {
             'name', COALESCE(mi.name, oi2.combo_menu_name, 'Item'),
             'prep_station', COALESCE(mi.prep_station, c.prep_station, 'cucina'),
             'required_kit', mi.required_kit
-          ) ORDER BY oi2.sent_at)
+          ) ORDER BY oi2.sent_at, oi2.id)
           FROM order_items oi2
           LEFT JOIN menu_items mi ON mi.id = oi2.menu_item_id
           LEFT JOIN categories c  ON c.id = mi.category_id
@@ -58,7 +58,7 @@ async function getReadyOrders(req, res, next) {
        LEFT JOIN tables t ON t.id = o.table_id
        LEFT JOIN users u  ON u.id = o.waiter_id
        WHERE oia.ready_items > 0
-       ORDER BY oia.ready_items::float / NULLIF(oia.total_active,0) DESC, o.created_at`,
+       ORDER BY oia.ready_items::float / NULLIF(oia.total_active,0) DESC, o.created_at, o.id`,
       [tenantId]
     );
     res.json(rows);
@@ -218,7 +218,7 @@ async function getOpenCalls(req, res, next) {
          LEFT JOIN tables t ON t.id = o.table_id
          LEFT JOIN users u  ON u.id = pc.called_by
          WHERE pc.tenant_id = $1 AND pc.acknowledged_at IS NULL
-         ORDER BY pc.called_at`,
+         ORDER BY pc.called_at, pc.id`,
       [tenantId]
     );
     res.json(rows);

@@ -66,7 +66,7 @@ async function getBarOrders(req, res, next) {
                 mi.name, mi.prep_time_mins, c.course_type
        ORDER BY
          CASE oi.display_status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 ELSE 2 END,
-         oi.sent_at ASC`,
+         oi.sent_at ASC, oi.id ASC`,
       [TENANT(req)]
     );
 
@@ -133,7 +133,7 @@ async function getBarItemsForTable(req, res, next) {
          AND oi.tenant_id = $2
          AND o.status IN ('open','completed')
          AND (c.is_beverage = true OR o.order_type = 'takeaway')
-       ORDER BY oi.sent_at DESC`,
+       ORDER BY oi.sent_at DESC, oi.id DESC`,
       [tableId, tenantId]
     );
 

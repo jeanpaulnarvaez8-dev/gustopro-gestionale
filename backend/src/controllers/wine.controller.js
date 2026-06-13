@@ -96,7 +96,7 @@ async function getOpenCalls(req, res, next) {
          LEFT JOIN users u  ON u.id = wc.called_by
          LEFT JOIN tables t ON t.id = wc.table_id
          WHERE wc.tenant_id = $1 AND wc.acknowledged_at IS NULL
-         ORDER BY wc.called_at`,
+         ORDER BY wc.called_at, wc.id`,
       [tenantId]
     );
     res.json(rows);

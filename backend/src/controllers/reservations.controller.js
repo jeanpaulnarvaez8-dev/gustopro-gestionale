@@ -19,7 +19,7 @@ async function listReservations(req, res, next) {
        LEFT JOIN users     u ON u.id = r.created_by
        LEFT JOIN customers c ON c.id = r.customer_id
        WHERE r.reserved_date = $1 AND r.tenant_id = $2
-       ORDER BY r.reserved_time, r.customer_name`,
+       ORDER BY r.reserved_time, r.customer_name, r.id`,
       [targetDate, TENANT(req)]
     );
     res.json(rows);

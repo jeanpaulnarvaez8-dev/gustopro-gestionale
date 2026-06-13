@@ -465,7 +465,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
     }
     return Array.from(map.entries())
       .filter(([, e]) => (e.ready + e.waiting) >= 2 || e.waiting > 0)
-      .sort((a, b) => (b[1].ready + b[1].waiting) - (a[1].ready + a[1].waiting))
+      .sort((a, b) => ((b[1].ready + b[1].waiting) - (a[1].ready + a[1].waiting)) || a[0].localeCompare(b[0], 'it'))
   })()
 
   return (

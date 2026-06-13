@@ -125,7 +125,7 @@ async function getPendingOrders(req, res, next) {
                 mi.name, mi.prep_time_mins, mi.required_kit, mi.cooking_modes, mi.requires_preallerta, mi.prep_station, c.course_type, c.prep_station
        ORDER BY
          CASE oi.display_status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 ELSE 2 END,
-         oi.sent_at ASC`,
+         oi.sent_at ASC, oi.id ASC`,
       params
     );
 
@@ -520,7 +520,7 @@ async function getHistory(req, res, next) {
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        LEFT JOIN categories c  ON c.id = mi.category_id
        WHERE ${where}
-       ORDER BY oi.sent_at DESC
+       ORDER BY oi.sent_at DESC, oi.id DESC
        LIMIT 500`,
       params
     );
@@ -613,7 +613,7 @@ async function getAbbinaGroups(req, res, next) {
            'id', id, 'quantity', quantity, 'status', status,
            'order_id', order_id, 'table_number', table_number,
            'sent_at', sent_at
-         ) ORDER BY sent_at) AS items
+         ) ORDER BY sent_at, id) AS items
        FROM active_items
        GROUP BY menu_item_id, item_name
        HAVING COUNT(*) >= 2

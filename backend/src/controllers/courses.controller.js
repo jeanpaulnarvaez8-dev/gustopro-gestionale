@@ -135,7 +135,7 @@ async function getOrderCourseStatus(req, res, next) {
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        LEFT JOIN categories c ON c.id = mi.category_id
        WHERE oi.order_id = $1 AND oi.tenant_id = $2
-       ORDER BY c.sort_order, oi.display_status DESC, mi.name`,
+       ORDER BY c.sort_order, oi.display_status DESC, mi.name, oi.id`,
       [orderId, tenantId]
     );
 

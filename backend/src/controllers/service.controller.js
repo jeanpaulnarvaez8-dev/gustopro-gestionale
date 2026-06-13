@@ -56,7 +56,7 @@ async function getReadyItems(req, res, next) {
          AND oi.served_at IS NULL
          AND o.status = 'open'
          AND oi.tenant_id = $1
-       ORDER BY oi.ready_at ASC`,
+       ORDER BY oi.ready_at ASC, oi.id ASC`,
       [TENANT(req)]
     );
     res.json(rows);

@@ -37,7 +37,7 @@ async function generatePreConto(req, res, next) {
        WHERE oi.order_id = $1 AND oi.tenant_id = $2 AND oi.status != 'cancelled'
        GROUP BY oi.id, mi.name, oi.combo_menu_name, mi.pricing_type
        -- JP 2026-05-27: i coperti devono uscire per primi nel conto.
-       ORDER BY (CASE WHEN oi.custom_name = 'Coperto' THEN 0 ELSE 1 END), oi.sent_at NULLS FIRST`,
+       ORDER BY (CASE WHEN oi.custom_name = 'Coperto' THEN 0 ELSE 1 END), oi.sent_at NULLS FIRST, oi.id`,
       [orderId, tenantId]
     );
 
@@ -147,7 +147,7 @@ async function processPayment(req, res, next) {
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        WHERE oi.order_id=$1 AND oi.tenant_id=$2 AND oi.status != 'cancelled'
        GROUP BY COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item'), oi.unit_price
-       ORDER BY (CASE WHEN BOOL_OR(oi.custom_name = 'Coperto') THEN 0 ELSE 1 END), MIN(oi.sent_at) NULLS FIRST`,
+       ORDER BY (CASE WHEN BOOL_OR(oi.custom_name = 'Coperto') THEN 0 ELSE 1 END), MIN(oi.sent_at) NULLS FIRST, MIN(oi.id)`,
       [order_id, tenantId]
     );
 

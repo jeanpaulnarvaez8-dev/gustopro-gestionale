@@ -674,7 +674,7 @@ async function getQrPendingOrders(req, res, next) {
                 json_agg(json_build_object(
                   'name', COALESCE(mi.name, oi.combo_menu_name, 'Piatto'),
                   'quantity', oi.quantity
-                ) ORDER BY oi.sent_at)
+                ) ORDER BY oi.sent_at, oi.id)
                 FILTER (WHERE oi.id IS NOT NULL), '[]'
               ) AS items
          FROM orders o
@@ -1114,7 +1114,7 @@ async function markAsportoRitirato(req, res, next) {
          LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
          WHERE oi.order_id=$1 AND oi.tenant_id=$2 AND oi.status <> 'cancelled'
          GROUP BY COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item'), oi.unit_price
-         ORDER BY MIN(oi.sent_at) NULLS FIRST`,
+         ORDER BY MIN(oi.sent_at) NULLS FIRST, MIN(oi.id)`,
         [id, tenantId]
       );
 
