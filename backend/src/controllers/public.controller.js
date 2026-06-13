@@ -167,7 +167,9 @@ async function createPublicOrder(req, res, next) {
       const unit = parseFloat(mi.base_price);
       const sub = Math.round(unit * qty * 100) / 100;
       total += sub;
-      lines.push({ menu_item_id: mi.id, quantity: qty, unit_price: unit, subtotal: sub });
+      // JP 2026-06-13: nota libera del cliente (es. "senza crudo"). Max 200 char.
+      const note = String(it.notes || '').trim().slice(0, 200) || null;
+      lines.push({ menu_item_id: mi.id, quantity: qty, unit_price: unit, subtotal: sub, notes: note });
     }
     total = Math.round(total * 100) / 100;
 
@@ -210,9 +212,9 @@ async function createPublicOrder(req, res, next) {
         await client.query(
           `INSERT INTO order_items
              (tenant_id, order_id, menu_item_id, quantity, unit_price, modifier_total,
-              subtotal, workflow_status, status, is_manual_hold)
-           VALUES ($1,$2,$3,$4,$5,0,$6,'waiting','pending',false)`,
-          [tenant.id, order.id, l.menu_item_id, l.quantity, l.unit_price, l.subtotal]
+              subtotal, notes, workflow_status, status, is_manual_hold)
+           VALUES ($1,$2,$3,$4,$5,0,$6,$7,'waiting','pending',false)`,
+          [tenant.id, order.id, l.menu_item_id, l.quantity, l.unit_price, l.subtotal, l.notes]
         );
       }
 

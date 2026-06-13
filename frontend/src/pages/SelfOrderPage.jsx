@@ -33,12 +33,14 @@ export default function SelfOrderPage() {
     return () => { alive = false }
   }, [slug, table])
 
-  const add = (item) => setCart(c => ({ ...c, [item.id]: { item, qty: (c[item.id]?.qty || 0) + 1 } }))
+  const add = (item) => setCart(c => ({ ...c, [item.id]: { ...(c[item.id] || {}), item, qty: (c[item.id]?.qty || 0) + 1 } }))
   const sub = (id) => setCart(c => {
     const cur = c[id]?.qty || 0
     if (cur <= 1) { const n = { ...c }; delete n[id]; return n }
     return { ...c, [id]: { ...c[id], qty: cur - 1 } }
   })
+  // JP 2026-06-13: nota libera per prodotto (es. "senza crudo")
+  const setNote = (id, note) => setCart(c => (c[id] ? { ...c, [id]: { ...c[id], note } } : c))
 
   const lines = Object.values(cart)
   const count = lines.reduce((s, l) => s + l.qty, 0)
@@ -53,7 +55,7 @@ export default function SelfOrderPage() {
         order_type: table ? 'table' : 'takeaway',
         table_number: table || undefined,
         customer_name: name.trim(),
-        items: lines.map(l => ({ menu_item_id: l.item.id, quantity: l.qty })),
+        items: lines.map(l => ({ menu_item_id: l.item.id, quantity: l.qty, notes: l.note || '' })),
       })
       setConfirm(r.data)
       setView('done')
@@ -120,14 +122,23 @@ export default function SelfOrderPage() {
           <h2 className="so-cart-title">Il tuo ordine</h2>
           {lines.length === 0 && <div className="so-center">Carrello vuoto</div>}
           {lines.map(l => (
-            <div key={l.item.id} className="so-cart-row">
-              <div className="so-cart-q">{l.qty}×</div>
-              <div className="so-cart-n">{l.item.name}</div>
-              <div className="so-cart-p">{formatPrice(l.item.base_price * l.qty)}</div>
-              <div className="so-stepper sm">
-                <button onClick={() => sub(l.item.id)}><Minus size={14} /></button>
-                <button onClick={() => add(l.item)}><Plus size={14} /></button>
+            <div key={l.item.id} className="so-cart-item">
+              <div className="so-cart-row">
+                <div className="so-cart-q">{l.qty}×</div>
+                <div className="so-cart-n">{l.item.name}</div>
+                <div className="so-cart-p">{formatPrice(l.item.base_price * l.qty)}</div>
+                <div className="so-stepper sm">
+                  <button onClick={() => sub(l.item.id)}><Minus size={14} /></button>
+                  <button onClick={() => add(l.item)}><Plus size={14} /></button>
+                </div>
               </div>
+              <input
+                className="so-note"
+                placeholder="Note? es. senza crudo, senza cipolla…"
+                value={l.note || ''}
+                onChange={e => setNote(l.item.id, e.target.value)}
+                maxLength={200}
+              />
             </div>
           ))}
           {lines.length > 0 && (
@@ -211,7 +222,11 @@ const CSS = `
 .so-cartview{padding:16px;}
 .so-back{background:none;border:none;color:#1c5b86;font-weight:600;font-size:14px;display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 0;margin-bottom:6px;}
 .so-cart-title{font-family:Georgia,serif;font-size:22px;color:#0a2540;margin:4px 0 14px;}
-.so-cart-row{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #e7ddc8;}
+.so-cart-item{border-bottom:1px solid #e7ddc8;padding:4px 0;}
+.so-cart-row{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:10px;padding:9px 0 4px;}
+.so-note{width:100%;box-sizing:border-box;margin:0 0 8px;padding:8px 10px;border:1.5px dashed #c9b48e;border-radius:9px;font-size:13px;background:#fff;outline:none;color:#1a1c20;}
+.so-note:focus{border-color:#1c5b86;border-style:solid;}
+.so-note::placeholder{color:#b3a98f;}
 .so-cart-q{font-weight:700;color:#1c5b86;}
 .so-cart-n{font-size:14.5px;font-weight:500;}
 .so-cart-p{font-weight:700;font-size:14px;}
