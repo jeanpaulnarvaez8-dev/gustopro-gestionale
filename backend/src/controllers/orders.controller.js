@@ -598,7 +598,13 @@ async function getOrder(req, res, next) {
        FROM order_items oi
        LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
        WHERE oi.order_id = $1 AND oi.tenant_id = $2
-       ORDER BY oi.sent_at`,
+       -- JP 2026-06-13 FIX: ordine STABILE per posizione. Prima era
+       -- ORDER BY sent_at: piatti mandati insieme hanno lo stesso sent_at
+       -- (o NULL se non ancora mandati) → senza spareggio PostgreSQL
+       -- restituiva un ordine ARBITRARIO che cambiava ad ogni ricarica,
+       -- e aggiungendo un piatto le righe "saltavano" di posizione.
+       -- inserted_at = ordine di aggiunta (non cambia mai), id = spareggio.
+       ORDER BY oi.inserted_at ASC, oi.id ASC`,
       [id, tenantId]
     );
 

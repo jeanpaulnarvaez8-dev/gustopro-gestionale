@@ -277,6 +277,15 @@ export default function OrderPage() {
       g.items.push(it)
       g.qty += Number(it.quantity || 0)
     }
+    // JP 2026-06-13: posizione STABILE. Ancoro ogni gruppo all'istante di
+    // inserimento del suo primo piatto: cosi' quando un piatto cambia stato
+    // (waiting→production→ready) o se ne aggiunge uno, le righe NON saltano.
+    groups.sort((a, b) => {
+      const ta = Date.parse(a.sample?.inserted_at || '') || 0
+      const tb = Date.parse(b.sample?.inserted_at || '') || 0
+      if (ta !== tb) return ta - tb
+      return String(a.sample?.id || '').localeCompare(String(b.sample?.id || ''))
+    })
     return groups
   }, [existingItems])
   // Manda in cucina TUTTI gli item waiting di un gruppo (azione su gruppo).
