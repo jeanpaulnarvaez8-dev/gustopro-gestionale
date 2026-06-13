@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { ShoppingBag, CheckCircle2, Loader2, Banknote, CreditCard, Smartphone, QrCode, LogOut } from 'lucide-react'
-import { ordersAPI, billingAPI } from '../lib/api'
+import { ShoppingBag, CheckCircle2, Loader2, Banknote, CreditCard, Smartphone, QrCode, LogOut, Printer } from 'lucide-react'
+import { ordersAPI, billingAPI, printAPI } from '../lib/api'
 import { useSocket } from '../context/SocketContext'
 import { formatPrice } from '../lib/utils'
 
@@ -16,6 +16,15 @@ export default function QrOrdersPage() {
   const [loading, setLoading] = useState(true)
   const [paying, setPaying] = useState(null)    // order.id in pagamento
   const [chooser, setChooser] = useState(null)  // order.id che mostra scelta metodo
+  const [printing, setPrinting] = useState(null) // order.id in stampa preconto
+
+  // JP 2026-06-13: stampa preconto (NON manda in cucina, solo il conto cliente)
+  const preconto = async (o) => {
+    setPrinting(o.id)
+    try { await printAPI.enqueue('preconto', o.id) }
+    catch (e) { alert(e?.response?.data?.error || 'Errore stampa preconto') }
+    finally { setPrinting(null) }
+  }
 
   const load = useCallback(async () => {
     try { const r = await ordersAPI.qrPending(); setOrders(Array.isArray(r.data) ? r.data : []) }
@@ -138,15 +147,28 @@ export default function QrOrdersPage() {
                 <button onClick={() => setChooser(null)} className="col-span-3 text-xs text-[var(--color-text-3)] py-1">Annulla</button>
               </div>
             ) : (
-              <button
-                onClick={() => setChooser(o.id)}
-                disabled={paying === o.id}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[var(--color-sea)] text-white font-bold active:scale-95 disabled:opacity-50"
-              >
-                {paying === o.id
-                  ? <><Loader2 className="animate-spin" size={18} /> Incasso…</>
-                  : <><CheckCircle2 size={20} /> INCASSATO → fai partire</>}
-              </button>
+              <div className="space-y-2">
+                {/* Stampa preconto: NON manda in cucina, solo il conto */}
+                <button
+                  onClick={() => preconto(o)}
+                  disabled={printing === o.id}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-2)] font-semibold active:scale-95 disabled:opacity-50"
+                >
+                  {printing === o.id
+                    ? <><Loader2 className="animate-spin" size={16} /> Stampo…</>
+                    : <><Printer size={18} /> Stampa preconto</>}
+                </button>
+                {/* PAGATO: incassa e fa partire la comanda in cucina */}
+                <button
+                  onClick={() => setChooser(o.id)}
+                  disabled={paying === o.id}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[var(--color-leaf,#15803d)] text-white font-bold active:scale-95 disabled:opacity-50"
+                >
+                  {paying === o.id
+                    ? <><Loader2 className="animate-spin" size={18} /> Incasso…</>
+                    : <><CheckCircle2 size={20} /> PAGATO → manda in cucina</>}
+                </button>
+              </div>
             )}
           </div>
         ))}
