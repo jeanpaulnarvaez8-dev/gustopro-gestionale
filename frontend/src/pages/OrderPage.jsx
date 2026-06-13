@@ -9,7 +9,7 @@ import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
-import { menuAPI, ordersAPI, tablesAPI, comboAPI, waitersAPI, workflowAPI } from '../lib/api'
+import { menuAPI, ordersAPI, tablesAPI, comboAPI, waitersAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { AllergenBadges } from '../lib/allergens'
 import { Card, Badge, Modal, BottomSheet, Button } from '../components/v2'
@@ -288,20 +288,8 @@ export default function OrderPage() {
     })
     return groups
   }, [existingItems])
-  // Manda in cucina TUTTI gli item waiting di un gruppo (azione su gruppo).
-  const fireGroup = async (group) => {
-    const waitingItems = group.items.filter(x => x.workflow_status === 'waiting')
-    for (const it of waitingItems) {
-      try {
-        await workflowAPI.changeStatus(it.id, 'production')
-        setExistingItems(prev => prev.map(x => x.id === it.id ? { ...x, workflow_status: 'production' } : x))
-      } catch (e) {
-        toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
-        return
-      }
-    }
-    toast({ type: 'success', title: 'Mandato in cucina', message: `${group.sample.item_name} × ${group.qty}` })
-  }
+  // JP 2026-06-13: rimosso fireGroup (tasto "Manda" del cameriere). Con il
+  // Comandista il rilascio dei waiting passa solo da lui (INIZIA TAVOLO).
   // Decrementa la quantita' del gruppo: rimuove l'ULTIMO item (cosi' x2 -> x1).
   const removeOneFromGroup = async (group) => {
     if (!table?.active_order_id) return
@@ -925,20 +913,12 @@ export default function OrderPage() {
                               ⏰ tempo
                             </button>
                           )}
-                          {/* JP 2026-06-04: "Manda" su tutti i waiting
-                              del cameriere proprietario, come escape hatch
-                              se Fabio (7500) e' lento. Cameriere su tavoli
-                              altrui resta bloccato (canFire=false). */}
-                          {isWaiting && canFire && (
-                            <button
-                              onClick={() => fireGroup(group)}
-                              className="px-2.5 py-1 rounded-md bg-[var(--color-warn)] text-black text-[11px] font-bold uppercase active:scale-95 transition flex items-center gap-1"
-                              title="Manda subito in cucina"
-                            >
-                              <Send size={11} /> Manda
-                            </button>
-                          )}
-                          {isWaiting && !canFire && (
+                          {/* JP 2026-06-13: tolto il tasto giallo "Manda"
+                              (escape hatch del cameriere). Con il Comandista
+                              tutto passa da lui: sui piatti gia' inviati il
+                              cameriere vede solo "IN ATTESA", non puo' piu'
+                              bypassare il dispatcher. */}
+                          {isWaiting && (
                             <span className="text-[var(--color-warn)] text-[11px] font-bold whitespace-nowrap">IN ATTESA</span>
                           )}
                         </div>
