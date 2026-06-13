@@ -152,11 +152,11 @@ function HomeRedirect() {
   if (user?.role === 'waiter' && ['bar', 'bar/caffetteria'].includes(user?.sub_role)) {
     return <Navigate to="/bar" replace />
   }
-  // JP 2026-06-07: waiter asporto (Alessandra PIN 3000) → landing su
-  // /asporto (lista asporti + nuovo asporto + cassa). NON deve vedere
-  // i tavoli della sala.
+  // JP 2026-06-12: waiter asporto (Alessandra PIN 3000) → landing su
+  // /qr-orders (ordini self-order da QR: tavoli Botti + asporti, da incassare).
+  // Da lì naviga ad /asporto coi link in pagina.
   if (user?.role === 'waiter' && user?.sub_role === 'asporto') {
-    return <Navigate to="/asporto" replace />
+    return <Navigate to="/qr-orders" replace />
   }
   return <Navigate to="/tables" replace />
 }
