@@ -1123,7 +1123,7 @@ async function markAsportoRitirato(req, res, next) {
          LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
          WHERE oi.order_id=$1 AND oi.tenant_id=$2 AND oi.status <> 'cancelled'
          GROUP BY COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Item'), oi.unit_price
-         ORDER BY MIN(oi.sent_at) NULLS FIRST, MIN(oi.id)`,
+         ORDER BY MIN(oi.sent_at) NULLS FIRST, MIN(oi.id::text)`,
         [id, tenantId]
       );
 
