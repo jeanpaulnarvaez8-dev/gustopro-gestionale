@@ -172,6 +172,14 @@ async function createPublicOrder(req, res, next) {
       lines.push({ menu_item_id: mi.id, quantity: qty, unit_price: unit, subtotal: sub, notes: note });
     }
     total = Math.round(total * 100) / 100;
+    // JP 2026-06-13: COPERTO anche sugli ordini QR al tavolo. Prima mancava
+    // del tutto → il coperto non veniva mai addebitato (soldi persi) e il
+    // preconto stampato (che il coperto lo mostrava) non collimava con
+    // l'incasso. covers=1 di default; la cassa corregge il n. persone con
+    // lo stepper (PATCH /covers, che ricalcola). Asporto: nessun coperto.
+    const copertoPrice = parseFloat(tenant.coperto_price || 0);
+    const copertoTot = (order_type === 'table' && copertoPrice > 0) ? copertoPrice : 0;
+    const grandTotal = Math.round((total + copertoTot) * 100) / 100;
 
     // waiter_id tecnico: l'admin del tenant (l'ordine QR non ha un cameriere
     // finche' la cassa non lo prende in carico)
@@ -203,9 +211,9 @@ async function createPublicOrder(req, res, next) {
         `INSERT INTO orders
            (tenant_id, table_id, waiter_id, order_type, customer_name, source,
             status, payment_status, covers, takeaway_number, subtotal, total_amount)
-         VALUES ($1,$2,$3,$4,$5,'qr','open','unpaid',1,$6,$7,$7)
+         VALUES ($1,$2,$3,$4,$5,'qr','open','unpaid',1,$6,$7,$8)
          RETURNING id`,
-        [tenant.id, table_id, sysUser.id, order_type, name, takeawayNumber, total]
+        [tenant.id, table_id, sysUser.id, order_type, name, takeawayNumber, total, grandTotal]
       );
 
       for (const l of lines) {
@@ -215,6 +223,19 @@ async function createPublicOrder(req, res, next) {
               subtotal, notes, workflow_status, status, is_manual_hold)
            VALUES ($1,$2,$3,$4,$5,0,$6,$7,'waiting','pending',false)`,
           [tenant.id, order.id, l.menu_item_id, l.quantity, l.unit_price, l.subtotal, l.notes]
+        );
+      }
+
+      // JP 2026-06-13: riga COPERTO per i tavoli (voce surcharge, NON va in
+      // cucina). Stesso formato di insertSurchargeItem: delivered/served, cosi'
+      // non appare nel KDS. Il trigger DB ricalcola comunque total_amount.
+      if (copertoTot > 0) {
+        await client.query(
+          `INSERT INTO order_items
+             (tenant_id, order_id, menu_item_id, quantity, unit_price, modifier_total,
+              subtotal, custom_name, is_surcharge, workflow_status, status, is_manual_hold)
+           VALUES ($1,$2,NULL,1,$3,0,$3,'Coperto',true,'delivered','served',false)`,
+          [tenant.id, order.id, copertoPrice]
         );
       }
 
