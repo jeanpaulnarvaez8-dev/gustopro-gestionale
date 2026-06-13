@@ -201,7 +201,8 @@ export default function OrderPage() {
   const [sending, setSending]         = useState(false)
   const [sent, setSent]               = useState(false)
   const [comboModal, setComboModal]   = useState(null)
-  const [covers]                      = useState(initialCovers)
+  const [covers, setCovers]           = useState(initialCovers)
+  const [savingCovers, setSavingCovers] = useState(false)
   const [weightSheet, setWeightSheet] = useState(null)
   // Modifica piatto: nota tipo "senza cipolla". noteFor = _key item del carrello.
   const [noteFor, setNoteFor] = useState(null)
@@ -223,6 +224,25 @@ export default function OrderPage() {
       setExistingItems((r.data.items || []).filter(i => i.status !== 'cancelled'))
     } catch { /* silent */ }
   }, [])
+  // JP 2026-06-13: cambia n. persone → ricalcola SUBITO il coperto a DB.
+  // Se l'ordine e' gia' aperto chiama il backend (PATCH /covers) cosi' non
+  // si perdono coperti quando arrivano altri commensali. Se il tavolo e'
+  // ancora vuoto aggiorna solo il numero locale (verra' usato alla create).
+  const changeCovers = async (delta) => {
+    const n = Math.max(1, Math.min(99, covers + delta))
+    if (n === covers) return
+    setCovers(n)
+    if (!table?.active_order_id) return
+    setSavingCovers(true)
+    try {
+      const r = await ordersAPI.setCovers(table.active_order_id, n)
+      await loadExisting(table.active_order_id)
+      toast({ type: 'success', title: `${n} coperti`, message: `Coperto ${formatPrice(r.data?.coperto || 0)}` })
+    } catch (e) {
+      setCovers(covers) // rollback ottimistico
+      toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Coperto non aggiornato' })
+    } finally { setSavingCovers(false) }
+  }
   const [showExisting, setShowExisting] = useState(true)
   const canRemove = ['admin', 'manager', 'cashier'].includes(authUser?.role)
   const canFire = ['waiter', 'manager', 'admin'].includes(authUser?.role)
@@ -539,7 +559,24 @@ export default function OrderPage() {
           <span className="serif text-[var(--color-text)] font-bold text-lg leading-none">
             Tavolo {table?.table_number ?? '…'}
           </span>
-          <Badge tone="sea" size="sm">{covers} pers.</Badge>
+          {/* JP 2026-06-13: stepper persone → ricalcola coperto live (anti soldi-persi) */}
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-sea)]/15 border border-[var(--color-sea)]/30 pl-0.5 pr-2 py-0.5">
+            <button
+              onClick={() => changeCovers(-1)}
+              disabled={savingCovers || covers <= 1}
+              className="w-6 h-6 rounded-full bg-[var(--color-surface-2)] text-[var(--color-text)] font-bold leading-none disabled:opacity-30 active:scale-90 flex items-center justify-center"
+              aria-label="Meno persone"
+            >−</button>
+            <span className="text-[var(--color-sea)] font-bold text-sm tnum min-w-[2.6rem] text-center">
+              {savingCovers ? '…' : `${covers} pers.`}
+            </span>
+            <button
+              onClick={() => changeCovers(1)}
+              disabled={savingCovers}
+              className="w-6 h-6 rounded-full bg-[var(--color-surface-2)] text-[var(--color-text)] font-bold leading-none disabled:opacity-30 active:scale-90 flex items-center justify-center"
+              aria-label="Più persone"
+            >+</button>
+          </span>
           {table?.active_order_id && (
             <Badge tone="gold" size="sm" leftIcon={<Building size={10} />}>
               Ordine aperto
