@@ -33,11 +33,18 @@ async function getPublicMenu(req, res, next) {
       return row[field];
     };
 
+    // JP 2026-06-13: filtro categorie "solo bar". Le categorie bar_only
+    // (pucce/street food) NON appaiono nel menu ristorante/tavoli. Compaiono
+    // SOLO se il QR e' dell'asporto bar (?bar=1). Cosi' non inquinano il
+    // menu del ristorante.
+    const showBar = String(req.query.bar || '') === '1';
+    const barClause = showBar ? '' : 'AND COALESCE(bar_only, false) = false';
     const { rows: cats } = await pool.query(
       `SELECT id, name, sort_order, course_type, is_beverage, translations
          FROM categories
         WHERE tenant_id = $1 AND is_active = true
           AND COALESCE(show_on_qr, true) = true
+          ${barClause}
         ORDER BY sort_order, name`,
       [tenant.id]
     );

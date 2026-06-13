@@ -24,12 +24,14 @@ export default function SelfOrderPage() {
 
   useEffect(() => {
     let alive = true
-    publicAPI.menu(slug)
+    // JP 2026-06-13: asporto (no tavolo) → mostra anche la categoria bar
+    // (pucce/street food). Tavolo → solo menu ristorante (no pucce).
+    publicAPI.menu(slug, null, !table)
       .then(r => { if (alive) setMenu(r.data) })
       .catch(() => { if (alive) setError(true) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [slug])
+  }, [slug, table])
 
   const add = (item) => setCart(c => ({ ...c, [item.id]: { item, qty: (c[item.id]?.qty || 0) + 1 } }))
   const sub = (id) => setCart(c => {
