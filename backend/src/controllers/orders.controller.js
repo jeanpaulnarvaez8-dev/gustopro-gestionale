@@ -634,9 +634,18 @@ async function setOrderCovers(req, res, next) {
       const { rows: [tc] } = await client.query('SELECT coperto_price FROM tenants WHERE id=$1', [tenantId]);
       const cp = parseFloat(tc?.coperto_price || 0);
       if (cp > 0) {
+        // JP 2026-06-13: match ESATTO sulla voce di sistema (is_surcharge +
+        // custom_name='Coperto'), non regex ~*'copert': prima una voce custom
+        // della cassa con "copert" nel nome (es. "Coperto bimbo 1€") veniva
+        // sovrascritta dal ricalcolo. Ne aggiorno UNA sola (la prima per id).
         const { rowCount } = await client.query(
           `UPDATE order_items SET quantity=$1, unit_price=$2, subtotal=ROUND($1*$2,2)
-            WHERE order_id=$3 AND tenant_id=$4 AND custom_name ~* 'copert' AND status<>'cancelled'`,
+            WHERE id = (
+              SELECT id FROM order_items
+                WHERE order_id=$3 AND tenant_id=$4 AND is_surcharge=true
+                  AND custom_name='Coperto' AND status<>'cancelled'
+                ORDER BY inserted_at ASC, id ASC LIMIT 1
+            )`,
           [n, cp, id, tenantId]
         );
         if (rowCount === 0) {

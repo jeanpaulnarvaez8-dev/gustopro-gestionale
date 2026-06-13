@@ -112,7 +112,10 @@ async function processPayment(req, res, next) {
       "SELECT * FROM orders WHERE id=$1 AND tenant_id=$2 AND status='open'",
       [order_id, tenantId]
     );
-    if (!order) return res.status(404).json({ error: 'Ordine non trovato o già chiuso' });
+    // JP 2026-06-13: ROLLBACK prima del return, altrimenti la connessione
+    // torna nel pool "idle in transaction" (doppio click su Paga su ordine
+    // gia' chiuso → degrado del pool sotto carico).
+    if (!order) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Ordine non trovato o già chiuso' }); }
 
     // Calcola resto da dare al cliente (solo su pagamento cash, ultima tranche)
     const { rows: [prevPaid] } = await client.query(

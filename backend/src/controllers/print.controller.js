@@ -259,11 +259,17 @@ function scheduleKitchenTicket(tenantId, orderId /* itemId ignorato */) {
                 oi.quantity, oi.notes
            FROM order_items oi
            LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+           LEFT JOIN categories c ON c.id = mi.category_id
           WHERE oi.order_id = $1 AND oi.tenant_id = $2
             AND oi.workflow_status = 'production'
             AND oi.status NOT IN ('served', 'cancelled')
             AND COALESCE(oi.is_surcharge, false) = false
-          ORDER BY name`,
+            -- JP 2026-06-13: le BEVANDE e gli item che vanno al BAR non
+            -- escono sulla comanda CUCINA (.23): stampano gia' al bar (.21).
+            -- Prima Spritz/birre finivano anche sulla comanda della cucina.
+            AND COALESCE(c.is_beverage, false) = false
+            AND COALESCE(mi.goes_to_bar, c.goes_to_bar, false) = false
+          ORDER BY name, oi.id`,
         [orderId, entry.tenantId]
       );
       if (hdr && items.length > 0) {
