@@ -606,6 +606,53 @@ async function getOrder(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// JP 2026-06-13: aggiorna il numero di PERSONE (covers) di un ordine aperto
+// e RICALCOLA il coperto. Prima il coperto restava fisso al numero iniziale
+// → se arrivavano altre persone i loro coperti si perdevano (soldi persi).
+async function setOrderCovers(req, res, next) {
+  const client = await pool.connect();
+  const tenantId = TENANT(req);
+  try {
+    const { id } = req.params;
+    const n = Math.max(1, Math.min(99, parseInt(req.body?.covers, 10) || 1));
+    await client.query('BEGIN');
+
+    const { rows: [order] } = await client.query(
+      "UPDATE orders SET covers=$1 WHERE id=$2 AND tenant_id=$3 AND status='open' RETURNING id, order_type",
+      [n, id, tenantId]
+    );
+    if (!order) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Ordine non trovato o chiuso' }); }
+
+    let copertoTot = 0;
+    if (order.order_type === 'table') {
+      const { rows: [tc] } = await client.query('SELECT coperto_price FROM tenants WHERE id=$1', [tenantId]);
+      const cp = parseFloat(tc?.coperto_price || 0);
+      if (cp > 0) {
+        const { rowCount } = await client.query(
+          `UPDATE order_items SET quantity=$1, unit_price=$2, subtotal=ROUND($1*$2,2)
+            WHERE order_id=$3 AND tenant_id=$4 AND custom_name ~* 'copert' AND status<>'cancelled'`,
+          [n, cp, id, tenantId]
+        );
+        if (rowCount === 0) {
+          await insertSurchargeItem(client, id, { label: 'Coperto', unit_price: cp, quantity: n }, req.user.id, tenantId);
+        }
+        copertoTot = Math.round(n * cp * 100) / 100;
+      }
+    }
+
+    await client.query(
+      `UPDATE orders SET total_amount=(SELECT COALESCE(SUM(subtotal),0) FROM order_items WHERE order_id=$1 AND status<>'cancelled') WHERE id=$1 AND tenant_id=$2`,
+      [id, tenantId]
+    );
+    await client.query('COMMIT');
+    getIO()?.emit('order-covers-changed', { orderId: id, covers: n });
+    res.json({ ok: true, covers: n, coperto: copertoTot });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally { client.release(); }
+}
+
 // JP 2026-06-12: lista ordini DA INCASSARE alla cassa = self-order da QR
 // (source='qr') + ASPORTI (order_type='takeaway') in attesa di pagamento.
 // La cassa li vede, incassa, e la comanda parte (anti-furto: niente parte
@@ -1908,4 +1955,4 @@ async function moveOrderTable(req, res, next) {
   }
 }
 
-module.exports = { createOrder, getOrder, getQrPendingOrders, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemQuantity, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable };
+module.exports = { createOrder, getOrder, getQrPendingOrders, setOrderCovers, addItems, cancelItem, cancelOrder, transferOrder, claimOrder, setItemPrice, setItemWeight, setItemQuantity, setItemFireAt, dispatchOrder, markAsportoRitirato, markAsportoNoShow, moveOrderTable };
