@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { Navigate } from 'react-router-dom'
 import { ShoppingBag, CheckCircle2, Loader2, Banknote, CreditCard, Smartphone, QrCode, LogOut, Printer } from 'lucide-react'
 import { ordersAPI, billingAPI, printAPI } from '../lib/api'
 import { useSocket } from '../context/SocketContext'
+import { useAuth } from '../context/AuthContext'
 import { formatPrice } from '../lib/utils'
 
 /**
@@ -12,6 +14,7 @@ import { formatPrice } from '../lib/utils'
  */
 export default function QrOrdersPage() {
   const { socket } = useSocket()
+  const { user } = useAuth()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [paying, setPaying] = useState(null)    // order.id in pagamento
@@ -62,6 +65,11 @@ export default function QrOrdersPage() {
       alert(e?.response?.data?.error || 'Errore incasso, riprova')
     } finally { setPaying(null) }
   }
+
+  // JP 2026-06-13: gli ordini QR (asporti) li gestisce SOLO il bar/asporto +
+  // cassa/admin/manager. I camerieri di sala vengono rimandati ai tavoli.
+  const isSalaWaiter = user?.role === 'waiter' && !['asporto', 'bar', 'bar/caffetteria'].includes(user?.sub_role)
+  if (isSalaWaiter) return <Navigate to="/tables" replace />
 
   return (
     <div className="min-h-screen bg-[var(--color-canvas)] p-4">
