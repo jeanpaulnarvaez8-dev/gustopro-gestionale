@@ -256,7 +256,8 @@ function scheduleKitchenTicket(tenantId, orderId /* itemId ignorato */) {
       // cooking sia i ready: il chef vuole vedere TUTTO il tavolo.
       const { rows: items } = await pool.query(
         `SELECT COALESCE(mi.name, oi.combo_menu_name, 'Piatto') AS name,
-                oi.quantity, oi.notes
+                oi.quantity, oi.notes,
+                COALESCE(mi.prep_station, c.prep_station, 'cucina') AS prep_station
            FROM order_items oi
            LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
            LEFT JOIN categories c ON c.id = mi.category_id
@@ -273,18 +274,29 @@ function scheduleKitchenTicket(tenantId, orderId /* itemId ignorato */) {
         [orderId, entry.tenantId]
       );
       if (hdr && items.length > 0) {
-        enqueueKitchenPassJob(entry.tenantId, orderId, null, {
+        // JP 2026-06-13: includo le NOTE del cliente (es. "senza crudo")
+        // cosi' cucina/pizzeria le vedono sulla comanda.
+        const mkItems = (arr) => arr.map(it => ({
+          name: String(it.name),
+          quantity: Number(it.quantity || 1),
+          notes: it.notes || null,
+        }));
+        const base = {
           table_number: String(hdr.table_number),
           customer_name: hdr.customer_name || null,
           is_takeaway: hdr.is_takeaway || false,
-          // JP 2026-06-13: includo le NOTE del cliente (es. "senza crudo")
-          // cosi' la cucina le vede sulla comanda.
-          items: items.map(it => ({
-            name: String(it.name),
-            quantity: Number(it.quantity || 1),
-            notes: it.notes || null,
-          })),
-        });
+        };
+        // JP 2026-06-13: la comanda dei piatti "pizzeria" (pucce, pizze,
+        // panini) esce alla PIZZA-PASS .25 dove sta il paninaro; il resto
+        // alla cucina .23. L'agent instrada in base a payload.station.
+        const pizzeria = items.filter(it => it.prep_station === 'pizzeria');
+        const cucina   = items.filter(it => it.prep_station !== 'pizzeria');
+        if (cucina.length > 0) {
+          enqueueKitchenPassJob(entry.tenantId, orderId, null, { ...base, items: mkItems(cucina) });
+        }
+        if (pizzeria.length > 0) {
+          enqueueKitchenPassJob(entry.tenantId, orderId, null, { ...base, station: 'pizzeria', items: mkItems(pizzeria) });
+        }
       }
     } catch (e) {
       console.error('[scheduleKitchenTicket] failed:', e.message);
