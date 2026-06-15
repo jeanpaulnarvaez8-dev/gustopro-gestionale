@@ -37,14 +37,20 @@ async function getPublicMenu(req, res, next) {
     // (pucce/street food) NON appaiono nel menu ristorante/tavoli. Compaiono
     // SOLO se il QR e' dell'asporto bar (?bar=1). Cosi' non inquinano il
     // menu del ristorante.
+    // JP 2026-06-14: ASPORTO (?takeaway=1) → SOLO le categorie marcate
+    // "mostra in asporto" (categories.show_on_takeaway, gestibili dall'admin).
+    // bar (?bar=1) → mostra anche le bar_only. ristorante → nasconde bar_only.
+    const showTakeaway = String(req.query.takeaway || '') === '1';
     const showBar = String(req.query.bar || '') === '1';
-    const barClause = showBar ? '' : 'AND COALESCE(bar_only, false) = false';
+    const catClause = showTakeaway
+      ? 'AND COALESCE(show_on_takeaway, false) = true'
+      : (showBar ? '' : 'AND COALESCE(bar_only, false) = false');
     const { rows: cats } = await pool.query(
       `SELECT id, name, sort_order, course_type, is_beverage, translations
          FROM categories
         WHERE tenant_id = $1 AND is_active = true
           AND COALESCE(show_on_qr, true) = true
-          ${barClause}
+          ${catClause}
         ORDER BY sort_order, name`,
       [tenant.id]
     );

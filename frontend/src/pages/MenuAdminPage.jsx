@@ -409,6 +409,14 @@ function CategoryCard({ cat, onRefresh }) {
     } catch { toast({ type: 'error', title: 'Errore' }) }
   }
 
+  // JP 2026-06-14: mostra/nascondi la categoria nel QR ASPORTO.
+  const handleToggleTakeaway = async () => {
+    try {
+      await menuAPI.updateCategory(cat.id, { show_on_takeaway: !cat.show_on_takeaway })
+      onRefresh()
+    } catch { toast({ type: 'error', title: 'Errore' }) }
+  }
+
   const handleToggleItem = async (id, isAvailable) => {
     try {
       await menuAPI.updateItem(id, { is_available: isAvailable })
@@ -459,6 +467,17 @@ function CategoryCard({ cat, onRefresh }) {
               {items.length > 0 ? `${items.filter(i => i.is_available).length}/${items.length} attivi` : ''}
             </span>
             {expanded ? <ChevronUp size={14} className="text-[var(--color-text-3)] ml-auto" /> : <ChevronDown size={14} className="text-[var(--color-text-3)] ml-auto" />}
+          </button>
+        )}
+
+        {/* JP 2026-06-14: interruttore "Asporto" — categoria visibile nel QR asporto */}
+        {!editingName && (
+          <button
+            onClick={handleToggleTakeaway}
+            title={cat.show_on_takeaway ? 'Visibile nel QR asporto — clic per togliere' : 'Nascosta dal QR asporto — clic per mostrare'}
+            className={`flex-shrink-0 text-[11px] font-bold px-2 py-1 rounded-md transition active:scale-95 ${cat.show_on_takeaway ? 'bg-[var(--color-sea)] text-white' : 'bg-[var(--color-surface-2)] border border-[var(--color-border-strong)] text-[var(--color-text-3)]'}`}
+          >
+            🥡 Asporto
           </button>
         )}
 

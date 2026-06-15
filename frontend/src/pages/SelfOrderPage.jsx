@@ -38,7 +38,9 @@ export default function SelfOrderPage() {
   useEffect(() => {
     let alive = true
     setLoading(true); setError(false)
-    publicAPI.menu(slug, lang === 'it' ? null : lang, !table)
+    // JP 2026-06-14: asporto (no tavolo) → menu ASPORTO (solo categorie
+    // marcate show_on_takeaway). Al tavolo → menu normale del ristorante.
+    publicAPI.menu(slug, lang === 'it' ? null : lang, false, !table)
       .then(r => { if (alive) setMenu(r.data) })
       .catch(() => { if (alive) setError(true) })
       .finally(() => { if (alive) setLoading(false) })

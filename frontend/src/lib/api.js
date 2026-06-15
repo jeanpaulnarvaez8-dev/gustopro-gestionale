@@ -471,7 +471,7 @@ const publicApi = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'https://gestione.gustopro.it/api',
 });
 export const publicAPI = {
-  menu:       (slug, lang, bar)    => publicApi.get(`/public/menu/${slug}`, { params: { ...(lang ? { lang } : {}), ...(bar ? { bar: 1 } : {}) } }),
+  menu:       (slug, lang, bar, takeaway) => publicApi.get(`/public/menu/${slug}`, { params: { ...(lang ? { lang } : {}), ...(bar ? { bar: 1 } : {}), ...(takeaway ? { takeaway: 1 } : {}) } }),
   callWaiter: (slug, tableNumber)  => publicApi.post(`/public/call-waiter/${slug}`, { table_number: tableNumber }),
   receipt:    (id)                 => publicApi.get(`/public/receipt/${id}`),
   // JP 2026-06-12: self-order da QR. payload = { order_type, table_number, customer_name, items:[{menu_item_id, quantity}] }
