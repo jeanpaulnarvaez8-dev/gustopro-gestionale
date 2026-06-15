@@ -819,6 +819,15 @@ export default function OrderPage() {
                 const minsToFire = fireAtAny
                   ? Math.max(0, Math.round((new Date(fireAtAny).getTime() - Date.now()) / 60000))
                   : null
+                // JP 2026-06-15: distinguo l'attesa VERA (hold manuale o timer
+                // impostato dal cameriere) dall'attesa TECNICA del Comandista
+                // (requires_dispatch forza 'waiting' finche' non fa INIZIA TAVOLO).
+                // Al cameriere mostriamo "IN ATTESA" solo per l'attesa vera;
+                // quella tecnica la vede come "In preparazione" (gia' inviata,
+                // la smista il Comandista) → niente confusione in sala.
+                const hasManualHold = group.items.some(x => x.is_manual_hold)
+                const isGenuineWait = isWaiting && (hasManualHold || !!fireAtAny)
+                const isTechWait = isWaiting && !isGenuineWait
                 const setTimerForGroup = async () => {
                   const ans = window.prompt('Tra quanti minuti mandare in cucina?', '15')
                   if (ans === null) return
@@ -882,7 +891,7 @@ export default function OrderPage() {
                   toast({ type: 'success', title: 'Aggiunto', message: `+1 ${it.item_name} nel carrello` })
                 }
                 return (
-                  <div key={group.key} className={`flex items-start justify-between gap-2 text-sm py-1.5 border-b border-[var(--color-border-soft)] last:border-0 ${isWaiting ? 'bg-[var(--color-warn-soft)]/40 -mx-2 px-2 rounded' : ''}`}>
+                  <div key={group.key} className={`flex items-start justify-between gap-2 text-sm py-1.5 border-b border-[var(--color-border-soft)] last:border-0 ${isGenuineWait ? 'bg-[var(--color-warn-soft)]/40 -mx-2 px-2 rounded' : ''}`}>
                     <span className="text-[var(--color-text)] min-w-0">
                       <span className="text-[var(--color-gold)] font-bold tnum">{group.qty}×</span> {it.item_name}
                       {it.notes && <span className="text-[var(--color-warn)] text-xs ml-1 italic">({it.notes})</span>}
@@ -918,8 +927,11 @@ export default function OrderPage() {
                               tutto passa da lui: sui piatti gia' inviati il
                               cameriere vede solo "IN ATTESA", non puo' piu'
                               bypassare il dispatcher. */}
-                          {isWaiting && (
+                          {isGenuineWait && (
                             <span className="text-[var(--color-warn)] text-[11px] font-bold whitespace-nowrap">IN ATTESA</span>
+                          )}
+                          {isTechWait && (
+                            <span className="text-[var(--color-sea)] text-[11px] font-bold whitespace-nowrap">In preparazione</span>
                           )}
                         </div>
                       ) : (
