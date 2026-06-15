@@ -6,7 +6,7 @@ import {
   RefreshCw, CheckCircle2, User, Phone, Clock, Receipt,
   Printer, Package, XCircle, Banknote, CreditCard, Smartphone, X,
 } from 'lucide-react'
-import { menuAPI, asportoAPI, adminAPI, printAPI, ordersAPI } from '../lib/api'
+import { menuAPI, asportoAPI, adminAPI, printAPI, ordersAPI, billingAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
@@ -94,6 +94,19 @@ export default function AsportoPage() {
     const { orderId, customer, action } = releaseModal
     setSubmittingRelease(true)
     try {
+      if (action === 'incassa') {
+        // JP 2026-06-15: INCASSA = pagamento dell'asporto QR/self-order →
+        // il backend (processPayment) fa partire la comanda in cucina
+        // (fireTakeawayItems). L'ordine NON si chiude: resta in lista come
+        // PAGATO, in attesa che il cliente lo ritiri.
+        let register = null
+        try { register = localStorage.getItem('gustopro_register') || null } catch {}
+        await billingAPI.pay({ order_id: orderId, amount: Number(releaseModal.total), payment_method: paymentMethod, register })
+        toast({ type: 'success', title: '💰 Incassato → in cucina', message: `${customer || 'Asporto'} · ${paymentMethod}` })
+        setOpenAsporti(prev => prev.map(x => x.id === orderId ? { ...x, payment_status: 'paid' } : x))
+        setReleaseModal(null)
+        return
+      }
       if (action === 'ritirato') {
         // JP 2026-06-06: propaga register (stesso pattern di CheckoutPage).
         // Senza, payments/receipts venivano salvati con register=NULL e
@@ -280,9 +293,14 @@ export default function AsportoPage() {
                       {o.takeaway_number && <span>#{o.takeaway_number}</span>}
                     </div>
                   </div>
-                  <span className="serif text-[var(--color-gold)] font-bold text-base tnum shrink-0">
-                    {formatPrice(o.total_amount)}
-                  </span>
+                  <div className="flex flex-col items-end shrink-0 gap-0.5">
+                    <span className="serif text-[var(--color-gold)] font-bold text-base tnum">
+                      {formatPrice(o.total_amount)}
+                    </span>
+                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${o.payment_status === 'paid' ? 'bg-[var(--color-ok)]/20 text-[var(--color-ok)]' : 'bg-[var(--color-warn)]/20 text-[var(--color-warn)]'}`}>
+                      {o.payment_status === 'paid' ? '✓ pagato' : 'da pagare'}
+                    </span>
+                  </div>
                 </div>
                 {Array.isArray(o.items) && (
                   <div className="text-[11px] text-[var(--color-text-2)] line-clamp-2 leading-snug">
@@ -308,24 +326,46 @@ export default function AsportoPage() {
                   <Receipt size={13} />
                   Cassa completa
                 </button>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    onClick={() => openReleaseModal(o.id, o.customer_name, o.total_amount, 'ritirato')}
-                    className="py-2 rounded-md bg-[var(--color-ok)] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1 hover:brightness-110 active:scale-[0.98] transition"
-                    title="Cliente ritira + paga → scontrino"
-                  >
-                    <CheckCircle2 size={13} />
-                    Ritirato
-                  </button>
-                  <button
-                    onClick={() => openReleaseModal(o.id, o.customer_name, o.total_amount, 'no_show')}
-                    className="py-2 rounded-md bg-[var(--color-err)]/80 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1 hover:brightness-110 active:scale-[0.98] transition"
-                    title="Cliente non si presenta → cancellato"
-                  >
-                    <XCircle size={13} />
-                    No show
-                  </button>
-                </div>
+                {/* JP 2026-06-15: NON pagato (asporto QR/self-order) → prima
+                    si INCASSA (parte la comanda in cucina). Pagato → Ritirato. */}
+                {o.payment_status !== 'paid' ? (
+                  <div className="grid grid-cols-1 gap-1.5">
+                    <button
+                      onClick={() => openReleaseModal(o.id, o.customer_name, o.total_amount, 'incassa')}
+                      className="py-2.5 rounded-md bg-[var(--color-leaf,#15803d)] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 hover:brightness-110 active:scale-[0.98] transition"
+                      title="Incassa → la comanda parte in cucina"
+                    >
+                      <Banknote size={14} />
+                      Incassa → cucina
+                    </button>
+                    <button
+                      onClick={() => openReleaseModal(o.id, o.customer_name, o.total_amount, 'no_show')}
+                      className="py-1.5 rounded-md bg-[var(--color-err)]/70 text-white font-semibold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1 hover:brightness-110 active:scale-[0.98] transition"
+                      title="Cliente non si presenta → cancellato"
+                    >
+                      <XCircle size={12} /> No show
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      onClick={() => openReleaseModal(o.id, o.customer_name, o.total_amount, 'ritirato')}
+                      className="py-2 rounded-md bg-[var(--color-ok)] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1 hover:brightness-110 active:scale-[0.98] transition"
+                      title="Cliente ritira (già pagato)"
+                    >
+                      <CheckCircle2 size={13} />
+                      Ritirato
+                    </button>
+                    <button
+                      onClick={() => openReleaseModal(o.id, o.customer_name, o.total_amount, 'no_show')}
+                      className="py-2 rounded-md bg-[var(--color-err)]/80 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1 hover:brightness-110 active:scale-[0.98] transition"
+                      title="Cliente non si presenta → cancellato"
+                    >
+                      <XCircle size={13} />
+                      No show
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -551,7 +591,8 @@ export default function AsportoPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[var(--color-text-3)] text-xs uppercase tracking-wider font-semibold">
-                    {releaseModal.action === 'ritirato' ? 'Ritirato + scontrino' : 'No show'}
+                    {releaseModal.action === 'incassa' ? 'Incassa → manda in cucina'
+                      : releaseModal.action === 'ritirato' ? 'Ritirato + scontrino' : 'No show'}
                   </p>
                   <p className="serif text-[var(--color-text)] font-extrabold text-xl truncate">
                     {releaseModal.customer || 'Asporto'}
@@ -570,7 +611,7 @@ export default function AsportoPage() {
                 </button>
               </div>
 
-              {releaseModal.action === 'ritirato' ? (
+              {releaseModal.action !== 'no_show' ? (
                 <>
                   <p className="text-[var(--color-text-2)] text-sm">
                     Metodo di pagamento incassato:
@@ -630,12 +671,14 @@ export default function AsportoPage() {
                   onClick={handleSubmitRelease}
                   disabled={submittingRelease}
                   className={`flex-1 py-2.5 rounded-lg text-white font-bold text-sm uppercase tracking-wider hover:brightness-110 active:scale-[0.98] disabled:opacity-50 transition ${
-                    releaseModal.action === 'ritirato'
-                      ? 'bg-[var(--color-ok)]'
-                      : 'bg-[var(--color-err)]'
+                    releaseModal.action === 'no_show'
+                      ? 'bg-[var(--color-err)]'
+                      : 'bg-[var(--color-ok)]'
                   }`}
                 >
-                  {submittingRelease ? '…' : releaseModal.action === 'ritirato' ? 'Conferma' : 'Conferma no show'}
+                  {submittingRelease ? '…'
+                    : releaseModal.action === 'incassa' ? 'Incassa → cucina'
+                    : releaseModal.action === 'ritirato' ? 'Conferma' : 'Conferma no show'}
                 </button>
               </div>
             </motion.div>

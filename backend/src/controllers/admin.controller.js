@@ -425,6 +425,7 @@ async function getTakeawayList(req, res, next) {
     const { rows } = await pool.query(
       `SELECT o.id, o.customer_name, o.customer_phone, o.pickup_time,
               o.total_amount, o.created_at, o.status, o.takeaway_number,
+              o.payment_status, o.source,
               (SELECT json_agg(json_build_object(
                  'name', mi.name,
                  'quantity', oi.quantity,
