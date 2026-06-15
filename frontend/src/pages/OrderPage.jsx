@@ -222,6 +222,11 @@ export default function OrderPage() {
     try {
       const r = await ordersAPI.get(orderId)
       setExistingItems((r.data.items || []).filter(i => i.status !== 'cancelled'))
+      // JP 2026-06-15: lo stepper "persone" deve mostrare i coperti REALI
+      // dell'ordine aperto, non il default 1. Senza questo il cameriere
+      // vedeva "1 PERS." con 3 coperti nel conto → confusione.
+      const cov = Number(r.data?.covers)
+      if (Number.isFinite(cov) && cov > 0) setCovers(cov)
     } catch { /* silent */ }
   }, [])
   // JP 2026-06-13: cambia n. persone → ricalcola SUBITO il coperto a DB.
