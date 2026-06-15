@@ -191,7 +191,7 @@ async function updateItemStatus(req, res, next) {
     // (caso tavolo 19 di oggi).
     if (status !== 'cancelled') {
       const { rows: [check] } = await pool.query(
-        `SELECT workflow_status, is_manual_hold
+        `SELECT workflow_status, is_manual_hold, status AS cur_status, served_at
            FROM order_items WHERE id=$1 AND tenant_id=$2`,
         [id, tenantId]
       );
@@ -205,6 +205,16 @@ async function updateItemStatus(req, res, next) {
           error_code: 'ITEM_STILL_WAITING',
           workflow_status: check.workflow_status,
           is_manual_hold: check.is_manual_hold,
+        });
+      }
+      // JP 2026-06-15 FIX: un piatto GIA' SERVITO non torna indietro
+      // (cooking/oven_done/ready). Altrimenti riappare sul KDS cucina anche
+      // se gia' fatto e servito (caso tav 14: served_at popolato ma status
+      // tornato 'ready'). Solo 'served' (idempotente) e 'cancelled' permessi.
+      if ((check.cur_status === 'served' || check.served_at) && status !== 'served') {
+        return res.status(409).json({
+          error: 'Piatto gia\' servito: non puo\' tornare in lavorazione.',
+          error_code: 'ITEM_ALREADY_SERVED',
         });
       }
     }
@@ -651,12 +661,16 @@ async function batchUpdateStatus(req, res, next) {
     // JP 2026-06-07 FIX: in batch UPDATE escludo i waiting (non possono
     // saltare). Solo 'cancelled' batch-cancella anche waiting.
     const waitingGuard = status === 'cancelled' ? '' : "AND workflow_status <> 'waiting'";
+    // JP 2026-06-15 FIX: un piatto gia' servito non torna indietro (vedi
+    // updateItemStatus). Vale solo se NON stiamo (ri)mettendo served/cancelled.
+    const servedGuard = (status === 'served' || status === 'cancelled')
+      ? '' : "AND status <> 'served' AND served_at IS NULL";
     const { rows } = await pool.query(
       `UPDATE order_items SET
          status   = $1::varchar,
          ready_at = CASE WHEN $1::varchar = 'ready'  AND ready_at  IS NULL THEN NOW() ELSE ready_at  END,
          served_at = CASE WHEN $1::varchar = 'served' AND served_at IS NULL THEN NOW() ELSE served_at END
-       WHERE id = ANY($2::uuid[]) AND tenant_id = $3 ${waitingGuard}
+       WHERE id = ANY($2::uuid[]) AND tenant_id = $3 ${waitingGuard} ${servedGuard}
        RETURNING id, order_id, status`,
       [status, item_ids, tenantId]
     );
