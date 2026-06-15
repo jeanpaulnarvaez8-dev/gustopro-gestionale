@@ -45,11 +45,15 @@ async function getPublicMenu(req, res, next) {
     const catClause = showTakeaway
       ? 'AND COALESCE(show_on_takeaway, false) = true'
       : (showBar ? '' : 'AND COALESCE(bar_only, false) = false');
+    // JP 2026-06-14: in asporto il flag "mostra in asporto" ha precedenza
+    // anche su show_on_qr=false (es. Acqua/Soft Drink e Birre, nascoste dal
+    // menu da consultazione ma da vendere in asporto).
+    const qrClause = showTakeaway ? '' : 'AND COALESCE(show_on_qr, true) = true';
     const { rows: cats } = await pool.query(
       `SELECT id, name, sort_order, course_type, is_beverage, translations
          FROM categories
         WHERE tenant_id = $1 AND is_active = true
-          AND COALESCE(show_on_qr, true) = true
+          ${qrClause}
           ${catClause}
         ORDER BY sort_order, name`,
       [tenant.id]
