@@ -15,6 +15,8 @@ router.get('/audit-report',          requireRole('admin', 'manager'), getAuditRe
 // JP 2026-06-08: ammessa anche Alessandra (waiter sub_role='asporto')
 // per vedere la lista asporti aperti. Controller restituisce solo
 // asporti del tenant — niente leak su altri ordini di sala.
-router.get('/takeaway',              requireRole('admin', 'manager', 'waiter'), getTakeawayList);
+// JP 2026-06-15: ammessa anche la cassa (cashier) per aprire gli asporti
+// QR e aggiungerci prodotti (bevande ecc.) prima di incassare.
+router.get('/takeaway',              requireRole('admin', 'manager', 'waiter', 'cashier'), getTakeawayList);
 
 module.exports = router;

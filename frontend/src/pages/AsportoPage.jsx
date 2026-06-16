@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -130,6 +130,11 @@ export default function AsportoPage() {
 
   // Customer info
   const [customerName, setCustomerName] = useState('')
+  // JP 2026-06-15: modalita' "aggiungi prodotti a un asporto QR gia' aperto"
+  // (la cassa/bar apre l'ordine e ci mette le bevande prima di incassare).
+  // addingTo = { id, name } | null. Se valorizzato, l'invio fa addItems.
+  const [addingTo, setAddingTo] = useState(null)
+  const formRef = useRef(null)
   const [customerPhone, setCustomerPhone] = useState('')
   const [pickupTime, setPickupTime] = useState('')
 
@@ -200,6 +205,27 @@ export default function AsportoPage() {
       toast({ type: 'warning', title: 'Carrello vuoto', message: 'Aggiungi almeno un piatto' })
       return
     }
+    const items = cart.map(c => ({
+      menu_item_id: c.item.id,
+      quantity: c.quantity,
+      notes: c.notes?.trim() || null,
+      modifiers: [],
+    }))
+    // JP 2026-06-15: modalita' AGGIUNGI a un asporto QR gia' aperto. La cassa/
+    // bar ci mette le bevande ecc. prima di incassare. Gli item entrano held
+    // (l'ordine takeaway resta in attesa) e partono all'incasso come gli altri.
+    if (addingTo) {
+      setSending(true)
+      try {
+        await ordersAPI.addItems(addingTo.id, items)
+        toast({ type: 'success', title: '✅ Aggiunto all\'ordine', message: addingTo.name || 'Asporto' })
+        setCart([]); setAddingTo(null); setCustomerName('')
+        loadAsporti()
+      } catch (e) {
+        toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+      } finally { setSending(false) }
+      return
+    }
     if (!customerName.trim()) {
       toast({ type: 'warning', title: 'Nome obbligatorio', message: 'Inserisci il nome del cliente' })
       return
@@ -210,12 +236,7 @@ export default function AsportoPage() {
         customer_name: customerName.trim(),
         customer_phone: customerPhone.trim() || null,
         pickup_time:    pickupTime || null,
-        items: cart.map(c => ({
-          menu_item_id: c.item.id,
-          quantity: c.quantity,
-          notes: c.notes?.trim() || null,
-          modifiers: [],
-        })),
+        items,
       })
       setSent(true)
       setTimeout(() => navigate('/tables'), 2000)
@@ -224,6 +245,15 @@ export default function AsportoPage() {
       setSending(false)
     }
   }
+
+  // JP 2026-06-15: apre un asporto QR esistente per aggiungerci prodotti.
+  const startAddingTo = (o) => {
+    setAddingTo({ id: o.id, name: o.customer_name })
+    setCart([])
+    setCustomerName(o.customer_name || '')
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+  }
+  const cancelAddingTo = () => { setAddingTo(null); setCart([]); setCustomerName('') }
 
   if (sent) {
     return (
@@ -318,6 +348,16 @@ export default function AsportoPage() {
                 {/* JP 2026-06-07: bottone "Cassa" che apre il checkout
                     completo (sconti, split, voce libera, modifica peso/prezzo).
                     Per asporti complessi quando il quick-flow Ritirato non basta. */}
+                {/* JP 2026-06-15: aggiungi prodotti (bevande ecc.) a questo
+                    asporto prima di incassare. Apre il menu sotto. */}
+                <button
+                  onClick={() => startAddingTo(o)}
+                  className="w-full py-2 rounded-md bg-[var(--color-gold-soft)] border border-[var(--color-gold-ring)] text-[var(--color-gold)] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 hover:brightness-110 active:scale-[0.98] transition"
+                  title="Aggiungi prodotti a questo ordine (bevande, ecc.)"
+                >
+                  <Plus size={13} />
+                  Aggiungi prodotti
+                </button>
                 <button
                   onClick={() => navigate(`/checkout/${o.id}`)}
                   className="w-full py-2 rounded-md bg-[var(--color-sea)] text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 hover:brightness-110 active:scale-[0.98] transition"
@@ -543,8 +583,16 @@ export default function AsportoPage() {
           </div>
 
           {/* Footer: customer summary + total + send */}
-          <div className="px-4 py-4 border-t border-[var(--color-border-soft)] flex flex-col gap-3 bg-[var(--color-surface-2)]">
-            {customerName.trim() && (
+          <div ref={formRef} className="px-4 py-4 border-t border-[var(--color-border-soft)] flex flex-col gap-3 bg-[var(--color-surface-2)]">
+            {addingTo && (
+              <div className="flex items-center justify-between gap-2 bg-[var(--color-gold-soft)] border border-[var(--color-gold-ring)] rounded-lg px-3 py-2">
+                <span className="text-[var(--color-gold)] text-xs font-bold">
+                  ➕ Aggiungi all'ordine di {addingTo.name || 'asporto'}
+                </span>
+                <button onClick={cancelAddingTo} className="text-[var(--color-text-3)] text-[11px] underline shrink-0">annulla</button>
+              </div>
+            )}
+            {!addingTo && customerName.trim() && (
               <Card variant="outline" padding="sm" className="text-xs">
                 <p className="text-[var(--color-text)] font-semibold">{customerName}</p>
                 {customerPhone && <p className="text-[var(--color-text-2)] mt-0.5 tnum">{customerPhone}</p>}
@@ -567,7 +615,7 @@ export default function AsportoPage() {
               leftIcon={<Send size={16} />}
               onClick={handleSend}
             >
-              Invia ordine
+              {addingTo ? "Aggiungi all'ordine" : 'Invia ordine'}
             </Button>
           </div>
         </div>
