@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { ShoppingBag, CheckCircle2, Loader2, Banknote, CreditCard, Smartphone, QrCode, LogOut, Printer } from 'lucide-react'
 import { ordersAPI, billingAPI, printAPI } from '../lib/api'
 import { useSocket } from '../context/SocketContext'
@@ -15,6 +15,7 @@ import { formatPrice } from '../lib/utils'
 export default function QrOrdersPage() {
   const { socket } = useSocket()
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [paying, setPaying] = useState(null)    // order.id in pagamento
@@ -114,7 +115,19 @@ export default function QrOrdersPage() {
             {/* Header card */}
             <div className="flex items-start justify-between gap-2 mb-3">
               <div>
-                <div className="text-lg font-bold text-[var(--color-text)] leading-tight">{o.customer_name}</div>
+                {/* JP 2026-06-16: tocca il NOME dell'asporto per aggiungere
+                    prodotti (apre la vista Asporti in modalità "aggiungi"). */}
+                {o.table_number === 'ASPORTO' ? (
+                  <button
+                    onClick={() => navigate(`/asporto?add=${o.id}&name=${encodeURIComponent(o.customer_name || '')}`)}
+                    className="text-lg font-bold text-[var(--color-text)] leading-tight text-left underline decoration-dotted decoration-2 underline-offset-2 decoration-[var(--color-sea)] active:scale-95"
+                    title="Tocca per aggiungere prodotti a questo ordine"
+                  >
+                    {o.customer_name} <span className="text-[var(--color-sea)] text-sm">➕</span>
+                  </button>
+                ) : (
+                  <div className="text-lg font-bold text-[var(--color-text)] leading-tight">{o.customer_name}</div>
+                )}
                 <div className="text-xs text-[var(--color-text-3)] mt-0.5 flex items-center gap-1.5 flex-wrap">
                   <span>
                     {o.table_number === 'ASPORTO'

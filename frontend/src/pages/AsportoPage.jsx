@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, ShoppingBag, Plus, Minus, Trash2, Send, ShoppingCart,
@@ -18,11 +18,12 @@ export default function AsportoPage() {
   const { toast } = useToast()
   const { user } = useAuth()
   const { socket } = useSocket()
-  // JP 2026-06-08: anche Alessandra (waiter+sub_role='asporto') vede la
-  // lista degli asporti aperti, stampa preconti, chiude col flow
-  // Ritirato/No-show, e accede alla Cassa completa di un asporto.
-  const canManageList = ['admin', 'manager'].includes(user?.role)
-    || (user?.role === 'waiter' && user?.sub_role === 'asporto')
+  const [searchParams, setSearchParams] = useSearchParams()
+  // JP 2026-06-08: anche Alessandra (waiter+sub_role='asporto') vede la lista.
+  // JP 2026-06-16: aggiunti la CASSA (cashier) e il BAR (waiter sub_role bar):
+  // devono poter aprire gli asporti QR e aggiungerci prodotti prima d'incassare.
+  const canManageList = ['admin', 'manager', 'cashier'].includes(user?.role)
+    || (user?.role === 'waiter' && ['asporto', 'bar', 'bar/caffetteria'].includes(user?.sub_role))
 
   // JP 2026-06-04: lista asporti di oggi (solo admin/manager) — top panel
   // sopra il form di creazione. Include stampa preconto per ciascuno.
@@ -254,6 +255,16 @@ export default function AsportoPage() {
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
   }
   const cancelAddingTo = () => { setAddingTo(null); setCart([]); setCustomerName('') }
+
+  // JP 2026-06-16: arrivo da "tocca il nome" nella vista cassa
+  // (/asporto?add=ORDERID&name=NOME) → apre subito la modalità "aggiungi".
+  useEffect(() => {
+    const addId = searchParams.get('add')
+    if (!addId) return
+    startAddingTo({ id: addId, customer_name: searchParams.get('name') || '' })
+    setSearchParams({}, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   if (sent) {
     return (
