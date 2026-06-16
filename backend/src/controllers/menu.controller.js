@@ -9,10 +9,15 @@ async function listCategories(req, res, next) {
     // JP 2026-06-13: le categorie bar_only (pucce/street food) NON appaiono
     // quando si ORDINA ai tavoli (ramo default) — solo bar/asporto. In admin
     // (all=true) restano visibili per poterle gestire/modificare.
+    // JP 2026-06-16: ?bar=true → tutte le categorie ATTIVE incluse le bar_only
+    // (pucce). Usato dal form ASPORTO (cassa/bar) per poter aggiungere le pucce.
+    const includeBar = req.query.bar === 'true';
     const { rows } = await pool.query(
       all
         ? 'SELECT * FROM categories WHERE tenant_id=$1 ORDER BY sort_order, name'
-        : 'SELECT * FROM categories WHERE tenant_id=$1 AND is_active=true AND COALESCE(bar_only,false)=false ORDER BY sort_order, name',
+        : includeBar
+          ? 'SELECT * FROM categories WHERE tenant_id=$1 AND is_active=true ORDER BY sort_order, name'
+          : 'SELECT * FROM categories WHERE tenant_id=$1 AND is_active=true AND COALESCE(bar_only,false)=false ORDER BY sort_order, name',
       [TENANT(req)]
     );
     res.json(rows);

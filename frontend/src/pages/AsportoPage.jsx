@@ -153,7 +153,9 @@ export default function AsportoPage() {
   const [sent, setSent]       = useState(false)
 
   useEffect(() => {
-    menuAPI.categories()
+    // JP 2026-06-16: bar=true → include le pucce/street food (bar_only) nel
+    // form asporto, cosi' la cassa/bar puo' aggiungerle.
+    menuAPI.categories(true)
       .then(r => {
         setCategories(r.data)
         if (r.data.length > 0) setActiveCategory(r.data[0].id)

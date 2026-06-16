@@ -184,7 +184,7 @@ export const tablesAPI = {
 
 // Menu
 export const menuAPI = {
-  categories:     ()          => api.get('/menu/categories'),
+  categories:     (bar)       => api.get('/menu/categories', { params: bar ? { bar: true } : {} }),
   allCategories:  ()          => api.get('/menu/categories', { params: { all: 'true' } }),
   items:          (catId)     => api.get('/menu/items', { params: { categoryId: catId } }),
   allItems:       ()          => api.get('/menu/items'),
