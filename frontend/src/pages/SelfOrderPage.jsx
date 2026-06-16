@@ -33,6 +33,9 @@ export default function SelfOrderPage() {
   const [name, setName] = useState('')
   const [sending, setSending] = useState(false)
   const [confirm, setConfirm] = useState(null)
+  // JP 2026-06-16: feedback errore IN PAGINA. Prima si usava alert(), che su
+  // telefono in modalita' PWA viene ingoiato → l'invio falliva "in silenzio".
+  const [sendError, setSendError] = useState('')
   const t = T[lang] || T.it
 
   useEffect(() => {
@@ -62,7 +65,7 @@ export default function SelfOrderPage() {
 
   const send = async () => {
     if (name.trim().length < 2 || count === 0) return
-    setSending(true)
+    setSending(true); setSendError('')
     try {
       const r = await publicAPI.createOrder(slug, {
         order_type: table ? 'table' : 'takeaway',
@@ -72,7 +75,11 @@ export default function SelfOrderPage() {
       })
       setConfirm(r.data); setView('done'); setCart({})
     } catch (e) {
-      alert(e?.response?.data?.error || t.errSend)
+      setSendError(
+        e?.response?.status === 429
+          ? 'Ordine già inviato! Attendi qualche secondo prima di farne un altro.'
+          : (e?.response?.data?.error || t.errSend)
+      )
     } finally { setSending(false) }
   }
 
@@ -149,6 +156,7 @@ export default function SelfOrderPage() {
               <div className="so-cart-total"><span>{t.total}</span><span>{formatPrice(total)}</span></div>
               <label className="so-name-lbl">{t.yourName}</label>
               <input className="so-name" value={name} onChange={e => setName(e.target.value)} placeholder={t.namePh} maxLength={40} autoComplete="name" />
+              {sendError && <div className="so-err-banner">⚠️ {sendError}</div>}
               <button className="so-send" disabled={sending || name.trim().length < 2} onClick={send}>
                 {sending ? <><Loader2 className="so-spin" size={18} /> {t.sending}</> : t.send}
               </button>
@@ -232,6 +240,7 @@ const CSS = `
 .so-name:focus{border-color:#1c5b86;}
 .so-send{width:100%;margin-top:16px;background:#1c5b86;color:#fff;border:none;border-radius:14px;padding:17px;font-size:17px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(28,91,134,.35);}
 .so-send:disabled{opacity:.5;}
+.so-err-banner{margin-top:12px;background:#fdecea;border:1.5px solid #e57373;color:#b3261e;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:600;text-align:center;}
 .so-done{padding:48px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;}
 .so-done-ico{color:#15803d;margin-bottom:8px;}
 .so-done h2{font-family:Georgia,serif;font-size:26px;color:#0a2540;margin:6px 0;}

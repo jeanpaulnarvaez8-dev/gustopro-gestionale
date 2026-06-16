@@ -111,6 +111,11 @@ async function getPendingOrders(req, res, next) {
          -- quando vengono serviti. Esclude solo served/cancelled.
          -- Storico completo (incluso served/cancelled) in /kds/history.
          AND oi.status NOT IN ('served','cancelled')
+         -- JP 2026-06-16: gli ASPORTI (takeaway) NON compaiono in cucina
+         -- finche' non sono PAGATI. Partono solo quando la cassa incassa
+         -- (processPayment → fireTakeawayItems: production + payment='paid').
+         -- Cosi' il cuoco non vede ne' puo' far partire un asporto non pagato.
+         AND NOT (o.order_type = 'takeaway' AND COALESCE(o.payment_status,'unpaid') <> 'paid')
          -- JP 2026-06-03: filtro dinamico per stazione (vedi workflowFilter).
          -- dispatcher → waiting only · stazioni → production only · all → entrambi.
          AND ${workflowFilter}
