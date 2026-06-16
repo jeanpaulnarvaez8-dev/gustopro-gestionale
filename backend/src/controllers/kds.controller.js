@@ -249,7 +249,7 @@ async function updateItemStatus(req, res, next) {
         const { rows: [info] } = await pool.query(
           `SELECT COALESCE(t.table_number, 'ASPORTO') AS table_number,
                   COALESCE(mi.name, oi.combo_menu_name, oi.custom_name, 'Piatto') AS name,
-                  oi.quantity,
+                  oi.quantity, o.order_type,
                   COALESCE(mi.prep_station, c.prep_station, 'cucina') AS prep_station
              FROM order_items oi
              LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
@@ -259,7 +259,11 @@ async function updateItemStatus(req, res, next) {
             WHERE oi.id = $1 AND oi.tenant_id = $2`,
           [id, tenantId]
         );
-        if (info) {
+        // JP 2026-06-16: per gli ASPORTI niente foglietto al pass (.102/.25)
+        // quando il piatto diventa pronto. La comanda col nome cliente esce
+        // gia' all'incasso; la ristampa quando il paninaro fa START/pronto e'
+        // un duplicato inutile. Vale SOLO per takeaway: ai tavoli resta.
+        if (info && info.order_type !== 'takeaway') {
           // Routing: pizze/panini (stazione pizzeria) → .25; resto → .102.
           const target = info.prep_station === 'pizzeria' ? 'pizza-pass' : 'pass';
           const { enqueuePassTicketJob } = require('./print.controller');
