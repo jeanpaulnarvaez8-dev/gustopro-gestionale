@@ -36,7 +36,10 @@ export default function WaiterDashboardPage() {
         serviceAPI.readyItems(),
         assignmentsAPI.my(),
       ])
-      setReadyItems(itemsRes.data)
+      // JP 2026-06-16: gli ASPORTI non compaiono in "I Miei Piatti" del
+      // cameriere (si ritirano al bancone, non si servono ai tavoli). Sala
+      // e asporto sono separati.
+      setReadyItems((itemsRes.data || []).filter(i => i.table_number !== 'ASPORTO'))
       setMyZones(zonesRes.data)
     } catch {
       toast({ type: 'error', title: 'Errore caricamento' })
