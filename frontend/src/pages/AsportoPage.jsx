@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Navigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, ShoppingBag, Plus, Minus, Trash2, Send, ShoppingCart,
@@ -267,6 +267,11 @@ export default function AsportoPage() {
     setSearchParams({}, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
+
+  // JP 2026-06-16: i camerieri di SALA (Francesco, Teo…) NON gestiscono gli
+  // asporti: sala e asporto sono separati. Se ci arrivano via URL → ai tavoli.
+  const isSalaWaiter = user?.role === 'waiter' && !['asporto', 'bar', 'bar/caffetteria'].includes(user?.sub_role)
+  if (isSalaWaiter) return <Navigate to="/tables" replace />
 
   if (sent) {
     return (

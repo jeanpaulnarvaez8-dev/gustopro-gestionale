@@ -442,7 +442,10 @@ export default function TableMapPage() {
           {user?.role === 'waiter' && (
             <>
               <NavButton icon={UtensilsCrossed} label="I Miei Piatti" onClick={() => navigate('/my-tables')} />
-              <NavButton icon={ShoppingBag} label="Asporto" onClick={() => navigate('/asporto')} />
+              {/* JP 2026-06-16: i camerieri di SALA non vedono gli asporti */}
+              {['asporto', 'bar', 'bar/caffetteria'].includes(user?.sub_role) && (
+                <NavButton icon={ShoppingBag} label="Asporto" onClick={() => navigate('/asporto')} />
+              )}
               <NavButton icon={CalendarDays} label="Prenotazioni" onClick={() => navigate('/reservations')} />
             </>
           )}

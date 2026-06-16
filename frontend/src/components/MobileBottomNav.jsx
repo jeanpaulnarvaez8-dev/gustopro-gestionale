@@ -3,9 +3,14 @@ import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
 import { LayoutGrid, UtensilsCrossed, ShoppingBag, ChefHat, LayoutDashboard, MapPin, LogOut, Home, CreditCard } from 'lucide-react'
 
+// JP 2026-06-16: i camerieri di SALA NON vedono gli asporti (sala e asporto
+// sono cose separate). Solo i waiter asporto/bar hanno la tab Asporto.
 const WAITER_TABS = [
   { path: '/tables', icon: LayoutGrid, label: 'Tavoli' },
   { path: '/my-tables', icon: UtensilsCrossed, label: 'Piatti' },
+]
+const WAITER_ASPORTO_TABS = [
+  ...WAITER_TABS,
   { path: '/asporto', icon: ShoppingBag, label: 'Asporto' },
 ]
 
@@ -46,7 +51,9 @@ export default function MobileBottomNav() {
       tabs = KITCHEN_TABS
     }
   }
-  else if (user.role === 'waiter') tabs = WAITER_TABS
+  else if (user.role === 'waiter') {
+    tabs = ['asporto', 'bar', 'bar/caffetteria'].includes(user.sub_role) ? WAITER_ASPORTO_TABS : WAITER_TABS
+  }
   else if (user.role === 'cashier') tabs = CASHIER_TABS
   else tabs = ADMIN_TABS // admin, manager
 
