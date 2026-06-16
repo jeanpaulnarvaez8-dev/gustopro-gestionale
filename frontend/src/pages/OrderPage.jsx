@@ -9,7 +9,7 @@ import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
-import { menuAPI, ordersAPI, tablesAPI, comboAPI, waitersAPI } from '../lib/api'
+import { menuAPI, ordersAPI, tablesAPI, comboAPI, waitersAPI, serviceAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { AllergenBadges } from '../lib/allergens'
 import { Card, Badge, Modal, BottomSheet, Button } from '../components/v2'
@@ -295,6 +295,22 @@ export default function OrderPage() {
   }, [existingItems])
   // JP 2026-06-13: rimosso fireGroup (tasto "Manda" del cameriere). Con il
   // Comandista il rilascio dei waiting passa solo da lui (INIZIA TAVOLO).
+  // JP 2026-06-16: "Servito" — segna consegnati i piatti/bevande gia' mandati
+  // (production). Cosi' "⏰ tempo" lascia il posto a "Servito": il cameriere
+  // vede subito cosa ha gia' portato, niente confusione (es. acqua, calice).
+  const markServedGroup = async (group) => {
+    const toServe = group.items.filter(x => x.status === 'pending' && x.workflow_status !== 'waiting')
+    for (const it of toServe) {
+      try {
+        await serviceAPI.markServed(it.id)
+        setExistingItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'served', served_at: new Date().toISOString() } : x))
+      } catch (e) {
+        toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+        return
+      }
+    }
+    toast({ type: 'success', title: '✅ Servito', message: `${group.sample.item_name} × ${group.qty}` })
+  }
   // Decrementa la quantita' del gruppo: rimuove l'ULTIMO item (cosi' x2 -> x1).
   const removeOneFromGroup = async (group) => {
     if (!table?.active_order_id) return
@@ -937,6 +953,17 @@ export default function OrderPage() {
                           )}
                           {isTechWait && (
                             <span className="text-[var(--color-sea)] text-[11px] font-bold whitespace-nowrap">In preparazione</span>
+                          )}
+                          {/* JP 2026-06-16: piatto/bevanda gia' mandato (non in attesa)
+                              → tasto "Servito" per segnarlo consegnato. */}
+                          {!isGenuineWait && !isTechWait && (
+                            <button
+                              onClick={() => markServedGroup(group)}
+                              className="px-2.5 py-1 rounded-md bg-[var(--color-ok)] text-white text-[11px] font-bold uppercase active:scale-95 transition flex items-center gap-1"
+                              title="Segna come servito / portato al tavolo"
+                            >
+                              ✓ Servito
+                            </button>
                           )}
                         </div>
                       ) : (
