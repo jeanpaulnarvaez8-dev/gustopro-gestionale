@@ -9,7 +9,7 @@ import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
-import { menuAPI, ordersAPI, tablesAPI, comboAPI, waitersAPI } from '../lib/api'
+import { menuAPI, ordersAPI, tablesAPI, comboAPI, waitersAPI, workflowAPI } from '../lib/api'
 import { formatPrice } from '../lib/utils'
 import { AllergenBadges } from '../lib/allergens'
 import { Card, Badge, Modal, BottomSheet, Button } from '../components/v2'
@@ -293,8 +293,21 @@ export default function OrderPage() {
     })
     return groups
   }, [existingItems])
-  // JP 2026-06-13: rimosso fireGroup (tasto "Manda" del cameriere). Con il
-  // Comandista il rilascio dei waiting passa solo da lui (INIZIA TAVOLO).
+  // JP 2026-06-16: "Manda" rimesso ma SOLO sui waiting SENZA timer (vedi
+  // condizione nel render). Manda in cucina tutti gli item waiting del gruppo.
+  const fireGroup = async (group) => {
+    const waitingItems = group.items.filter(x => x.workflow_status === 'waiting')
+    for (const it of waitingItems) {
+      try {
+        await workflowAPI.changeStatus(it.id, 'production')
+        setExistingItems(prev => prev.map(x => x.id === it.id ? { ...x, workflow_status: 'production' } : x))
+      } catch (e) {
+        toast({ type: 'error', title: 'Errore', message: e?.response?.data?.error || 'Riprova' })
+        return
+      }
+    }
+    toast({ type: 'success', title: 'Mandato in cucina', message: `${group.sample.item_name} × ${group.qty}` })
+  }
   // Decrementa la quantita' del gruppo: rimuove l'ULTIMO item (cosi' x2 -> x1).
   const removeOneFromGroup = async (group) => {
     if (!table?.active_order_id) return
@@ -937,6 +950,18 @@ export default function OrderPage() {
                           )}
                           {isTechWait && (
                             <span className="text-[var(--color-sea)] text-[11px] font-bold whitespace-nowrap">In preparazione</span>
+                          )}
+                          {/* JP 2026-06-16: "Manda" SOLO sui waiting SENZA timer.
+                              Quelli con la tempistica (⏰ Xm) partono da soli →
+                              lì il tasto confonde, quindi non appare. */}
+                          {isWaiting && !fireAtAny && canFire && (
+                            <button
+                              onClick={() => fireGroup(group)}
+                              className="px-2.5 py-1 rounded-md bg-[var(--color-warn)] text-black text-[11px] font-bold uppercase active:scale-95 transition flex items-center gap-1"
+                              title="Manda subito in cucina"
+                            >
+                              <Send size={11} /> Manda
+                            </button>
                           )}
                         </div>
                       ) : (
