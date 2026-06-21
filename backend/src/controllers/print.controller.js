@@ -367,7 +367,7 @@ function scheduleBarTicket(tenantId, orderId, newItemIds) {
       // category) per essere a prova di bug client-side.
       const { rows: items } = await pool.query(
         `SELECT COALESCE(mi.name, oi.combo_menu_name, 'Bevanda') AS name,
-                oi.quantity
+                oi.quantity, oi.notes
            FROM order_items oi
            LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
            LEFT JOIN categories c ON c.id = mi.category_id
@@ -385,6 +385,7 @@ function scheduleBarTicket(tenantId, orderId, newItemIds) {
           items: items.map(it => ({
             name: String(it.name),
             quantity: Number(it.quantity || 1),
+            notes: it.notes || null,
           })),
         });
       }
