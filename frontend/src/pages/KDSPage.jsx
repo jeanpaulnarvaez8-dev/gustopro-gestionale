@@ -805,9 +805,9 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                         {/* Conteggio piatti — PICCOLO (JP 2026-05-29: era grande
                             e si confondeva col numero del tavolo). Pill compatto. */}
                         {badgeNum > 0 && (
-                          <div className="flex items-center gap-1 rounded-md bg-[var(--color-gold-soft)] text-[var(--color-gold)] px-1.5 py-0.5 leading-none">
-                            <span className="text-xs font-bold tnum">{badgeNum}</span>
-                            <span className="text-[8px] font-semibold tracking-wider">{badgeLabel}</span>
+                          <div className="flex items-center gap-1.5 rounded-md bg-[var(--color-gold-soft)] text-[var(--color-gold)] px-2.5 py-1 leading-none">
+                            <span className="text-lg font-bold tnum">{badgeNum}</span>
+                            <span className="text-[11px] font-bold tracking-wider">{badgeLabel}</span>
                           </div>
                         )}
                         <ElapsedTick sentAt={oldest} />
