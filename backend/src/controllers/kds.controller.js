@@ -69,6 +69,7 @@ async function getPendingOrders(req, res, next) {
          o.order_type,
          o.customer_name  AS order_customer_name,
          o.pickup_time,
+         o.covers,
          COALESCE(t.table_number, 'ASPORTO') AS table_number,
          COALESCE(z.name, '')                AS zone_name,
          oi.id             AS item_id,
@@ -123,7 +124,7 @@ async function getPendingOrders(req, res, next) {
          AND COALESCE(oi.is_surcharge, false) = false
          AND (c.is_beverage IS NULL OR c.is_beverage = false)
          AND ${stationFilter}
-       GROUP BY o.id, o.created_at, o.order_type, o.customer_name, o.pickup_time,
+       GROUP BY o.id, o.created_at, o.order_type, o.customer_name, o.pickup_time, o.covers,
                 t.table_number, z.name,
                 oi.id, oi.quantity, oi.status, oi.display_status, oi.workflow_status, oi.notes, oi.sent_at,
                 oi.combo_menu_name, oi.combo_selections,
@@ -144,6 +145,7 @@ async function getPendingOrders(req, res, next) {
           order_type:        row.order_type,
           order_customer_name: row.order_customer_name,
           pickup_time:       row.pickup_time,
+          covers:            row.covers,
           table_number:      row.table_number,
           zone_name:         row.zone_name,
           items: [],

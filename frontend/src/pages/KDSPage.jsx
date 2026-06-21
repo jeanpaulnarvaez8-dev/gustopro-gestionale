@@ -735,6 +735,15 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                 // se e' 1 piatto o una comanda da 8.
                 const totalPlates = order.items.reduce((s, it) =>
                   it.display_status === 'delivered' ? s : s + Number(it.quantity || 1), 0)
+                // JP 2026-06-18: nel badge il cuoco vuole i COPERTI (persone),
+                // non il n. piatti. Per i TAVOLI mostro i coperti; per gli
+                // asporti (niente coperti) resto sul conteggio piatti.
+                const isAsportoCard = order.table_number === 'ASPORTO'
+                const showCovers = !isAsportoCard && Number(order.covers) > 0
+                const badgeNum = showCovers ? Number(order.covers) : totalPlates
+                const badgeLabel = showCovers
+                  ? (badgeNum === 1 ? 'COPERTO' : 'COPERTI')
+                  : (badgeNum === 1 ? 'PIATTO' : 'PIATTI')
 
                 return (
                   <motion.div
@@ -795,10 +804,10 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                       <div className="flex items-center gap-2 shrink-0">
                         {/* Conteggio piatti — PICCOLO (JP 2026-05-29: era grande
                             e si confondeva col numero del tavolo). Pill compatto. */}
-                        {totalPlates > 0 && (
+                        {badgeNum > 0 && (
                           <div className="flex items-center gap-1 rounded-md bg-[var(--color-gold-soft)] text-[var(--color-gold)] px-1.5 py-0.5 leading-none">
-                            <span className="text-xs font-bold tnum">{totalPlates}</span>
-                            <span className="text-[8px] font-semibold tracking-wider">{totalPlates === 1 ? 'PIATTO' : 'PIATTI'}</span>
+                            <span className="text-xs font-bold tnum">{badgeNum}</span>
+                            <span className="text-[8px] font-semibold tracking-wider">{badgeLabel}</span>
                           </div>
                         )}
                         <ElapsedTick sentAt={oldest} />
