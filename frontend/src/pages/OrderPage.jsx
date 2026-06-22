@@ -951,10 +951,11 @@ export default function OrderPage() {
                           {isTechWait && (
                             <span className="text-[var(--color-sea)] text-[11px] font-bold whitespace-nowrap">In preparazione</span>
                           )}
-                          {/* JP 2026-06-16: "Manda" SOLO sui waiting SENZA timer.
-                              Quelli con la tempistica (⏰ Xm) partono da soli →
-                              lì il tasto confonde, quindi non appare. */}
-                          {isWaiting && !fireAtAny && canFire && (
+                          {/* JP 2026-06-17: "Manda" SOLO sui piatti che il cameriere
+                              ha messo ESPLICITAMENTE in attesa (is_manual_hold). Sui
+                              waiting "tecnici" del dispatcher (il cameriere non li ha
+                              trattenuti) niente Manda. Col timer (⏰) partono da soli. */}
+                          {hasManualHold && !fireAtAny && canFire && (
                             <button
                               onClick={() => fireGroup(group)}
                               className="px-2.5 py-1 rounded-md bg-[var(--color-warn)] text-black text-[11px] font-bold uppercase active:scale-95 transition flex items-center gap-1"
