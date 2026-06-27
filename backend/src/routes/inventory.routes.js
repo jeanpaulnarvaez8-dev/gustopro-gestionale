@@ -15,13 +15,13 @@ router.get('/po/:id',           requireRole('admin','manager'), c.getPO);
 
 // Goods Receipts
 router.get('/receipts',         requireRole('admin','manager'), c.listReceipts);
-router.post('/receipts',        c.createReceipt);
-router.get('/receipts/:id',     c.getReceipt);
+router.post('/receipts',        requireRole('admin','manager'), c.createReceipt);
+router.get('/receipts/:id',     requireRole('admin','manager'), c.getReceipt);
 router.patch('/receipt-items/:itemId/confirm', requireRole('admin','manager','kitchen'), c.confirmReceiptItem);
 
 // Spoilage
 router.get('/spoilage',         requireRole('admin','manager'), c.listSpoilage);
-router.post('/spoilage',        c.createSpoilage);
+router.post('/spoilage',        requireRole('admin','manager'), c.createSpoilage);
 
 // KPIs
 router.get('/kpis',             requireRole('admin','manager'), c.getInventoryKPIs);

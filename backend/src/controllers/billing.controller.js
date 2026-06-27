@@ -158,7 +158,7 @@ async function processPayment(req, res, next) {
     const { rows: [receipt] } = await client.query(
       `INSERT INTO receipts (tenant_id, order_id, issued_by, total_amount, tax_amount, is_split, split_index, split_total, receipt_data, register)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [tenantId, order_id, req.user.id, amount, order.tax_amount, is_split, split_index, split_total, JSON.stringify({ items }), registerNorm]
+      [tenantId, order_id, req.user.id, effectiveAmount, order.tax_amount, is_split, split_index, split_total, JSON.stringify({ items }), registerNorm]
     );
 
     // Check if fully paid
