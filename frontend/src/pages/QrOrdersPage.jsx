@@ -58,7 +58,7 @@ export default function QrOrdersPage() {
   }
 
   const pay = async (order, method) => {
-    if (paying) return   // JP 2026-06-27 (audit): un solo incasso alla volta, evita il doppio addebito su rete lenta
+    if (paying === order.id) return   // JP 2026-06-27 (audit): blocca il doppio-tap sullo STESSO ordine, ma lascia incassare ordini diversi anche con un pagamento in volo
     setPaying(order.id); setChooser(null)
     try {
       await billingAPI.pay({ order_id: order.id, amount: Number(order.total_amount), payment_method: method })
