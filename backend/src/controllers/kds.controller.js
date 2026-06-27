@@ -62,6 +62,16 @@ async function getPendingOrders(req, res, next) {
         : `(oi.workflow_status = 'production'
             OR (oi.workflow_status = 'waiting' AND oi.released_at IS NOT NULL))`;
 
+    // JP 2026-06-27: nelle POSTAZIONI specifiche (caldi/frittura/antipasti/
+    // cucina/pizzeria) i piatti 'ready' (gia' pronti, cameriere chiamato)
+    // spariscono SUBITO, cosi' il cuoco vede solo cio' che deve ancora fare e
+    // non si incasina con piatti gia' fatti che il cameriere tarda a ritirare.
+    // La vista 'all' (regia) e la schermata cameriere (I Miei Piatti)
+    // continuano a vederli. 'dispatcher' vede solo i waiting, non e' impattato.
+    const hideReady = (stationParam === 'all' || stationParam === 'dispatcher')
+      ? ''
+      : `AND oi.status <> 'ready'`;
+
     const { rows } = await pool.query(
       `SELECT
          o.id             AS order_id,
@@ -124,6 +134,7 @@ async function getPendingOrders(req, res, next) {
          AND COALESCE(oi.is_surcharge, false) = false
          AND (c.is_beverage IS NULL OR c.is_beverage = false)
          AND ${stationFilter}
+         ${hideReady}
        GROUP BY o.id, o.created_at, o.order_type, o.customer_name, o.pickup_time, o.covers,
                 t.table_number, z.name,
                 oi.id, oi.quantity, oi.status, oi.display_status, oi.workflow_status, oi.notes, oi.sent_at,
