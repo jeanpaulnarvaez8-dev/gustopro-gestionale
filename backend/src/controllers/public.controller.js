@@ -147,12 +147,18 @@ async function createPublicOrder(req, res, next) {
       table_id = tbl.id;
     }
 
-    // Rate-limit per tavolo (o per nome se asporto)
-    const rateKey = `${tenant.id}:${order_type}:${table_number || name.toLowerCase()}`;
+    // Rate-limit per tavolo (o per nome se asporto). Chiave normalizzata
+    // (trim+lowercase) per non aggirare il limite con spazi/maiuscole.
+    const rateKey = `${tenant.id}:${order_type}:${String(table_number || name).trim().toLowerCase()}`;
     const now = Date.now();
     if (now - (_publicOrderRate.get(rateKey) || 0) < PUBLIC_ORDER_RATE_MS) {
       return res.status(429).json({ error: 'Ordine gia\' inviato, attendi qualche secondo' });
     }
+    // JP 2026-06-27 (audit): chiudo la finestra TOCTOU segnando SUBITO il
+    // rate-limit (prima veniva scritto solo dopo il COMMIT): due richieste
+    // simultanee non possono piu' superare entrambe il check e creare ordini
+    // doppi dallo stesso tavolo/sessione.
+    _publicOrderRate.set(rateKey, now);
 
     // Validazione prodotti + PREZZI SERVER-SIDE (mai dal client)
     const itemIds = [...new Set(items.map(i => String(i.menu_item_id)))];
@@ -282,6 +288,16 @@ async function createPublicOrder(req, res, next) {
 // cliente: si puo' richiamare solo dopo 30 minuti dalla chiamata precedente).
 const lastCall = new Map();
 const THROTTLE_MS = 30 * 60 * 1000;
+
+// JP 2026-06-27 (audit): cleanup periodico delle Map in-memory di rate-limit
+// e throttle, per evitare che crescano illimitate (memory leak). Rimuove SOLO
+// entry gia' scadute, che non influenzano piu' il limite. unref(): non tiene
+// vivo il processo allo shutdown.
+setInterval(() => {
+  const t = Date.now();
+  for (const [k, ts] of _publicOrderRate) if (t - ts > 2 * PUBLIC_ORDER_RATE_MS) _publicOrderRate.delete(k);
+  for (const [k, ts] of lastCall) if (t - ts > THROTTLE_MS) lastCall.delete(k);
+}, 10 * 60 * 1000).unref();
 
 // POST /public/call-waiter/:slug { table_number } — il cliente chiama.
 async function callWaiter(req, res, next) {
