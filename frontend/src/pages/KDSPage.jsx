@@ -137,6 +137,46 @@ const STATION_PICKER = [
 ]
 const STATION_LS_KEY = 'gustopro_kds_station'
 
+// JP 2026-06-29: icona del piatto in base al contenuto, per lettura a colpo
+// d'occhio in cucina. In pizzeria (pizze + street food) distingue panini/pucce
+// dalle pizze; fuori usa le parole-chiave (frutti di mare, pesce, carne, ecc.).
+function dishIcon(name, prepStation) {
+  const n = String(name || '').toLowerCase().replace(/\s+/g, ' ').trim()
+  if (prepStation === 'pizzeria') {
+    if (/piadina|puccia|panino|frisa/.test(n)) return '🥪'
+    if (/hamburger|burger/.test(n)) return '🍔'
+    if (/\bhot dog\b/.test(n)) return '🌭'
+    if (/bresaola/.test(n)) return '🍖'
+    if (/burrata/.test(n)) return '🧀'
+    if (/\bcrudo\b/.test(n)) return '🍖'
+    if (/insalata/.test(n)) return '🥗'
+    return '🍕' // tutto il resto in pizzeria e' pizza
+  }
+  if (/cozz/.test(n)) return '🦪'
+  if (/vongol/.test(n)) return '🐚'
+  if (/astice|aragost/.test(n)) return '🦞'
+  if (/scamp/.test(n)) return '🦞'
+  if (/gamber/.test(n)) return '🦐'
+  if (/calamar/.test(n)) return '🦑'
+  if (/polp/.test(n)) return '🐙'
+  if (/granch/.test(n)) return '🦀'
+  if (/salmone|tonno|tataki|spada|rombo|branzino|orata|pesce|carpacc|tempory|mare/.test(n)) return '🐟'
+  if (/fiorentina|bistecca|tagliata|manzo/.test(n)) return '🥩'
+  if (/pollo|cotoletta/.test(n)) return '🍗'
+  if (/salsiccia/.test(n)) return '🌭'
+  if (/bresaola|prosciutt|\bcrudo\b/.test(n)) return '🍖'
+  if (/burrata|mozzarella|bufala|formaggi/.test(n)) return '🧀'
+  if (/risotto/.test(n)) return '🍚'
+  if (/linguine|pacchero|paccheri|orecchiette|tagliolino|spaghett|pasta|tagliatell/.test(n)) return '🍝'
+  if (/patat/.test(n)) return '🍟'
+  if (/insalata|misticanza/.test(n)) return '🥗'
+  if (/verdure/.test(n)) return '🥦'
+  if (/tiramis|cheesecake|panna cotta|sorbetto|gelato|crema|sgroppino|cioccolato|frutti di bosco/.test(n)) return '🍰'
+  if (/frutta/.test(n)) return '🍉'
+  if (/pane/.test(n)) return '🍞'
+  return '🍽️'
+}
+
 export default function KDSPage({ mode = 'kitchen', station: stationProp = null, emphasize = null }) {
   const isBar = mode === 'bar'
   // emphasize='pizzeria' (schermo Simone): pizze GRANDI, resto cucina piccolo.
@@ -865,7 +905,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                 {focusPizza ? 'CUCINA' : '🍕 PIZZA'}
                               </span>
                               <span className="text-[var(--color-text-2)] text-xs truncate">
-                                {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
+                                {dishIcon(item.name, item.prep_station)} {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
                               </span>
                               <span className="ml-auto text-[9px] text-[var(--color-text-3)] shrink-0">{cfg.label}</span>
                             </div>
@@ -881,7 +921,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                             >
                               <span className="text-[9px] font-mono text-[var(--color-text-3)]">c</span>
                               <span className="text-[var(--color-text-3)] text-[10px] line-through">
-                                {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
+                                {dishIcon(item.name, item.prep_station)} {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
                               </span>
                             </div>
                           )
@@ -902,7 +942,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                 🤚 SEGUE
                               </span>
                               <span className="text-[var(--color-text)] text-lg font-bold">
-                                {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
+                                {dishIcon(item.name, item.prep_station)} {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
                               </span>
                               {item.course_type && (
                                 <span className="ml-auto text-[10px] text-[var(--color-text-3)] italic uppercase tracking-wider">
@@ -940,7 +980,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                 </span>
                               )}
                               <span className="text-[var(--color-text)] text-lg font-bold">
-                                {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
+                                {dishIcon(item.name, item.prep_station)} {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
                               </span>
                               {item.course_type && (
                                 <span className="ml-auto text-[10px] text-[var(--color-text-3)] italic uppercase tracking-wider">
@@ -963,7 +1003,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                   {/* Quantita' SEMPRE visibile: ×1, ×2, ×3… (mai confusione) */}
                                   <span className="text-[var(--color-gold)] tnum font-extrabold text-3xl leading-none shrink-0">×{item.quantity}</span>
                                   <span className="text-[var(--color-text)] font-extrabold text-xl uppercase tracking-wide leading-tight">
-                                    {item.name}
+                                    {dishIcon(item.name, item.prep_station)} {item.name}
                                   </span>
                                   {item.is_combo && (
                                     <Badge tone="gold" size="sm">MENU</Badge>
