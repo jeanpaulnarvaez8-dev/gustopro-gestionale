@@ -905,7 +905,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                 {focusPizza ? 'CUCINA' : '🍕 PIZZA'}
                               </span>
                               <span className="text-[var(--color-text-2)] text-xs truncate">
-                                {dishIcon(item.name, item.prep_station)} {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
+                                {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name} {dishIcon(item.name, item.prep_station)}
                               </span>
                               <span className="ml-auto text-[9px] text-[var(--color-text-3)] shrink-0">{cfg.label}</span>
                             </div>
@@ -921,7 +921,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                             >
                               <span className="text-[9px] font-mono text-[var(--color-text-3)]">c</span>
                               <span className="text-[var(--color-text-3)] text-[10px] line-through">
-                                {dishIcon(item.name, item.prep_station)} {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
+                                {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name} {dishIcon(item.name, item.prep_station)}
                               </span>
                             </div>
                           )
@@ -942,7 +942,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                 🤚 SEGUE
                               </span>
                               <span className="text-[var(--color-text)] text-lg font-bold">
-                                {dishIcon(item.name, item.prep_station)} {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
+                                {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name} {dishIcon(item.name, item.prep_station)}
                               </span>
                               {item.course_type && (
                                 <span className="ml-auto text-[10px] text-[var(--color-text-3)] italic uppercase tracking-wider">
@@ -980,7 +980,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                 </span>
                               )}
                               <span className="text-[var(--color-text)] text-lg font-bold">
-                                {dishIcon(item.name, item.prep_station)} {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
+                                {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name} {dishIcon(item.name, item.prep_station)}
                               </span>
                               {item.course_type && (
                                 <span className="ml-auto text-[10px] text-[var(--color-text-3)] italic uppercase tracking-wider">
@@ -1003,7 +1003,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                                   {/* Quantita' SEMPRE visibile: ×1, ×2, ×3… (mai confusione) */}
                                   <span className="text-[var(--color-gold)] tnum font-extrabold text-3xl leading-none shrink-0">×{item.quantity}</span>
                                   <span className="text-[var(--color-text)] font-extrabold text-xl uppercase tracking-wide leading-tight">
-                                    {dishIcon(item.name, item.prep_station)} {item.name}
+                                    {item.name} {dishIcon(item.name, item.prep_station)}
                                   </span>
                                   {item.is_combo && (
                                     <Badge tone="gold" size="sm">MENU</Badge>
