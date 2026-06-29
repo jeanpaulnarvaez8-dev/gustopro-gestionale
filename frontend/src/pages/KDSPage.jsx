@@ -890,7 +890,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                         // ── WAITING MANUAL HOLD — JP 2026-06-05.
                         // Il cameriere ha tenuto esplicitamente il piatto in
                         // attesa SENZA timer. INIZIA TAVOLO non lo rilascia.
-                        // Badge arancione "TENUTO" per indicare al chef che
+                        // Badge arancione "SEGUE" per indicare al chef che
                         // questo piatto verra' rilasciato solo a comando.
                         if (ds === 'waiting' && item.is_manual_hold) {
                           return (
@@ -899,7 +899,7 @@ export default function KDSPage({ mode = 'kitchen', station: stationProp = null,
                               className="flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-orange-500 bg-orange-500/10 shadow-[0_0_0_2px_rgba(249,115,22,0.18)]"
                             >
                               <span className="px-2 py-0.5 rounded-md bg-orange-500 text-black text-xs font-extrabold tracking-widest shrink-0 animate-pulse">
-                                🤚 TENUTO
+                                🤚 SEGUE
                               </span>
                               <span className="text-[var(--color-text)] text-lg font-bold">
                                 {item.quantity > 1 ? `×${item.quantity} ` : ''}{item.name}
